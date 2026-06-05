@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safe Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Core Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return !isSignedIn() || request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'videopremieroficial@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (exists(/databases/$(database)/documents/artists/$(request.auth.uid)) && get(/databases/$(database)/documents/artists/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidArtist(data) {
+      return data.keys().hasAll(['userId', 'name', 'email', 'plan'])
+        && data.keys().size() <= 25
+        && data.userId is string && data.userId.size() <= 128
+        && data.name is string && data.name.size() <= 200
+        && data.email is string && data.email.size() <= 200
+        && data.plan is string && (data.plan == 'free' || data.plan == 'pro' || data.plan == 'premium')
+        && (!('city' in data) || (data.city is string && data.city.size() <= 200))
+        && (!('genre' in data) || (data.genre is string && data.genre.size() <= 100))
+        && (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() <= 50))
+        && (!('instagram' in data) || (data.instagram is string && data.instagram.size() <= 100))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000))
+        && (!('subscriptionDate' in data) || (data.subscriptionDate is string || data.subscriptionDate is timestamp))
+        && (!('subscriptionStatus' in data) || (data.subscriptionStatus is string))
+        && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp));
+    }
+
+    function isValidMusic(data) {
+      return data.keys().hasAll(['trackId', 'artistId', 'title', 'audioUrl', 'playsCount'])
+        && data.keys().size() <= 12
+        && data.trackId is string && data.trackId.size() <= 128
+        && data.artistId is string && data.artistId.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.audioUrl is string && data.audioUrl.size() <= 1000
+        && data.playsCount is number
+        && (!('composer' in data) || (data.composer is string && data.composer.size() <= 200))
+        && (!('singer' in data) || (data.singer is string && data.singer.size() <= 200))
+        && (!('genre' in data) || (data.genre is string && data.genre.size() <= 100))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() <= 1000))
+        && (!('lyrics' in data) || (data.lyrics is string && data.lyrics.size() <= 10000))
+        && (!('createdAt' in data) || (data.createdAt is string || data.createdAt is timestamp));
+    }
+
+    function isValidAnalytics(data) {
+      return data.keys().hasAll(['artistId', 'viewsCount', 'whatsappClicks'])
+        && data.keys().size() == 3
+        && data.artistId is string && data.artistId.size() <= 128
+        && data.viewsCount is number
+        && data.whatsappClicks is number;
+    }
+
+    // --- Collections ---
+
+    // Users Collection (Administrative & Auth Mirror)
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // Artist Profiles
+    match /artists/{userId} {
+      allow get: if true; // Public profiles are read by fans
+      allow list: if true; // To find and browse artists
+      allow create: if isOwner(userId) && isValidArtist(incoming());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidArtist(incoming()) 
+                     && incoming().userId == existing().userId; // Immutable ID
+      allow delete: if isOwner(userId) || isAdmin();
+      
+      // Musics (nested sub-collection)
+      match /musics/{trackId} {
+        allow get, list: if true; // Public listens to music
+        allow create: if isOwner(userId) && isValidMusic(incoming()) && incoming().artistId == userId && incoming().playsCount == 0;
+        allow update: if (isOwner(userId) && isValidMusic(incoming()) && incoming().artistId == existing().artistId)
+                      || (incoming().diff(existing()).affectedKeys().hasOnly(['playsCount']) && incoming().playsCount == existing().playsCount + 1); // Anyone can increment play count by 1
+        allow delete: if (isOwner(userId) || isAdmin());
+      }
+
+      // Analytics for each Artist
+      match /analytics/metrics {
+        allow get, list: if true; // Let viewers query/get analytics to sync state or increment
+        allow create: if isValidAnalytics(incoming());
+        allow update: if isValidAnalytics(incoming()) && (
+          isOwner(userId) || isAdmin() ||
+          // Allow viewers to increment viewsCount or whatsappClicks one by one safely without decreasing
+          (incoming().viewsCount >= existing().viewsCount && incoming().whatsappClicks >= existing().whatsappClicks)
+        );
+      }
+    }
+
+  }
+}

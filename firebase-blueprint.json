@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "Artist": {
+      "title": "Artist",
+      "description": "Information about an artist or band profile",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The unique slug ID of the artist profile" },
+        "name": { "type": "string", "description": "The primary artistic name or band name" },
+        "avatarUrl": { "type": "string", "description": "Profile picture storage or web URL" },
+        "city": { "type": "string", "description": "Location formatted as City - State" },
+        "genre": { "type": "string", "description": "Main musical genre" },
+        "whatsapp": { "type": "string", "description": "Cleaned telephone number for messaging" },
+        "instagram": { "type": "string", "description": "Instagram tag handle" },
+        "email": { "type": "string", "description": "Registered email details" },
+        "bio": { "type": "string", "description": "Brief biography or summary of achievements" },
+        "plan": { "type": "string", "enum": ["free", "pro", "premium"], "description": "Assigned membership tier" },
+        "subscriptionDate": { "type": "string", "description": "ISO timestamp indicating when subscription started" },
+        "subscriptionStatus": { "type": "string", "enum": ["ativo", "pendente", "cancelado"], "description": "Current active billing state" },
+        "createdAt": { "type": "string", "description": "Account registration time" }
+      },
+      "required": ["userId", "name", "email", "plan", "createdAt"]
+    },
+    "Music": {
+      "title": "Music",
+      "description": "A single track uploaded to the artist repository",
+      "type": "object",
+      "properties": {
+        "trackId": { "type": "string", "description": "Unique identifier of the music track" },
+        "artistId": { "type": "string", "description": "Reference lookup linking to the artist profile UID" },
+        "title": { "type": "string", "description": "The name or title of the composition" },
+        "composer": { "type": "string", "description": "Author of the composition lyrics or melody" },
+        "singer": { "type": "string", "description": "Featured singer or band name" },
+        "genre": { "type": "string", "description": "Specific sub-genre of the composition" },
+        "description": { "type": "string", "description": "Brief note or pitch about the track" },
+        "audioUrl": { "type": "string", "description": "Firebase Storage direct music playback URL" },
+        "coverUrl": { "type": "string", "description": "Firebase Storage image thumbnail URL" },
+        "lyrics": { "type": "string", "description": "Aesthetic lyrics formatted with verses and choruses" },
+        "playsCount": { "type": "integer", "description": "Aesthetic meter of active fan impressions" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of upload" }
+      },
+      "required": ["trackId", "artistId", "title", "audioUrl", "playsCount", "createdAt"]
+    },
+    "Analytics": {
+      "title": "Analytics",
+      "description": "Consolidated statistics counting engagement with an artist profile",
+      "type": "object",
+      "properties": {
+        "artistId": { "type": "string", "description": "Reference UID linking to the artist profile" },
+        "viewsCount": { "type": "integer", "description": "Total visits logged on public page" },
+        "whatsappClicks": { "type": "integer", "description": "Sum of direct conversion triggers" }
+      },
+      "required": ["artistId", "viewsCount", "whatsappClicks"]
+    }
+  },
+  "firestore": {
+    "/artists/{artistId}": {
+      "schema": "Artist",
+      "description": "Public and private profile data for registered composers"
+    },
+    "/artists/{artistId}/musics/{musicId}": {
+      "schema": "Music",
+      "description": "Catalog of music tracks published under a specific artist profile"
+    },
+    "/analytics/{artistId}": {
+      "schema": "Analytics",
+      "description": "Engagement counters tracking individual metrics"
+    }
+  }
+}
