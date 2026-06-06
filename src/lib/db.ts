@@ -733,7 +733,7 @@ export const dbService = {
     });
   },
 
-  addMusic(artistId: string, track: Omit<Music, 'playsCount' | 'createdAt'>): Music {
+  async addMusic(artistId: string, track: Omit<Music, 'playsCount' | 'createdAt'>): Promise<Music> {
     const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
     const tracks: Music[] = musicsMap[artistId] || [];
 
@@ -758,7 +758,7 @@ export const dbService = {
     musicsMap[artistId] = tracks;
     localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
 
-    // Async sync track to Firestore
+    // Wait for sync to Firestore
     try {
       const firestoreTrackPayload = {
         id: newTrack.trackId,
@@ -786,12 +786,10 @@ export const dbService = {
         updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt)),
       };
 
-      setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), firestoreTrackPayload, { merge: true }).catch(e => {
-        console.error(e);
-        handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${newTrack.trackId}`);
-      });
-    } catch (e) {
-      console.error(e);
+      await setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), firestoreTrackPayload, { merge: true });
+    } catch (e: any) {
+      console.error("erro ao salvar no Firestore:", e);
+      handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${newTrack.trackId}`);
     }
 
     return newTrack;

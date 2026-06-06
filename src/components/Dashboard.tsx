@@ -131,26 +131,42 @@ export default function Dashboard({
     onProgress: (percent: number) => void
   ): Promise<{ publicAudioUrl: string; storagePath: string }> => {
     // 1. Obter URL presignada do servidor express do applet
-    const response = await fetch("/api/r2-presigned-upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fileName: file.name,
-        fileType: file.type || "audio/mpeg",
-        fileSize: file.size,
-        userId,
-        songId,
-      }),
-    });
+    let response;
+    try {
+      response = await fetch("/api/r2-presigned-upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type || "audio/mpeg",
+          fileSize: file.size,
+          userId,
+          songId,
+        }),
+      });
+    } catch (e: any) {
+      console.error("erro ao chamar rota R2:", e);
+      throw new Error("step:presigned_url_fetch_failed");
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Erro ao obter URL de upload presignada do servidor.");
+      console.error("resposta da rota (R2 presigned upload falhou):", response.status, errorData);
+      throw new Error("step:presigned_url_generation_failed");
     }
 
-    const { uploadUrl, storagePath, publicAudioUrl } = await response.json();
+    let uploadUrl, storagePath, publicAudioUrl;
+    try {
+      const resData = await response.json();
+      uploadUrl = resData.uploadUrl;
+      storagePath = resData.storagePath;
+      publicAudioUrl = resData.publicAudioUrl;
+    } catch (e: any) {
+      console.error("erro ao decodificar JSON da rota R2:", e);
+      throw new Error("step:presigned_url_generation_failed");
+    }
 
     // 2. Upload direto do binário para o Cloudflare R2 usando PUT
     return new Promise((resolve, reject) => {
@@ -169,12 +185,14 @@ export default function Dashboard({
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve({ publicAudioUrl, storagePath });
         } else {
-          reject(new Error(`O upload para o R2 falhou com status ${xhr.status}.`));
+          console.error("erro do PUT para R2 status:", xhr.status, xhr.statusText);
+          reject(new Error("step:r2_upload_put_failed_status"));
         }
       };
 
-      xhr.onerror = () => {
-        reject(new Error("Erro de rede no upload direto para o Cloudflare R2. Verifique sua conexão."));
+      xhr.onerror = (e) => {
+        console.error("erro do PUT para R2 rede:", e);
+        reject(new Error("step:r2_upload_put_failed_network"));
       };
 
       xhr.send(file);
@@ -282,26 +300,31 @@ export default function Dashboard({
 
       setUploadProgress(92);
 
-      dbService.addMusic(profile.userId, {
-        trackId: uniqueId,
-        artistId: profile.userId,
-        title: title.trim(),
-        composer: composer.trim() || profile.name,
-        singer: singer.trim() || profile.name,
-        performer: singer.trim() || profile.name,
-        genre: genre.trim() || profile.genre || 'Sertanejo',
-        description: desc.trim() || 'Faixa exclusiva em exibição para ouvintes.',
-        audioUrl: finalAudio,
-        coverUrl: finalCover,
-        lyrics: lyrics.trim(),
-        plays: 0,
-        status: "active",
-        storageProvider: r2StorageProvider,
-        storagePath: r2StoragePath,
-        fileSize: r2FileSize,
-        mimeType: r2MimeType,
-        originalFileName: r2OriginalName
-      });
+      try {
+        await dbService.addMusic(profile.userId, {
+          trackId: uniqueId,
+          artistId: profile.userId,
+          title: title.trim(),
+          composer: composer.trim() || profile.name,
+          singer: singer.trim() || profile.name,
+          performer: singer.trim() || profile.name,
+          genre: genre.trim() || profile.genre || 'Sertanejo',
+          description: desc.trim() || 'Faixa exclusiva em exibição para ouvintes.',
+          audioUrl: finalAudio,
+          coverUrl: finalCover,
+          lyrics: lyrics.trim(),
+          plays: 0,
+          status: "active",
+          storageProvider: r2StorageProvider,
+          storagePath: r2StoragePath,
+          fileSize: r2FileSize,
+          mimeType: r2MimeType,
+          originalFileName: r2OriginalName
+        });
+      } catch (firestoreErrObj: any) {
+        console.error("erro ao salvar no Firestore:", firestoreErrObj);
+        throw new Error("step:firestore_save_failed");
+      }
 
       setUploadProgress(95);
 
@@ -322,7 +345,15 @@ export default function Dashboard({
       refreshData();
     } catch (err: any) {
       console.error("Upload workflow failed: ", err);
-      setFormError('Falha ao registrar música no Firebase. Certifique-se de que os seus arquivos de som ou imagem são válidos.');
+      if (err.message === "step:presigned_url_fetch_failed" || err.message === "step:presigned_url_generation_failed") {
+        setFormError("Falha ao gerar URL de upload no Cloudflare R2.");
+      } else if (err.message === "step:r2_upload_put_failed_status" || err.message === "step:r2_upload_put_failed_network") {
+        setFormError("Falha ao enviar o MP3 para o Cloudflare R2.");
+      } else if (err.message === "step:firestore_save_failed") {
+        setFormError("Falha ao salvar os dados da música no Firestore.");
+      } else {
+        setFormError(err.message || "Erro inesperado ao registrar a música.");
+      }
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
