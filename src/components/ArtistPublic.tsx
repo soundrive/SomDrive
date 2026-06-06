@@ -55,7 +55,7 @@ export default function ArtistPublic({
     const found = dbService.getArtist(artistId) || dbService.getArtist("gabriel-silva");
     if (found) {
       setArtist(found);
-      const list = dbService.getArtistMusics(found.userId);
+      const list = dbService.getArtistMusics(found.userId).filter(t => t.status !== 'inactive');
       setTracks(list);
       // Synchronize profile views counter in background
       dbService.incrementAnalyticsView(found.userId, true, false);
@@ -236,6 +236,12 @@ export default function ArtistPublic({
 
       {/* TRACKS LIST SECTION */}
       <section className="max-w-4xl mx-auto px-6 pt-10 space-y-6">
+
+        {/* Private Catalog Invitation Guard Notice */}
+        <div className="p-4 bg-orange-950/20 border border-orange-500/10 rounded-2xl flex items-center gap-3 text-orange-400 text-xs sm:text-sm font-heading font-black uppercase tracking-wide">
+          <ShieldCheck className="w-5 h-5 text-orange-400 shrink-0" />
+          <span>Aviso: Catálogo privado enviado por convite.</span>
+        </div>
         
         {/* Headline list control */}
         <div className="flex items-center justify-between border-b border-slate-900 pb-3">

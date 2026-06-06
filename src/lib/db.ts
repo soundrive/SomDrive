@@ -156,34 +156,11 @@ A nota perfeita da minha canção`
 ];
 
 // Initial system seed state
-const INITIAL_ARTISTS: Record<string, Artist> = {
-  "gabriel-silva": DEMO_ARTIST,
-};
+const INITIAL_ARTISTS: Record<string, Artist> = {};
 
-const INITIAL_MUSICS: Record<string, Music[]> = {
-  "gabriel-silva": DEMO_SONGS.map((song, idx) => ({
-    trackId: `music-${idx + 1}`,
-    artistId: "gabriel-silva",
-    title: song.title,
-    composer: song.composer,
-    singer: song.singer,
-    genre: song.genre,
-    description: song.description,
-    audioUrl: song.audioUrl,
-    coverUrl: song.coverUrl,
-    lyrics: DEMO_LYRICS[idx] || "",
-    playsCount: 204 + idx * 87, // Seed play counts
-    createdAt: new Date(Date.now() - idx * 86400000).toISOString(),
-  })),
-};
+const INITIAL_MUSICS: Record<string, Music[]> = {};
 
-const INITIAL_ANALYTICS: Record<string, Analytics> = {
-  "gabriel-silva": {
-    artistId: "gabriel-silva",
-    viewsCount: 1420,
-    whatsappClicks: 322,
-  },
-};
+const INITIAL_ANALYTICS: Record<string, Analytics> = {};
 
 // Keys for standard local storage key-value tables
 export const LS_ARTISTS = "pendrive_artists";
@@ -191,19 +168,27 @@ export const LS_MUSICS = "pendrive_musics";
 export const LS_ANALYTICS = "pendrive_analytics";
 export const LS_CURR_USER = "pendrive_curr_user";
 
-// Seed local storage with base tables if empty
-if (!localStorage.getItem(LS_ARTISTS)) {
+// Clear old demo account if found in localStorage to avoid stale cached view
+if (localStorage.getItem(LS_CURR_USER)) {
+  try {
+    const user = JSON.parse(localStorage.getItem(LS_CURR_USER) || "{}");
+    if (user.userId === 'gabriel-silva' || user.email === 'gabriel.silva@soundrive.com' || user.name === 'Gabriel Silva') {
+      localStorage.removeItem(LS_CURR_USER);
+    }
+  } catch (e) {
+    localStorage.removeItem(LS_CURR_USER);
+  }
+}
+
+// Seed local storage with base tables if empty or contains old demo tags
+if (!localStorage.getItem(LS_ARTISTS) || localStorage.getItem(LS_ARTISTS)?.includes("gabriel-silva")) {
   localStorage.setItem(LS_ARTISTS, JSON.stringify(INITIAL_ARTISTS));
 }
-if (!localStorage.getItem(LS_MUSICS)) {
+if (!localStorage.getItem(LS_MUSICS) || localStorage.getItem(LS_MUSICS)?.includes("gabriel-silva")) {
   localStorage.setItem(LS_MUSICS, JSON.stringify(INITIAL_MUSICS));
 }
-if (!localStorage.getItem(LS_ANALYTICS)) {
+if (!localStorage.getItem(LS_ANALYTICS) || localStorage.getItem(LS_ANALYTICS)?.includes("gabriel-silva")) {
   localStorage.setItem(LS_ANALYTICS, JSON.stringify(INITIAL_ANALYTICS));
-}
-if (!localStorage.getItem(LS_CURR_USER)) {
-  // Always trigger with DEMO user signed in by default for a ready-to-test dashboard experience
-  localStorage.setItem(LS_CURR_USER, JSON.stringify(DEMO_ARTIST));
 }
 
 // Firebase imports
@@ -233,6 +218,7 @@ export const dbService = {
       uid: artist.userId,
       email: artist.email || '',
       artistName: artist.artistName || artist.name || '',
+      whatsapp: artist.whatsapp || artist.phone || '',
       phone: artist.phone || artist.whatsapp || '',
       instagram: artist.instagram || '',
       city: artist.city || '',
@@ -243,6 +229,11 @@ export const dbService = {
       accessType: artist.accessType || (plan !== 'free' ? 'trial' : 'free'),
       musicLimit: artist.musicLimit !== undefined ? artist.musicLimit : defaultLimit,
       songsCount: songsCount,
+      userType: artist.userType || 'Artista',
+      mainGenre: artist.mainGenre || artist.genre || '',
+      totalPlays: 0,
+      totalViews: 0,
+      whatsappClicks: 0,
       trialEndsAt: artist.trialEndsAt || null,
       manualAccessEndsAt: artist.manualAccessEndsAt || null,
       subscriptionStartedAt: artist.subscriptionStartedAt || null,
@@ -379,6 +370,101 @@ export const dbService = {
     this.updateArtistProfileLocallyAndFirestore(id, saved);
 
     return saved;
+  },
+
+  async registerUserInFirestore(uid: string, data: Partial<Artist>): Promise<Artist> {
+    const defaultLimit = 5; // free limit
+    const nowISO = new Date().toISOString();
+    
+    // Build a clean Artist profile
+    const newProfile: Artist = {
+      userId: uid,
+      name: data.artistName || data.name || 'Artista',
+      artistName: data.artistName || data.name || 'Artista',
+      email: data.email || '',
+      whatsapp: data.whatsapp || '',
+      phone: data.whatsapp || '',
+      city: data.city || '',
+      state: data.state || '',
+      mainGenre: data.mainGenre || 'Sertanejo',
+      genre: data.mainGenre || 'Sertanejo',
+      instagram: data.instagram || '',
+      userType: data.userType || 'Artista',
+      role: 'user',
+      plan: 'free',
+      paymentStatus: 'inactive',
+      accessType: 'free',
+      musicLimit: defaultLimit,
+      songsCount: 0,
+      createdAt: nowISO,
+      updatedAt: nowISO,
+      isBlocked: false,
+    };
+
+    // Save locally
+    const artists = this.getAllArtists();
+    artists[uid] = newProfile;
+    localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+    localStorage.setItem(LS_CURR_USER, JSON.stringify(newProfile));
+
+    // Also initialize musics and analytics locally
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    musicsMap[uid] = [];
+    localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+    const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+    analyticsMap[uid] = { artistId: uid, viewsCount: 0, whatsappClicks: 0 };
+    localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+
+    // Dual-write to Firebase Firestore
+    try {
+      const normalizedUser = {
+        uid: uid,
+        email: newProfile.email,
+        artistName: newProfile.artistName,
+        whatsapp: newProfile.whatsapp,
+        city: newProfile.city,
+        state: newProfile.state,
+        mainGenre: newProfile.mainGenre,
+        instagram: newProfile.instagram,
+        userType: newProfile.userType,
+        role: "user",
+        plan: "free",
+        paymentStatus: "inactive",
+        accessType: "free",
+        musicLimit: 5,
+        songsCount: 0,
+        totalPlays: 0,
+        totalViews: 0,
+        whatsappClicks: 0,
+        isBlocked: false,
+        createdAt: Timestamp.fromDate(new Date(nowISO)),
+        updatedAt: Timestamp.fromDate(new Date(nowISO))
+      };
+
+      // Write 'users'
+      await setDoc(doc(db, "users", uid), normalizedUser, { merge: true });
+
+      // Write 'artists'
+      await setDoc(doc(db, "artists", uid), {
+        ...newProfile,
+        createdAt: Timestamp.fromDate(new Date(nowISO)),
+        updatedAt: Timestamp.fromDate(new Date(nowISO))
+      }, { merge: true });
+
+      // Write initial analytics
+      await setDoc(doc(db, "artists", uid, "analytics", "metrics"), {
+        artistId: uid,
+        viewsCount: 0,
+        whatsappClicks: 0
+      }, { merge: true });
+
+    } catch (e) {
+      console.error("Firestore dual writing during registration failed: ", e);
+      handleFirestoreError(e, OperationType.WRITE, `users/${uid}`);
+    }
+
+    return newProfile;
   },
 
   // Save changes to localStorage AND dual-write to Firestore (artists/{id} AND users/{id})
@@ -651,10 +737,21 @@ export const dbService = {
     const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
     const tracks: Music[] = musicsMap[artistId] || [];
 
+    const playsValue = track.plays !== undefined ? track.plays : 0;
+    const performerValue = track.performer || track.singer || '';
+    const statusValue = track.status || 'active';
+    const storageProviderValue = track.storageProvider || 'cloudflare_r2';
+
     const newTrack: Music = {
       ...track,
-      playsCount: 0,
-      createdAt: new Date().toISOString()
+      playsCount: playsValue,
+      plays: playsValue,
+      status: statusValue,
+      performer: performerValue,
+      singer: track.singer || performerValue,
+      storageProvider: storageProviderValue,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     tracks.push(newTrack);
@@ -663,10 +760,33 @@ export const dbService = {
 
     // Async sync track to Firestore
     try {
-      setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), {
-        ...newTrack,
-        createdAt: Timestamp.fromDate(new Date(newTrack.createdAt))
-      }, { merge: true }).catch(e => {
+      const firestoreTrackPayload = {
+        id: newTrack.trackId,
+        ownerId: newTrack.artistId,
+        title: newTrack.title,
+        composer: newTrack.composer || '',
+        performer: newTrack.performer || newTrack.singer || '',
+        singer: newTrack.singer || newTrack.performer || '',
+        genre: newTrack.genre || '',
+        lyrics: newTrack.lyrics || '',
+        description: newTrack.description || '',
+        status: newTrack.status || 'active',
+        audioUrl: newTrack.audioUrl,
+        storageProvider: newTrack.storageProvider || 'cloudflare_r2',
+        storagePath: newTrack.storagePath || '',
+        fileSize: newTrack.fileSize || 0,
+        mimeType: newTrack.mimeType || 'audio/mpeg',
+        originalFileName: newTrack.originalFileName || '',
+        plays: newTrack.plays !== undefined ? newTrack.plays : 0,
+        playsCount: newTrack.playsCount !== undefined ? newTrack.playsCount : 0,
+        trackId: newTrack.trackId,
+        artistId: newTrack.artistId,
+        coverUrl: newTrack.coverUrl || '',
+        createdAt: Timestamp.fromDate(new Date(newTrack.createdAt)),
+        updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt)),
+      };
+
+      setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), firestoreTrackPayload, { merge: true }).catch(e => {
         console.error(e);
         handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${newTrack.trackId}`);
       });
@@ -684,6 +804,12 @@ export const dbService = {
     const track = tracks.find(t => t.trackId === trackId);
     if (track) {
       track.playsCount += 1;
+      if (track.plays !== undefined) {
+        track.plays += 1;
+      } else {
+        track.plays = track.playsCount;
+      }
+      track.updatedAt = new Date().toISOString();
       musicsMap[artistId] = tracks;
       localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
       
@@ -693,7 +819,9 @@ export const dbService = {
       // Async sync specifically playsCount increment to Firestore
       try {
         setDoc(doc(db, "artists", artistId, "musics", trackId), {
-          playsCount: track.playsCount
+          playsCount: track.playsCount,
+          plays: track.plays,
+          updatedAt: Timestamp.fromDate(new Date())
         }, { merge: true }).catch(e => {
           console.error(e);
           handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${trackId}`);
@@ -799,18 +927,27 @@ export const dbService = {
       const fetchedTracks: Music[] = musicsSnap.docs.map(docSnap => {
         const d = docSnap.data();
         return {
-          trackId: d.trackId,
-          artistId: d.artistId || normalizedId,
+          trackId: d.trackId || d.id,
+          artistId: d.artistId || d.ownerId || normalizedId,
           title: d.title,
           composer: d.composer || "",
-          singer: d.singer || "",
+          singer: d.singer || d.performer || "",
+          performer: d.performer || d.singer || "",
           genre: d.genre || "",
           description: d.description || "",
           audioUrl: d.audioUrl,
           coverUrl: d.coverUrl || "",
           lyrics: d.lyrics || "",
-          playsCount: d.playsCount || 0,
-          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString()
+          playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+          plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+          status: d.status || "active",
+          storageProvider: d.storageProvider || "cloudflare_r2",
+          storagePath: d.storagePath || "",
+          fileSize: d.fileSize || 0,
+          mimeType: d.mimeType || "audio/mpeg",
+          originalFileName: d.originalFileName || "",
+          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+          updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
         };
       });
 
@@ -895,6 +1032,32 @@ export const dbService = {
     } catch (e) {
       console.error("Error deleting music:", e);
       return false;
+    }
+  },
+
+  async toggleMusicStatus(artistId: string, trackId: string, currentStatus: string): Promise<string> {
+    try {
+      const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
+      await setDoc(musicDocRef, {
+        status: nextStatus,
+        updatedAt: Timestamp.fromDate(new Date())
+      }, { merge: true }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${trackId}`);
+        throw e;
+      });
+
+      // Update locally
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const currentList: Music[] = musicsMap[artistId] || [];
+      const updatedList = currentList.map(t => t.trackId === trackId ? { ...t, status: nextStatus, updatedAt: new Date().toISOString() } : t);
+      musicsMap[artistId] = updatedList;
+      localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+      return nextStatus;
+    } catch (e) {
+      console.error("Error toggling music status:", e);
+      throw e;
     }
   }
 };

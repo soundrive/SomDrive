@@ -123,7 +123,7 @@ export default function Player({
   // 1. IMMERSIVE CAR MODE (FULL SCREEN VIEW)
   if (isCarMode) {
     return (
-      <div id="car-player-fullscreen" className="fixed inset-0 bg-[#06080d] text-white z-50 flex flex-col justify-between p-6 md:p-10 font-sans overflow-hidden">
+      <div id="car-player-fullscreen" onContextMenu={(e) => e.preventDefault()} className="fixed inset-0 bg-[#06080d] text-white z-50 flex flex-col justify-between p-6 md:p-10 font-sans overflow-hidden">
         
         {/* Ambient background disc glow */}
         <div className="absolute right-[-15%] top-[10%] w-[500px] h-[500px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none"></div>
@@ -307,6 +307,7 @@ export default function Player({
     <>
       <div 
         id="bottom-dock-player" 
+        onContextMenu={(e) => e.preventDefault()}
         className="fixed bottom-4 left-4 right-4 md:left-6 md:right-6 md:bottom-6 max-w-5xl mx-auto z-40 rounded-2xl bg-[#090b11]/90 border border-slate-800/80 backdrop-blur-xl transition-all duration-300 shadow-2xl shadow-orange-950/15"
       >
         {/* Sleek top edge continuous neon seekbar */}

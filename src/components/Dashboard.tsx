@@ -19,7 +19,9 @@ import {
   Info,
   ChevronRight,
   Globe,
-  UploadCloud
+  UploadCloud,
+  Link2,
+  Link2Off
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics } from '../types';
 import { dbService } from '../lib/db';
@@ -122,6 +124,63 @@ export default function Dashboard({
     "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=500",
   ];
 
+  const uploadAudioToR2 = async (
+    userId: string,
+    songId: string,
+    file: File,
+    onProgress: (percent: number) => void
+  ): Promise<{ publicAudioUrl: string; storagePath: string }> => {
+    // 1. Obter URL presignada do servidor express do applet
+    const response = await fetch("/api/r2-presigned-upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileType: file.type || "audio/mpeg",
+        fileSize: file.size,
+        userId,
+        songId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Erro ao obter URL de upload presignada do servidor.");
+    }
+
+    const { uploadUrl, storagePath, publicAudioUrl } = await response.json();
+
+    // 2. Upload direto do binário para o Cloudflare R2 usando PUT
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl, true);
+      xhr.setRequestHeader("Content-Type", file.type || "audio/mpeg");
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          onProgress(percentComplete);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve({ publicAudioUrl, storagePath });
+        } else {
+          reject(new Error(`O upload para o R2 falhou com status ${xhr.status}.`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Erro de rede no upload direto para o Cloudflare R2. Verifique sua conexão."));
+      };
+
+      xhr.send(file);
+    });
+  };
+
   const handleAddMusic = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -133,11 +192,23 @@ export default function Dashboard({
       return;
     }
 
-    const maxSizeMB = profile.plan === 'free' ? 20 : 30;
     if (audioOption === 'file' && audioFile) {
-      const sizeInMB = audioFile.size / (1024 * 1024);
-      if (sizeInMB > maxSizeMB) {
-        setFormError(`O arquivo de áudio excede o limite permitido para o seu plano (${maxSizeMB} MB). Faça upgrade para enviar arquivos maiores.`);
+      const maxSizeBytes = 20 * 1024 * 1024; // 20 MB
+
+      const fileExt = '.' + audioFile.name.split('.').pop()?.toLowerCase();
+      const mimeLower = audioFile.type.toLowerCase();
+      const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
+      const isMp3Ext = fileExt === '.mp3';
+
+      // Validação estrita de MP3
+      if (!isMp3Mime && !isMp3Ext) {
+        setFormError('Este arquivo não é um MP3 válido. Converta sua música para MP3 e tente novamente.');
+        return;
+      }
+
+      // Validação de tamanho <= 20MB
+      if (audioFile.size > maxSizeBytes) {
+        setFormError('Este MP3 ultrapassa o limite de 20 MB. Reduza o tamanho do arquivo e envie novamente.');
         return;
       }
     }
@@ -164,20 +235,52 @@ export default function Dashboard({
 
       setUploadProgress(50);
 
-      // Determine audio URL using Firebase Storage if local file exists
+      // Determine audio URL and tracking variables using Cloudflare R2 if local file exists
       let finalAudio = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
+      let r2StoragePath = "";
+      let r2MimeType = "audio/mpeg";
+      let r2FileSize = 0;
+      let r2OriginalName = "";
+      let r2StorageProvider = "preset_demo";
+
       if (audioOption === 'file' && audioFile) {
-        setUploadProgress(65);
-        finalAudio = await dbService.uploadFile(profile.userId, audioFile, 'audio', (p) => setUploadProgress(prev => Math.max(prev, p)));
+        setUploadProgress(60);
+        r2OriginalName = audioFile.name;
+        r2MimeType = audioFile.type || "audio/mpeg";
+        r2FileSize = audioFile.size;
+        r2StorageProvider = "cloudflare_r2";
+
+        const uploadResult = await uploadAudioToR2(
+          profile.userId,
+          uniqueId,
+          audioFile,
+          (percent) => {
+            // Mapeia progresso de [0-100] para [60-90] no indicador visual
+            const mappedProgress = Math.round(60 + (percent * 0.3));
+            setUploadProgress(mappedProgress);
+          }
+        );
+        finalAudio = uploadResult.publicAudioUrl;
+        r2StoragePath = uploadResult.storagePath;
       } else if (audioOption === 'url' && customAudioUrl.trim()) {
         finalAudio = customAudioUrl.trim();
+        r2OriginalName = "custom_url_link.mp3";
+        r2StoragePath = "custom-external";
+        r2MimeType = "audio/mpeg";
+        r2FileSize = 0;
+        r2StorageProvider = "external_link";
       } else {
         // Rotate roster of high quality fallback MP3 files
         const index = (tracks.length % 5) + 1;
         finalAudio = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${index}.mp3`;
+        r2OriginalName = `SoundHelix-Song-${index}.mp3`;
+        r2StoragePath = `preset/helix-${index}.mp3`;
+        r2MimeType = "audio/mpeg";
+        r2FileSize = 0;
+        r2StorageProvider = "preset_demo";
       }
 
-      setUploadProgress(85);
+      setUploadProgress(92);
 
       dbService.addMusic(profile.userId, {
         trackId: uniqueId,
@@ -185,11 +288,19 @@ export default function Dashboard({
         title: title.trim(),
         composer: composer.trim() || profile.name,
         singer: singer.trim() || profile.name,
+        performer: singer.trim() || profile.name,
         genre: genre.trim() || profile.genre || 'Sertanejo',
         description: desc.trim() || 'Faixa exclusiva em exibição para ouvintes.',
         audioUrl: finalAudio,
         coverUrl: finalCover,
-        lyrics: lyrics.trim()
+        lyrics: lyrics.trim(),
+        plays: 0,
+        status: "active",
+        storageProvider: r2StorageProvider,
+        storagePath: r2StoragePath,
+        fileSize: r2FileSize,
+        mimeType: r2MimeType,
+        originalFileName: r2OriginalName
       });
 
       setUploadProgress(95);
@@ -223,6 +334,24 @@ export default function Dashboard({
     if (confirm("Deseja realmente remover esta música do seu catálogo?")) {
       await dbService.deleteMusic(profile.userId, trackId);
       refreshData();
+    }
+  };
+
+  const handleToggleMusicStatus = async (track: Track, event: React.MouseEvent) => {
+    event.stopPropagation();
+    try {
+      const currentStatus = track.status || 'active';
+      const newStatus = await dbService.toggleMusicStatus(profile.userId, track.trackId, currentStatus);
+      
+      // Update local state tracks immediately
+      setTracks(prev => prev.map(t => t.trackId === track.trackId ? { ...t, status: newStatus } : t));
+      
+      // If currently playing track was modified, update active track too as well
+      if (activeTrack?.trackId === track.trackId) {
+        onSelectTrack({ ...activeTrack, status: newStatus }, tracks.map(t => t.trackId === track.trackId ? { ...t, status: newStatus } : t));
+      }
+    } catch (err) {
+      console.error("Error toggling music link status:", err);
     }
   };
 
@@ -444,7 +573,7 @@ export default function Dashboard({
             <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
               <Disc className="w-5 h-5 text-orange-400" /> Meu Acervo Musical
             </h3>
-            <p className="text-slate-400 text-xs mt-0.5 font-medium">Controle suas composições salvas no catálogo.</p>
+            <p className="text-slate-400 text-xs mt-0.5 font-medium">Controle suas composições salvas no catálogo. Clique no link do card para ativar/desativar a escuta pública.</p>
           </div>
 
           <button 
@@ -505,6 +634,29 @@ export default function Dashboard({
                       {/* Ambient glows inside mock card header */}
                       <div className="absolute -right-6 -top-6 w-24 h-24 bg-orange-500/10 rounded-full blur-xl pointer-events-none"></div>
                       <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-yellow-400/10 rounded-full blur-xl pointer-events-none"></div>
+                      
+                      {/* Interactive Link Status Toggler */}
+                      <button
+                        onClick={(e) => handleToggleMusicStatus(track, e)}
+                        className={`absolute top-3 right-3 px-2 py-0.5 border text-[9px] font-mono rounded uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1 z-20 ${
+                          (track.status || 'active') === 'active'
+                            ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900'
+                            : 'bg-rose-950/90 border-rose-500/40 text-rose-400 hover:bg-rose-900'
+                        }`}
+                        title={ (track.status || 'active') === 'active' ? "Desativar escuta pública (Link Ativo)" : "Ativar escuta pública (Link Inativo)" }
+                      >
+                        { (track.status || 'active') === 'active' ? (
+                          <>
+                            <Link2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                            <span>Link Ativo</span>
+                          </>
+                        ) : (
+                          <>
+                            <Link2Off className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                            <span>Link Inativo</span>
+                          </>
+                        ) }
+                      </button>
                       
                       <div className={`w-12 h-12 rounded-full bg-gradient-to-tr ${isCurrentlyPlaying ? 'from-orange-600 to-yellow-500 text-slate-950 shadow-md shadow-orange-500/20' : 'from-slate-950 to-slate-900 border border-slate-800 text-orange-400'} flex items-center justify-center shadow-lg relative z-10 transition-transform`}>
                         <Music className="w-5 h-5 animate-bounce" />
@@ -679,7 +831,7 @@ export default function Dashboard({
 
               {/* Audio Upload Controls */}
               <div className="pt-2 border-t border-slate-850 p-4 bg-slate-950 rounded-2xl space-y-3">
-                <h5 className="text-[11px] font-mono font-bold tracking-widest text-yellow-400 uppercase">1. Arquivo de Áudio da Música (MP3 / WAV)</h5>
+                <h5 className="text-[11px] font-mono font-bold tracking-widest text-yellow-400 uppercase">1. Arquivo de Áudio da Música (Apenas MP3)</h5>
                 
                 <div className="flex gap-4 text-xs font-semibold py-1">
                   <button 
@@ -707,11 +859,13 @@ export default function Dashboard({
 
                 {audioOption === 'file' && (
                   <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 p-4 rounded-xl text-center space-y-2 relative bg-slate-900/20">
-                    <UploadCloud className="w-8 h-8 text-slate-500 mx-auto" />
-                    <p className="text-xs text-slate-400">Arraste ou clique abaixo para carregar seu arquivo musical</p>
+                    <UploadCloud className="w-8 h-8 text-slate-500 mx-auto" strokeWidth={1.5} />
+                    <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto font-medium">
+                      “Envie sua música em MP3. Para manter o Soundrive rápido e estável, aceitamos apenas arquivos .mp3 com até 20 MB.”
+                    </p>
                     <input 
                       type="file" 
-                      accept="audio/*" 
+                      accept=".mp3,audio/mpeg,audio/mp3" 
                       onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
                       className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:border-t file:border-slate-700 file:bg-slate-800 file:text-white file:rounded pointer-events-auto"
                     />

@@ -57,6 +57,16 @@ export default function App() {
         setRoutePayload({ id: artistSlug, autoCar: false });
         return;
       }
+    } else if (path === '/dashboard') {
+      const u = dbService.getCurrentUser();
+      if (u) {
+        setCurrentView('dashboard');
+      } else {
+        setCurrentView('auth');
+        setRoutePayload({ isRegister: false });
+        window.history.replaceState({}, '', '/entrar');
+      }
+      return;
     } else if (path === '/admin') {
       if (actsAsAdmin) {
         setCurrentView('admin');

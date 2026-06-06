@@ -34,21 +34,32 @@ export interface Artist {
   updatedAt?: string;
   phone?: string;
   artistName?: string;
+  userType?: string;
+  mainGenre?: string;
 }
 
 export interface Music {
-  trackId: string;
-  artistId: string;
+  trackId: string; // id
+  artistId: string; // ownerId
   title: string;
   composer?: string;
-  singer?: string;
+  singer?: string; // matches performer
+  performer?: string; // name of singer or vocal guide
   genre?: string;
   description?: string;
-  audioUrl: string; // Firebase Storage URL or dynamic Blob Object URL / demo MP3 URL
-  coverUrl?: string; // Firebase Storage URL or profile cover URL / demo cover URL
-  lyrics?: string; // Optional song lyrics
-  playsCount: number;
+  audioUrl: string; // cloudflare r2 URL
+  coverUrl?: string; // image cover URL
+  lyrics?: string; // lyrics of the track
+  playsCount: number; // local/view tracker playsCount
+  plays?: number; // matches plays: 0
+  status?: string; // "active" or "inactive" for private links
+  storageProvider?: "cloudflare_r2" | string;
+  storagePath?: string;
+  fileSize?: number;
+  mimeType?: string;
+  originalFileName?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Analytics {

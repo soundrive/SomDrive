@@ -9,10 +9,24 @@ import {
   Music, 
   ArrowLeft, 
   Smartphone, 
-  ShieldCheck 
+  ShieldCheck,
+  Sparkles,
+  Globe
 } from 'lucide-react';
 import { Artist } from '../types';
 import { dbService } from '../lib/db';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  Timestamp 
+} from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 
 interface AuthScreenProps {
   onNavigate: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
@@ -30,26 +44,35 @@ export default function AuthScreen({
   const [isRegister, setIsRegister] = useState(startInRegister);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isGoogleFlow, setIsGoogleFlow] = useState(false);
   
   // Registration fields
   const [artisticName, setArtisticName] = useState('');
   const [city, setCity] = useState('');
+  const [state, setState] = useState('');
   const [genre, setGenre] = useState('Sertanejo');
   const [whatsapp, setWhatsapp] = useState('');
   const [instagram, setInstagram] = useState('');
+  const [userType, setUserType] = useState('Artista');
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   
+  // Missing Firestore document profile completion block
+  const [isCompleteProfileMode, setIsCompleteProfileMode] = useState(false);
+  const [pendingAuthUid, setPendingAuthUid] = useState('');
+  const [pendingAuthEmail, setPendingAuthEmail] = useState('');
+
   const [errorMsg, setErrorMsg] = useState('');
   const [successAnimation, setSuccessAnimation] = useState(false);
 
   useEffect(() => {
     setIsRegister(startInRegister);
     setIsGoogleFlow(false);
+    setIsCompleteProfileMode(false);
   }, [startInRegister]);
 
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -59,123 +82,216 @@ export default function AuthScreen({
     }
 
     if (isRegister) {
-      if (!artisticName) {
-        setErrorMsg('Nome Artístico é obrigatório.');
+      if (!artisticName.trim()) {
+        setErrorMsg('O Nome Artístico ou nome do cliente é obrigatório.');
         return;
       }
-      
-      // Auto slug for custom URL handle ID
-      const userSlug = artisticName.toLowerCase()
-        .replace(/[^a-z0-9]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
+      if (!whatsapp.trim()) {
+        setErrorMsg('WhatsApp de contato é obrigatório.');
+        return;
+      }
+      if (!city.trim()) {
+        setErrorMsg('Cidade é obrigatória.');
+        return;
+      }
+      if (!state.trim()) {
+        setErrorMsg('Estado é obrigatório.');
+        return;
+      }
+      if (password.length < 6) {
+        setErrorMsg('A senha deve conter no mínimo 6 caracteres.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg('As senhas não coincidem.');
+        return;
+      }
+
+      // Create user in Firebase Authentication
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+        const user = userCredential.user;
+
+        // Save profile in Firestore users collection & artists collection
+        const profileData: Partial<Artist> = {
+          name: artisticName.trim(),
+          artistName: artisticName.trim(),
+          email: email.trim().toLowerCase(),
+          whatsapp: whatsapp.trim().replace(/\D/g, ''),
+          phone: whatsapp.trim().replace(/\D/g, ''),
+          city: city.trim(),
+          state: state.trim().toUpperCase(),
+          mainGenre: genre,
+          instagram: instagram.trim().replace(/@/g, ''),
+          userType: userType,
+        };
+
+        const registeredProfile = await dbService.registerUserInFirestore(user.uid, profileData);
         
-      const slugId = userSlug || `artist-${Math.floor(Math.random() * 8999) + 1000}`;
+        setSuccessAnimation(true);
+        setTimeout(() => {
+          onLoginSuccess(registeredProfile);
+        }, 1200);
 
-      const newProfile: Artist = {
-        userId: slugId,
-        name: artisticName,
-        email: email.trim().toLowerCase(),
-        city: city || 'Não Informada',
-        genre,
-        whatsapp: whatsapp.replace(/\D/g, '') || '5562999999999',
-        instagram: instagram.replace(/@/g, '') || 'insta_artist',
-        bio: bio || `Catálogo musical de ${artisticName} no Soundrive.`,
-        avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500',
-        plan: initPremium ? 'premium' : 'free',
-        createdAt: new Date().toISOString()
-      };
-
-      dbService.updateArtistProfile(slugId, newProfile);
-      dbService.setCurrentUser(newProfile);
-      
-      setSuccessAnimation(true);
-      setTimeout(() => {
-        onLoginSuccess(newProfile);
-      }, 1200);
+      } catch (err: any) {
+        console.error("Firebase Registration Error: ", err);
+        let msg = 'Erro ao realizar cadastro. Tente outro e-mail.';
+        if (err.code === 'auth/email-already-in-use') {
+          msg = 'Este e-mail já está sendo utilizado por outra conta.';
+        } else if (err.code === 'auth/weak-password') {
+          msg = 'A senha informada é muito fraca.';
+        } else if (err.message) {
+          msg = err.message;
+        }
+        setErrorMsg(msg);
+      }
 
     } else {
-      // Login simulation: Check if user exists, otherwise create or auto-authenticate
-      const artists = dbService.getAllArtists();
-      const matched = Object.values(artists).find(a => a.email.toLowerCase() === email.trim().toLowerCase());
+      // Login flow
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+        const user = userCredential.user;
 
-      if (matched) {
-        if (matched.isBlocked) {
-          setErrorMsg('Sua conta está temporariamente bloqueada. Fale com o suporte.');
-          return;
-        }
-        dbService.setCurrentUser(matched);
-        setSuccessAnimation(true);
-        setTimeout(() => {
-          onLoginSuccess(matched);
-        }, 1200);
-      } else {
-        // Safe fallbacks to keep prototype completely active on arbitrary credentials
-        const emailLower = email.trim().toLowerCase();
-        if (emailLower === 'videopremieroficial@gmail.com') {
-          // Auto create administrator
-          const adminProfile: Artist = {
-            userId: "admin-soundrive",
-            name: "Administrador Soundrive",
-            email: "videopremieroficial@gmail.com",
-            city: "Goiânia - GO",
-            genre: "Todos",
-            whatsapp: "5562999999999",
-            instagram: "soundrive_app",
-            bio: "Painel de Administração do Soundrive.",
-            avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=500",
-            plan: 'premium',
-            role: 'admin',
-            createdAt: new Date().toISOString()
+        // Fetch user from Firestore 'users' collection
+        const userDocRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userDocRef);
+
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          if (userData.isBlocked) {
+            setErrorMsg('Sua conta está temporariamente bloqueada. Fale com o suporte.');
+            return;
+          }
+
+          // Build local Artist profile object from Firestore fields
+          const loggedArtist: Artist = {
+            userId: user.uid,
+            name: userData.artistName || userData.name || 'Artista',
+            artistName: userData.artistName || userData.name || 'Artista',
+            email: userData.email || email.trim().toLowerCase(),
+            whatsapp: userData.whatsapp || userData.phone || '',
+            phone: userData.phone || userData.whatsapp || '',
+            city: userData.city || '',
+            state: userData.state || '',
+            mainGenre: userData.mainGenre || userData.genre || 'Sertanejo',
+            genre: userData.genre || userData.mainGenre || 'Sertanejo',
+            instagram: userData.instagram || '',
+            userType: userData.userType || 'Artista',
+            role: userData.role || 'user',
+            plan: userData.plan || 'free',
+            paymentStatus: userData.paymentStatus || 'inactive',
+            accessType: userData.accessType || 'free',
+            musicLimit: userData.musicLimit || 5,
+            songsCount: userData.songsCount || 0,
+            createdAt: userData.createdAt instanceof Timestamp ? userData.createdAt.toDate().toISOString() : userData.createdAt || new Date().toISOString(),
+            updatedAt: userData.updatedAt instanceof Timestamp ? userData.updatedAt.toDate().toISOString() : userData.updatedAt || new Date().toISOString(),
           };
-          dbService.setCurrentUser(adminProfile);
-          dbService.ensureAdminAuth().then(() => {
-            const finalProfile = dbService.getCurrentUser() || adminProfile;
-            setSuccessAnimation(true);
-            setTimeout(() => {
-              onLoginSuccess(finalProfile);
-            }, 1200);
-          });
-          return;
+
+          dbService.setCurrentUser(loggedArtist);
+          setSuccessAnimation(true);
+          setTimeout(() => {
+            onLoginSuccess(loggedArtist);
+          }, 1200);
+
+        } else {
+          // Se o usuário logado ainda não tiver documento no Firestore, transicionamos para o modo "Complete seu cadastro"
+          setPendingAuthUid(user.uid);
+          setPendingAuthEmail(user.email || email.trim().toLowerCase());
+          setIsCompleteProfileMode(true);
         }
 
-        const demoProfile: Artist = {
-          userId: "gabriel-silva",
-          name: "Gabriel Silva",
-          email: email.trim().toLowerCase(),
-          city: "Goiânia - GO",
-          genre: "Sertanejo / MPB",
-          whatsapp: "5562999999999",
-          instagram: "gabrielsilva_oficial",
-          bio: "Compositor há mais de 10 anos, escrevendo hits sertanejos e modas de viola exclusivas.",
-          avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-          plan: 'free',
-          createdAt: new Date().toISOString()
-        };
-        dbService.setCurrentUser(demoProfile);
-        setSuccessAnimation(true);
-        setTimeout(() => {
-          onLoginSuccess(demoProfile);
-        }, 1205);
+      } catch (err: any) {
+        console.error("Firebase Login Error: ", err);
+        let msg = 'E-mail ou senha incorretos.';
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+          msg = 'E-mail ou senha inválidos.';
+        } else if (err.message) {
+          msg = err.message;
+        }
+        setErrorMsg(msg);
       }
     }
   };
 
-  const signInGoogle = () => {
+  const signInGoogle = async () => {
     setErrorMsg('');
-    setIsGoogleFlow(true);
-    // Pre-fill user profile fields for editing
-    setArtisticName("Rodrigo Alencar");
-    setEmail("rodrigo.alencar@gmail.com");
-    setCity("Goiânia - GO");
-    setGenre("Sertanejo");
-    setWhatsapp("");
-    setInstagram("rodrigoalencar_som");
-    setBio("Compositor ativo buscando gravar com grandes intérpretes.");
-    setAvatarUrl("https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80");
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      setIsGoogleFlow(true);
+      
+      // Update states with real Google account data
+      setEmail(user.email || '');
+      setArtisticName(user.displayName || '');
+      setAvatarUrl(user.photoURL || '');
+      setPendingAuthUid(user.uid);
+      setPendingAuthEmail(user.email || '');
+      
+      // Check if this user exists in Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userDocRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.isBlocked) {
+          setErrorMsg('Sua conta está temporariamente bloqueada. Fale com o suporte.');
+          setIsGoogleFlow(false);
+          return;
+        }
+        
+        // Build local Artist profile object from Firestore fields
+        const loggedArtist: Artist = {
+          userId: user.uid,
+          name: userData.artistName || userData.name || 'Artista',
+          artistName: userData.artistName || userData.name || 'Artista',
+          email: userData.email || user.email || '',
+          whatsapp: userData.whatsapp || userData.phone || '',
+          phone: userData.phone || userData.whatsapp || '',
+          city: userData.city || '',
+          state: userData.state || '',
+          mainGenre: userData.mainGenre || userData.genre || 'Sertanejo',
+          genre: userData.genre || userData.mainGenre || 'Sertanejo',
+          instagram: userData.instagram || '',
+          userType: userData.userType || 'Artista',
+          role: userData.role || 'user',
+          plan: userData.plan || 'free',
+          paymentStatus: userData.paymentStatus || 'inactive',
+          accessType: userData.accessType || 'free',
+          musicLimit: userData.musicLimit || 5,
+          songsCount: userData.songsCount || 0,
+          createdAt: userData.createdAt instanceof Timestamp ? userData.createdAt.toDate().toISOString() : userData.createdAt || new Date().toISOString(),
+          updatedAt: userData.updatedAt instanceof Timestamp ? userData.updatedAt.toDate().toISOString() : userData.updatedAt || new Date().toISOString(),
+        };
+
+        dbService.setCurrentUser(loggedArtist);
+        setSuccessAnimation(true);
+        setTimeout(() => {
+          onLoginSuccess(loggedArtist);
+        }, 1200);
+      } else {
+        // User profile does not exist yet. Let them complete the form!
+        setWhatsapp('');
+        setCity('');
+        setState('');
+      }
+    } catch (err: any) {
+      console.error("Google login error: ", err);
+      // Reset state so we don't present a fake/broken Google state with blank/missing fields
+      setIsGoogleFlow(false);
+      
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/user-cancelled' || err.message?.includes('closed') || err.message?.includes('cancelled') || err.message?.includes('Popup')) {
+        setErrorMsg('O login com o Google foi fechado ou cancelado. Se o pop-up foi bloqueado pelo seu navegador, clique em abrir em uma nova aba no topo para logar com o Google, ou preencha o cadastro/login comum por e-mail e senha abaixo.');
+      } else {
+        setErrorMsg(`Erro na autenticação do Google: ${err.message || 'Erro de rede ou permissão'}. Você pode utilizar o cadastro padrão por e-mail e senha abaixo.`);
+      }
+    }
   };
 
-  const handleGoogleCompleteSubmit = (e: React.FormEvent) => {
+  const handleGoogleCompleteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -187,6 +303,14 @@ export default function AuthScreen({
       setErrorMsg('O WhatsApp de contato é obrigatório.');
       return;
     }
+    if (!city.trim()) {
+      setErrorMsg('Cidade é obrigatória.');
+      return;
+    }
+    if (!state.trim()) {
+      setErrorMsg('Estado é obrigatório.');
+      return;
+    }
 
     const cleanedWhatsapp = whatsapp.replace(/\D/g, '');
     if (cleanedWhatsapp.length < 10) {
@@ -194,35 +318,82 @@ export default function AuthScreen({
       return;
     }
 
-    // Auto slug for custom URL handle ID
-    const userSlug = artisticName.toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
+    try {
+      // Use logged Google uid if available, otherwise fallback on a safe tracking ID
+      const targetUid = pendingAuthUid || auth.currentUser?.uid || `google-${Math.floor(Math.random() * 89999) + 10000}`;
+
+      const profileData: Partial<Artist> = {
+        name: artisticName.trim(),
+        artistName: artisticName.trim(),
+        email: email.trim().toLowerCase(),
+        whatsapp: cleanedWhatsapp,
+        phone: cleanedWhatsapp,
+        city: city.trim(),
+        state: state.trim().toUpperCase(),
+        mainGenre: genre,
+        instagram: instagram.trim().replace(/@/g, ''),
+        userType: 'Artista',
+      };
+
+      const registeredProfile = await dbService.registerUserInFirestore(targetUid, profileData);
       
-    const slugId = userSlug || `artist-${Math.floor(Math.random() * 8999) + 1000}`;
+      setSuccessAnimation(true);
+      setTimeout(() => {
+        onLoginSuccess(registeredProfile);
+      }, 1200);
 
-    const newProfile: Artist = {
-      userId: slugId,
-      name: artisticName,
-      email: email.trim().toLowerCase(),
-      city: city || 'Não Informada',
-      genre,
-      whatsapp: cleanedWhatsapp,
-      instagram: instagram.replace(/@/g, '') || 'insta_artist',
-      bio: bio || `Catálogo musical de ${artisticName} no Soundrive.`,
-      avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80',
-      plan: initPremium ? 'premium' : 'free',
-      createdAt: new Date().toISOString()
-    };
+    } catch (err: any) {
+      console.error("Google profile save error: ", err);
+      setErrorMsg(err.message || 'Erro ao finalizar cadastro pelo Google.');
+    }
+  };
 
-    dbService.updateArtistProfile(slugId, newProfile);
-    dbService.setCurrentUser(newProfile);
-    
-    setSuccessAnimation(true);
-    setTimeout(() => {
-      onLoginSuccess(newProfile);
-    }, 1200);
+  const handleCompleteProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!artisticName.trim()) {
+      setErrorMsg('O Nome Artístico ou nome do cliente é obrigatório.');
+      return;
+    }
+    if (!whatsapp.trim()) {
+      setErrorMsg('WhatsApp de contato é obrigatório.');
+      return;
+    }
+    if (!city.trim()) {
+      setErrorMsg('Cidade é obrigatória.');
+      return;
+    }
+    if (!state.trim()) {
+      setErrorMsg('Estado é obrigatório.');
+      return;
+    }
+
+    try {
+      const profileData: Partial<Artist> = {
+        name: artisticName.trim(),
+        artistName: artisticName.trim(),
+        email: pendingAuthEmail || email.trim().toLowerCase(),
+        whatsapp: whatsapp.trim().replace(/\D/g, ''),
+        phone: whatsapp.trim().replace(/\D/g, ''),
+        city: city.trim(),
+        state: state.trim().toUpperCase(),
+        mainGenre: genre,
+        instagram: instagram.trim().replace(/@/g, ''),
+        userType: userType,
+      };
+
+      const registeredProfile = await dbService.registerUserInFirestore(pendingAuthUid, profileData);
+
+      setSuccessAnimation(true);
+      setTimeout(() => {
+        onLoginSuccess(registeredProfile);
+      }, 1200);
+
+    } catch (err: any) {
+      console.error("Complete Profile error: ", err);
+      setErrorMsg(err.message || 'Erro ao finalizar cadastro.');
+    }
   };
 
   return (
@@ -250,6 +421,152 @@ export default function AuthScreen({
             </div>
             <h3 className="text-2xl font-heading font-black tracking-tight uppercase text-glow">Autenticação Concluída!</h3>
             <p className="text-slate-400 text-sm">Carregando as pastas do seu pen drive digital...</p>
+          </div>
+        ) : isCompleteProfileMode ? (
+          <div className="space-y-6 animate-fade-in">
+            <div className="text-center">
+              <div className="inline-flex p-3 bg-orange-955/45 border border-orange-500/20 rounded-2xl mb-4 text-orange-400 animate-pulse">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <h2 className="text-2xl font-heading font-black tracking-tight uppercase">
+                Complete Seu Cadastro
+              </h2>
+              <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                Falta muito pouco! Preencha as informações obrigatórias abaixo para ativar sua conta e acessar seu Soundrive grátis:
+              </p>
+            </div>
+
+            {errorMsg && (
+              <div id="complete-profile-error" className="p-3 bg-red-950 border border-red-500/40 text-red-300 text-xs font-mono rounded-xl text-center animate-shake">
+                {errorMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleCompleteProfileSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome Artístico / Cliente <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <input 
+                      id="comp-artist-name"
+                      required
+                      type="text" 
+                      placeholder="Ex: Lara & Gabriel"
+                      value={artisticName}
+                      onChange={(e) => setArtisticName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Tipo de Usuário <span className="text-red-500">*</span></label>
+                  <select 
+                    id="comp-user-type"
+                    value={userType}
+                    onChange={(e) => setUserType(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-slate-300 transition"
+                  >
+                    <option value="Compositor">Compositor</option>
+                    <option value="Artista">Artista</option>
+                    <option value="Produtor">Produtor</option>
+                    <option value="Escritório musical">Escritório musical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Principal <span className="text-red-500">*</span></label>
+                  <select 
+                    id="comp-music-genre"
+                    value={genre}
+                    onChange={(e) => setGenre(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-slate-300 transition animate-pulse-border"
+                  >
+                    <option value="Sertanejo Universitário">Sertanejo Universitário</option>
+                    <option value="Sertanejo Raiz">Sertanejo Raiz</option>
+                    <option value="Pagode / Samba">Pagode / Samba</option>
+                    <option value="Forró / Xote">Forró / Xote</option>
+                    <option value="MPB Tradicional">MPB Tradicional</option>
+                    <option value="Gospel">Gospel</option>
+                    <option value="Pop Rock">Pop Rock</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">WhatsApp de Contato <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <input 
+                      id="comp-whatsapp"
+                      required
+                      type="text" 
+                      placeholder="DDD + WhatsApp"
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Cidade <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <input 
+                      id="comp-city"
+                      required
+                      type="text" 
+                      placeholder="Ex: Goiânia"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estado (UF) <span className="text-red-500">*</span></label>
+                  <input 
+                    id="comp-state"
+                    required
+                    maxLength={2}
+                    type="text" 
+                    placeholder="Ex: GO"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Instagram (Opcional)</label>
+                <div className="relative">
+                  <Instagram className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                  <input 
+                    id="comp-instagram"
+                    type="text" 
+                    placeholder="gabrielsilva_oficial"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                  />
+                </div>
+              </div>
+
+              <button 
+                id="complete-submit-btn"
+                type="submit"
+                className="w-full py-4 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition text-slate-950 font-bold"
+              >
+                Salvar e Acessar Painel 🚀
+              </button>
+            </form>
           </div>
         ) : isGoogleFlow ? (
           <div className="space-y-6">
@@ -332,22 +649,39 @@ export default function AuthScreen({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Cidade - Estado</label>
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Cidade <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
                     <input 
                       id="google-reg-city"
+                      required
                       type="text" 
-                      placeholder="Ex: Goiânia - GO"
+                      placeholder="Ex: Goiânia"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-semibold"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Instagram (Usuário)</label>
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estado (UF) <span className="text-red-500">*</span></label>
+                  <input 
+                    id="google-reg-state"
+                    required
+                    maxLength={2}
+                    type="text" 
+                    placeholder="Ex: GO"
+                    value={state}
+                    onChange={(e) => setState(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Instagram (Opcional)</label>
                   <div className="relative">
                     <Instagram className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
                     <input 
@@ -360,20 +694,21 @@ export default function AuthScreen({
                     />
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">E-mail Conectado</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-600" />
-                  <input 
-                    id="google-reg-email"
-                    type="email" 
-                    value={email}
-                    disabled
-                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-850 rounded-xl text-sm text-slate-500 outline-none cursor-not-allowed"
-                    title="Seu e-mail está autenticado pelo Google"
-                  />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">E-mail Conectado <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <input 
+                      id="google-reg-email"
+                      required
+                      type="email" 
+                      placeholder="voce@exemplo.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-semibold"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -441,14 +776,15 @@ export default function AuthScreen({
             <form onSubmit={handleAuth} className="space-y-4">
               {/* Optional Registration Inputs */}
               {isRegister && (
-                <div className="space-y-3 pt-2">
+                <div className="space-y-3 pt-1">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome Artístico / Banda</label>
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome Artístico ou Cliente <span className="text-red-500">*</span></label>
                       <div className="relative">
                         <User className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
                         <input 
                           id="reg-artist-name"
+                          required
                           type="text" 
                           placeholder="Ex: Lara & Gabriel"
                           value={artisticName}
@@ -459,46 +795,47 @@ export default function AuthScreen({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Principal</label>
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Tipo de Usuário <span className="text-red-500">*</span></label>
                       <select 
-                        id="reg-music-genre"
-                        value={genre}
-                        onChange={(e) => setGenre(e.target.value)}
+                        id="reg-user-type"
+                        value={userType}
+                        onChange={(e) => setUserType(e.target.value)}
                         className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-slate-300 transition"
                       >
-                        <option value="Sertanejo">Sertanejo Universitário</option>
-                        <option value="Sertanejo Raiz">Sertanejo Raiz</option>
-                        <option value="Samba">Pagode / Samba</option>
-                        <option value="Forró">Forró / Xote</option>
-                        <option value="MPB">MPB Tradicional</option>
-                        <option value="Gospel">Gospel / Religioso</option>
-                        <option value="Pop Rock">Pop / Rock Nacional</option>
+                        <option value="Compositor">Compositor</option>
+                        <option value="Artista">Artista</option>
+                        <option value="Produtor">Produtor</option>
+                        <option value="Escritório musical">Escritório musical</option>
                       </select>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Cidade - Estado</label>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
-                        <input 
-                          id="reg-city"
-                          type="text" 
-                          placeholder="Ex: Goiânia - GO"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
-                        />
-                      </div>
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Principal <span className="text-red-500">*</span></label>
+                      <select 
+                        id="reg-music-genre"
+                        value={genre}
+                        onChange={(e) => setGenre(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-slate-300 transition"
+                      >
+                        <option value="Sertanejo Universitário">Sertanejo Universitário</option>
+                        <option value="Sertanejo Raiz">Sertanejo Raiz</option>
+                        <option value="Pagode / Samba">Pagode / Samba</option>
+                        <option value="Forró / Xote">Forró / Xote</option>
+                        <option value="MPB Tradicional">MPB Tradicional</option>
+                        <option value="Gospel">Gospel</option>
+                        <option value="Pop Rock">Pop Rock</option>
+                      </select>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">WhatsApp de Contato</label>
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">WhatsApp de Contato <span className="text-red-500">*</span></label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
                         <input 
                           id="reg-whatsapp"
+                          required
                           type="text" 
                           placeholder="DDD + Número (Ex: 6299999999)"
                           value={whatsapp}
@@ -511,54 +848,61 @@ export default function AuthScreen({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Instagram (Usuário)</label>
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Cidade <span className="text-red-500">*</span></label>
                       <div className="relative">
-                        <Instagram className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                        <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
                         <input 
-                          id="reg-instagram"
+                          id="reg-city"
+                          required
                           type="text" 
-                          placeholder="gabrielsilva_oficial"
-                          value={instagram}
-                          onChange={(e) => setInstagram(e.target.value)}
+                          placeholder="Ex: Goiânia"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
                           className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Link da Foto Artista (Opcional)</label>
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estado (UF) <span className="text-red-500">*</span></label>
                       <input 
-                        id="reg-avatar-url"
+                        id="reg-state"
+                        required
+                        maxLength={2}
                         type="text" 
-                        placeholder="https://suafoto.com/perfil.jpg"
-                        value={avatarUrl}
-                        onChange={(e) => setAvatarUrl(e.target.value)}
+                        placeholder="Ex: GO"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
                         className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Bio / Curto Histórico</label>
-                    <textarea 
-                      id="reg-bio"
-                      placeholder="Fale um pouco sobre sua trajetória, composições ou banda..."
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      rows={2}
-                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white resize-none transition"
-                    ></textarea>
+                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Instagram (Opcional)</label>
+                    <div className="relative">
+                      <Instagram className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                      <input 
+                        id="reg-instagram"
+                        type="text" 
+                        placeholder="gabrielsilva_oficial"
+                        value={instagram}
+                        onChange={(e) => setInstagram(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Core Login/Register Credentials */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Endereço de E-mail</label>
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Endereço de E-mail <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
                   <input 
                     id="auth-email-input"
+                    required
                     type="email" 
                     placeholder="voce@exemplo.com"
                     value={email}
@@ -568,27 +912,50 @@ export default function AuthScreen({
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Senha de Acesso</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
-                  <input 
-                    id="auth-password-input"
-                    type="password" 
-                    placeholder="Mínimo 6 caracteres"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Senha <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                    <input 
+                      id="auth-password-input"
+                      required
+                      type="password" 
+                      placeholder="Mínimo 6 caracteres"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                    />
+                  </div>
                 </div>
+
+                {isRegister ? (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Confirmar Senha <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                      <input 
+                        id="auth-confirm-password-input"
+                        required
+                        type="password" 
+                        placeholder="Repita a senha"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="hidden md:block"></div>
+                )}
               </div>
 
               <button 
                 id="auth-submit-btn"
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition-transform active:scale-98 select-none text-slate-950"
+                className="w-full py-4 mt-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition-transform active:scale-98 select-none text-slate-950"
               >
-                {isRegister ? 'Criar Minha Conta de Compositor' : 'Entrar no Painel do Compositor'}
+                {isRegister ? 'Criar Meu Soundrive Grátis' : 'Entrar no Painel'}
               </button>
             </form>
 
