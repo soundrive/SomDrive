@@ -19,6 +19,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'videopremieroficial@gmail.com' ||
+        request.auth.token.email == 'sertanejopremier@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
         (exists(/databases/$(database)/documents/artists/$(request.auth.uid)) && get(/databases/$(database)/documents/artists/$(request.auth.uid)).data.role == 'admin')
       );
@@ -59,6 +60,28 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount', 'whatsappClicks'])
         );
       }
+    }
+
+    // --- Audio Files Collection Rules (Deduplicated audio repository) ---
+    match /audioFiles/{audioFileId} {
+      allow get, list: if isSignedIn(); // Logged in users can check existing audioFiles by hash
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isSignedIn() && (
+        // Only allow incrementing usageCount, nothing else
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usageCount'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Songs Collection Rules (The compositions) ---
+    match /songs/{songId} {
+      allow get, list: if true; // Public listings can read and stream
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if (isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin())) || (
+        // Allow viewers/listeners to increment plays and playsCount safely without auth
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plays', 'playsCount', 'updatedAt'])
+      );
+      allow delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
     }
 
   }

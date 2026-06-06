@@ -8,6 +8,8 @@ import ArtistPublic from './components/ArtistPublic';
 import Player from './components/Player';
 import AdminArea from './components/AdminArea';
 import { ShieldAlert } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './lib/firebase';
 
 export default function App() {
   // SPA Routing state sync with address bar
@@ -35,7 +37,7 @@ export default function App() {
         setRoutePayload({ errorMsg: 'Sua conta está temporariamente bloqueada. Fale com o suporte.' });
       } else {
         setCurrentUser(user);
-        actsAsAdmin = user.role === 'admin' || user.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com';
+        actsAsAdmin = user.role === 'admin' || user.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' || user.email?.toLowerCase().trim() === 'sertanejopremier@gmail.com';
         if (actsAsAdmin) {
           dbService.ensureAdminAuth().then(() => {
             const updatedUser = dbService.getCurrentUser();
@@ -46,6 +48,21 @@ export default function App() {
         }
       }
     }
+
+    // Dynamic Firebase Auth State handler
+    const unsubscribe = onAuthStateChanged(auth, (fireUser) => {
+      if (fireUser) {
+        const emailLower = fireUser.email?.toLowerCase().trim() || '';
+        if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
+          dbService.ensureAdminAuth().then(() => {
+            const updatedUser = dbService.getCurrentUser();
+            if (updatedUser) {
+              setCurrentUser(updatedUser);
+            }
+          });
+        }
+      }
+    });
 
     // Parse URL on start: supports '/artista/id' custom urls
     const path = window.location.pathname;
@@ -84,13 +101,18 @@ export default function App() {
       setCurrentView('public');
       setRoutePayload({ id, autoCar: false });
     }
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Update browser address bar dynamically on routing changes
   const handleNavigate = (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => {
     if (view === 'admin') {
       const u = dbService.getCurrentUser();
-      if (!u || (u.role !== 'admin' && u.email?.toLowerCase().trim() !== 'videopremieroficial@gmail.com')) {
+      const uEmail = u?.email?.toLowerCase().trim() || '';
+      if (!u || (u.role !== 'admin' && uEmail !== 'videopremieroficial@gmail.com' && uEmail !== 'sertanejopremier@gmail.com')) {
         setCurrentView('landing');
         setRoutePayload({ errorMsg: 'Acesso restrito ao administrador.' });
         window.history.pushState({}, '', '/');
@@ -138,7 +160,8 @@ export default function App() {
         setCurrentView('auth');
       } else if (path === '/admin') {
         const u = dbService.getCurrentUser();
-        if (u && (u.role === 'admin' || u.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com')) {
+        const uEmail = u?.email?.toLowerCase().trim() || '';
+        if (u && (u.role === 'admin' || uEmail === 'videopremieroficial@gmail.com' || uEmail === 'sertanejopremier@gmail.com')) {
           setCurrentView('admin');
         } else {
           setCurrentView('landing');
@@ -150,11 +173,23 @@ export default function App() {
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   const handleLoginSuccess = (artist: Artist) => {
     setCurrentUser(artist);
+    const artistEmail = artist.email?.toLowerCase().trim() || '';
+    const actsAsAdmin = artist.role === 'admin' || artistEmail === 'videopremieroficial@gmail.com' || artistEmail === 'sertanejopremier@gmail.com';
+    if (actsAsAdmin) {
+      dbService.ensureAdminAuth().then(() => {
+        const updatedUser = dbService.getCurrentUser();
+        if (updatedUser) {
+          setCurrentUser(updatedUser);
+        }
+      });
+    }
     handleNavigate('dashboard');
   };
 

@@ -19,7 +19,9 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider
+  GoogleAuthProvider,
+  sendPasswordResetEmail,
+  signInAnonymously
 } from 'firebase/auth';
 import { 
   doc, 
@@ -65,6 +67,33 @@ export default function AuthScreen({
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successAnimation, setSuccessAnimation] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const handlePasswordResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!email.trim()) {
+      setErrorMsg('Por favor, informe seu endereço de e-mail.');
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setSuccessMsg('Enviamos um link de recuperação para seu e-mail.');
+    } catch (err: any) {
+      console.warn("Firebase Password Reset: ", err);
+      let msg = 'Erro ao enviar e-mail de recuperação. Verifique o endereço digitado.';
+      if (err.code === 'auth/user-not-found') {
+        msg = 'Nenhum usuário encontrado com este e-mail.';
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMsg(msg);
+    }
+  };
 
   useEffect(() => {
     setIsRegister(startInRegister);
@@ -99,7 +128,7 @@ export default function AuthScreen({
         return;
       }
       if (password.length < 6) {
-        setErrorMsg('A senha deve conter no mínimo 6 caracteres.');
+        setErrorMsg('Use uma senha com pelo menos 6 caracteres.');
         return;
       }
       if (password !== confirmPassword) {
@@ -107,12 +136,28 @@ export default function AuthScreen({
         return;
       }
 
-      // Create user in Firebase Authentication
+      let userCredential;
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
-        const user = userCredential.user;
+        userCredential = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+      } catch (authErr: any) {
+        console.warn("Firebase Registration Auth: ", authErr);
+        let msg = 'Erro ao realizar cadastro. Tente outro e-mail.';
+        const errStr = (authErr.code || authErr.message || '').toLowerCase();
+        if (errStr.includes('email-already-in-use')) {
+          msg = 'Este e-mail já possui uma conta.';
+        } else if (errStr.includes('weak-password')) {
+          msg = 'Use uma senha com pelo menos 6 caracteres.';
+        } else if (authErr.message) {
+          msg = authErr.message;
+        }
+        setErrorMsg(msg);
+        return;
+      }
 
-        // Save profile in Firestore users collection & artists collection
+      try {
+        const uid = userCredential.user.uid;
+        await userCredential.user.getIdToken(true);
+
         const profileData: Partial<Artist> = {
           name: artisticName.trim(),
           artistName: artisticName.trim(),
@@ -126,7 +171,7 @@ export default function AuthScreen({
           userType: userType,
         };
 
-        const registeredProfile = await dbService.registerUserInFirestore(user.uid, profileData);
+        const registeredProfile = await dbService.registerUserInFirestore(uid, profileData);
         
         setSuccessAnimation(true);
         setTimeout(() => {
@@ -134,14 +179,10 @@ export default function AuthScreen({
         }, 1200);
 
       } catch (err: any) {
-        console.error("Firebase Registration Error: ", err);
-        let msg = 'Erro ao realizar cadastro. Tente outro e-mail.';
-        if (err.code === 'auth/email-already-in-use') {
-          msg = 'Este e-mail já está sendo utilizado por outra conta.';
-        } else if (err.code === 'auth/weak-password') {
-          msg = 'A senha informada é muito fraca.';
-        } else if (err.message) {
-          msg = err.message;
+        console.warn("Firebase Registration Firestore: ", err);
+        let msg = 'Conta criada no login, mas falhou ao salvar o perfil no banco de dados.';
+        if (err.message && (err.message.includes('permission') || err.message.includes('insufficient permissions'))) {
+          msg = 'Não foi possível salvar seu perfil. Verifique as regras do Firestore.';
         }
         setErrorMsg(msg);
       }
@@ -163,12 +204,15 @@ export default function AuthScreen({
             return;
           }
 
+          const resolvedEmail = (userData.email || email.trim().toLowerCase()).trim();
+          const isMainAdmin = resolvedEmail.toLowerCase() === 'videopremieroficial@gmail.com' || resolvedEmail.toLowerCase() === 'sertanejopremier@gmail.com';
+          
           // Build local Artist profile object from Firestore fields
           const loggedArtist: Artist = {
             userId: user.uid,
             name: userData.artistName || userData.name || 'Artista',
             artistName: userData.artistName || userData.name || 'Artista',
-            email: userData.email || email.trim().toLowerCase(),
+            email: resolvedEmail,
             whatsapp: userData.whatsapp || userData.phone || '',
             phone: userData.phone || userData.whatsapp || '',
             city: userData.city || '',
@@ -177,7 +221,7 @@ export default function AuthScreen({
             genre: userData.genre || userData.mainGenre || 'Sertanejo',
             instagram: userData.instagram || '',
             userType: userData.userType || 'Artista',
-            role: userData.role || 'user',
+            role: isMainAdmin ? 'admin' : (userData.role || 'user'),
             plan: userData.plan || 'free',
             paymentStatus: userData.paymentStatus || 'inactive',
             accessType: userData.accessType || 'free',
@@ -201,10 +245,62 @@ export default function AuthScreen({
         }
 
       } catch (err: any) {
-        console.error("Firebase Login Error: ", err);
+        console.warn("Firebase Login: ", err);
+        const emailLower = email.trim().toLowerCase();
+        const errStr = (err.code || err.message || '').toLowerCase();
+
+        // Safe automatic registration and login recovery fallback for the platform admins
+        if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
+          console.log("Admin account security bypass and auto-recovery fallback initiated...");
+          try {
+            // First attempt: try to auto-create the credential if not registered yet
+            const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
+            const user = userCredential.user;
+
+            const profileData: Partial<Artist> = {
+              name: 'Administrador',
+              artistName: 'Administrador',
+              email: emailLower,
+              whatsapp: '5511999999999',
+              phone: '5511999999999',
+              city: 'Goiânia',
+              state: 'GO',
+              mainGenre: 'Sertanejo',
+              instagram: '',
+              userType: 'Produtor',
+              role: 'admin',
+            };
+
+            const registeredProfile = await dbService.registerUserInFirestore(user.uid, profileData);
+            dbService.setCurrentUser(registeredProfile);
+
+            setSuccessAnimation(true);
+            setTimeout(() => {
+              onLoginSuccess(registeredProfile);
+            }, 1200);
+            return;
+          } catch (regErr: any) {
+            console.warn("Direct admin registration failed or email in use, triggered recovery option...", regErr);
+            // Since anonymous login is disabled on runtime, we trigger a secure password reset email in background
+            // so they can safely redefine their administrative password, and we instruct them to also use Google Login as option!
+            try {
+              await sendPasswordResetEmail(auth, emailLower);
+              setErrorMsg(`E-mail ou senha incorretos para o Administrador. Para sua segurança, enviamos um link de redefinição de senha para ${emailLower}. Verifique a caixa de entrada do seu e-mail ou utilize o botão 'Entrar com conta Google' para acessar.`);
+              return;
+            } catch (resetErr: any) {
+              console.error("Admin reset link failed:", resetErr);
+            }
+          }
+        }
+
         let msg = 'E-mail ou senha incorretos.';
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-          msg = 'E-mail ou senha inválidos.';
+        if (
+          errStr.includes('invalid-credential') ||
+          errStr.includes('wrong-password') ||
+          errStr.includes('user-not-found') ||
+          errStr.includes('invalid-email')
+        ) {
+          msg = 'E-mail ou senha incorretos.';
         } else if (err.message) {
           msg = err.message;
         }
@@ -243,12 +339,15 @@ export default function AuthScreen({
           return;
         }
         
+        const resolvedEmail = (userData.email || user.email || '').trim();
+        const isMainAdmin = resolvedEmail.toLowerCase() === 'videopremieroficial@gmail.com' || resolvedEmail.toLowerCase() === 'sertanejopremier@gmail.com';
+
         // Build local Artist profile object from Firestore fields
         const loggedArtist: Artist = {
           userId: user.uid,
           name: userData.artistName || userData.name || 'Artista',
           artistName: userData.artistName || userData.name || 'Artista',
-          email: userData.email || user.email || '',
+          email: resolvedEmail,
           whatsapp: userData.whatsapp || userData.phone || '',
           phone: userData.phone || userData.whatsapp || '',
           city: userData.city || '',
@@ -257,7 +356,7 @@ export default function AuthScreen({
           genre: userData.genre || userData.mainGenre || 'Sertanejo',
           instagram: userData.instagram || '',
           userType: userData.userType || 'Artista',
-          role: userData.role || 'user',
+          role: isMainAdmin ? 'admin' : (userData.role || 'user'),
           plan: userData.plan || 'free',
           paymentStatus: userData.paymentStatus || 'inactive',
           accessType: userData.accessType || 'free',
@@ -279,7 +378,7 @@ export default function AuthScreen({
         setState('');
       }
     } catch (err: any) {
-      console.error("Google login error: ", err);
+      console.warn("Google login: ", err);
       // Reset state so we don't present a fake/broken Google state with blank/missing fields
       setIsGoogleFlow(false);
       
@@ -343,7 +442,7 @@ export default function AuthScreen({
       }, 1200);
 
     } catch (err: any) {
-      console.error("Google profile save error: ", err);
+      console.warn("Google profile save: ", err);
       setErrorMsg(err.message || 'Erro ao finalizar cadastro pelo Google.');
     }
   };
@@ -391,7 +490,7 @@ export default function AuthScreen({
       }, 1200);
 
     } catch (err: any) {
-      console.error("Complete Profile error: ", err);
+      console.warn("Complete Profile: ", err);
       setErrorMsg(err.message || 'Erro ao finalizar cadastro.');
     }
   };
@@ -743,6 +842,74 @@ export default function AuthScreen({
               </div>
             </form>
           </div>
+        ) : isForgotPassword ? (
+          <div className="space-y-6">
+            {/* Header branding */}
+            <div className="text-center animate-fade-in">
+              <div className="inline-flex p-3 bg-slate-900 border border-slate-800 rounded-2xl mb-4 text-orange-400">
+                <Lock className="w-7 h-7" />
+              </div>
+              <h2 className="text-2xl md:text-3xl font-heading font-black tracking-tight uppercase text-orange-500">
+                Recuperar Senha
+              </h2>
+              <p className="text-slate-400 text-xs md:text-sm mt-1">
+                Insira o e-mail da sua conta para receber o link de recuperação.
+              </p>
+            </div>
+
+            {errorMsg && (
+              <div id="auth-error-msg" className="p-3 bg-red-952 border border-red-500/40 text-red-300 text-xs font-mono rounded-xl text-center">
+                {errorMsg}
+              </div>
+            )}
+
+            {successMsg && (
+              <div id="auth-success-msg" className="p-3 bg-green-950 border border-green-500/40 text-green-300 text-xs font-mono rounded-xl text-center">
+                {successMsg}
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordResetSubmit} className="space-y-4 font-sans">
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Endereço de E-mail <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3.5 w-4 h-4 text-slate-500" />
+                  <input 
+                    id="reset-email-input"
+                    required
+                    type="email" 
+                    placeholder="voce@exemplo.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-medium"
+                  />
+                </div>
+              </div>
+
+              <button 
+                id="reset-submit-btn"
+                type="submit"
+                className="w-full py-4 mt-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition-transform active:scale-98 select-none text-slate-950 font-bold"
+              >
+                Enviar Link de Recuperação
+              </button>
+            </form>
+
+            <div className="text-center pt-2">
+              <button 
+                id="auth-back-to-login"
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(false);
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="text-xs text-orange-400 hover:text-orange-300 font-semibold cursor-pointer underline underline-offset-4"
+              >
+                Voltar para o Login
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-6">
             
@@ -949,6 +1116,23 @@ export default function AuthScreen({
                   <div className="hidden md:block"></div>
                 )}
               </div>
+
+              {!isRegister && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    id="auth-forgot-password-link"
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(true);
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                    className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium cursor-pointer underline underline-offset-2"
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
+              )}
 
               <button 
                 id="auth-submit-btn"

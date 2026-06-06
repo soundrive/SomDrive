@@ -62,6 +62,7 @@ export default function Dashboard({
   const [title, setTitle] = useState('');
   const [composer, setComposer] = useState(currentUser.name);
   const [singer, setSinger] = useState(currentUser.name);
+  const [partners, setPartners] = useState('');
   const [genre, setGenre] = useState('');
   const [desc, setDesc] = useState('');
   const [lyrics, setLyrics] = useState('');
@@ -199,6 +200,13 @@ export default function Dashboard({
     });
   };
 
+  const computeSHA256 = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   const handleAddMusic = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -260,26 +268,70 @@ export default function Dashboard({
       let r2FileSize = 0;
       let r2OriginalName = "";
       let r2StorageProvider = "preset_demo";
+      let computedHashHex = "";
+      let calculatedAudioFileId = "";
 
       if (audioOption === 'file' && audioFile) {
-        setUploadProgress(60);
+        setUploadProgress(55);
         r2OriginalName = audioFile.name;
         r2MimeType = audioFile.type || "audio/mpeg";
         r2FileSize = audioFile.size;
         r2StorageProvider = "cloudflare_r2";
 
-        const uploadResult = await uploadAudioToR2(
-          profile.userId,
-          uniqueId,
-          audioFile,
-          (percent) => {
-            // Mapeia progresso de [0-100] para [60-90] no indicador visual
-            const mappedProgress = Math.round(60 + (percent * 0.3));
-            setUploadProgress(mappedProgress);
-          }
-        );
-        finalAudio = uploadResult.publicAudioUrl;
-        r2StoragePath = uploadResult.storagePath;
+        // Calculate File Hash using browser performance SHA-256
+        try {
+          computedHashHex = await computeSHA256(audioFile);
+          console.log("Calculated MP3 hash:", computedHashHex);
+        } catch (hashErr) {
+          console.error("SHA-255 calculation failed, uploading without: ", hashErr);
+        }
+
+        setUploadProgress(60);
+
+        // Deduplication discovery flow
+        let existingAudioFile = null;
+        if (computedHashHex) {
+          existingAudioFile = await dbService.findAudioFileByHash(computedHashHex);
+        }
+
+        if (existingAudioFile) {
+          console.log("Physical audio duplicate detected in storage! Reusing existing stream URL:", existingAudioFile.audioUrl);
+          finalAudio = existingAudioFile.audioUrl;
+          r2StoragePath = existingAudioFile.storagePath;
+          calculatedAudioFileId = existingAudioFile.id;
+          
+          // Safely update file reuse count
+          await dbService.incrementAudioFileUsage(existingAudioFile.id);
+          setUploadProgress(90);
+        } else {
+          // Upload new unique binary file to Cloudflare R2
+          const uploadResult = await uploadAudioToR2(
+            profile.userId,
+            uniqueId,
+            audioFile,
+            (percent) => {
+              const mappedProgress = Math.round(60 + (percent * 0.3));
+              setUploadProgress(mappedProgress);
+            }
+          );
+          finalAudio = uploadResult.publicAudioUrl;
+          r2StoragePath = uploadResult.storagePath;
+
+          // Save newly uploaded physical audio file metadata descriptor
+          calculatedAudioFileId = `file-${Math.floor(Math.random() * 89999) + 10000}`;
+          const newAudioFileObject = {
+            id: calculatedAudioFileId,
+            audioHash: computedHashHex,
+            audioUrl: finalAudio,
+            storagePath: r2StoragePath,
+            fileSize: r2FileSize,
+            mimeType: r2MimeType,
+            originalFileName: r2OriginalName,
+            createdBy: profile.userId,
+            usageCount: 1
+          };
+          await dbService.createAudioFile(calculatedAudioFileId, newAudioFileObject);
+        }
       } else if (audioOption === 'url' && customAudioUrl.trim()) {
         finalAudio = customAudioUrl.trim();
         r2OriginalName = "custom_url_link.mp3";
@@ -287,6 +339,7 @@ export default function Dashboard({
         r2MimeType = "audio/mpeg";
         r2FileSize = 0;
         r2StorageProvider = "external_link";
+        calculatedAudioFileId = `file-ext-${Math.floor(Math.random() * 89999) + 10000}`;
       } else {
         // Rotate roster of high quality fallback MP3 files
         const index = (tracks.length % 5) + 1;
@@ -296,6 +349,7 @@ export default function Dashboard({
         r2MimeType = "audio/mpeg";
         r2FileSize = 0;
         r2StorageProvider = "preset_demo";
+        calculatedAudioFileId = `file-preset-${index}`;
       }
 
       setUploadProgress(92);
@@ -319,7 +373,10 @@ export default function Dashboard({
           storagePath: r2StoragePath,
           fileSize: r2FileSize,
           mimeType: r2MimeType,
-          originalFileName: r2OriginalName
+          originalFileName: r2OriginalName,
+          audioFileId: calculatedAudioFileId,
+          partners: partners.trim(),
+          audioHash: computedHashHex
         });
       } catch (firestoreErrObj: any) {
         console.error("erro ao salvar no Firestore:", firestoreErrObj);
@@ -337,6 +394,7 @@ export default function Dashboard({
       setTitle('');
       setDesc('');
       setLyrics('');
+      setPartners('');
       setAudioFile(null);
       setCoverFile(null);
       setCustomAudioUrl('');
@@ -414,7 +472,7 @@ export default function Dashboard({
         </div>
 
         <div className="flex items-center gap-4">
-          {(profile.role === 'admin' || profile.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com') && (
+          {(profile.role === 'admin' || profile.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' || profile.email?.toLowerCase().trim() === 'sertanejopremier@gmail.com') && (
             <button 
               onClick={() => onNavigate('admin')}
               className="flex items-center gap-1.5 text-xs font-mono uppercase bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-orange-500 hover:text-orange-400 px-3.5 py-1.5 rounded-xl font-bold cursor-pointer transition select-none shadow animate-pulse"
@@ -721,6 +779,11 @@ export default function Dashboard({
                           Autor: {track.composer}
                         </p>
                       )}
+                      {track.partners && (
+                        <p className="text-[10px] font-mono text-slate-400/80 hover:text-white uppercase truncate" title={track.partners}>
+                          Parceiros: {track.partners}
+                        </p>
+                      )}
                       {track.description && (
                         <p className="text-slate-400 text-xs italic line-clamp-2 pt-1 border-t border-slate-850/60 leading-relaxed">
                           {track.description}
@@ -738,6 +801,11 @@ export default function Dashboard({
                       {track.lyrics && (
                         <span className="px-1.5 py-0.5 bg-orange-955/80 border border-orange-550/25 text-orange-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider">
                           Letra
+                        </span>
+                      )}
+                      {track.audioFileId && (
+                        <span className="px-1.5 py-0.5 bg-emerald-950/60 border border-emerald-500/20 text-emerald-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider" title="Otimizado e Deduplicado no Cloudflare R2">
+                          ✓ R2
                         </span>
                       )}
                     </div>
@@ -833,8 +901,8 @@ export default function Dashboard({
                 </div>
               </div>
 
-              {/* Row 2: Composer & Singer */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 2: Composer, Singer & Partners */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome do Compositor (Autor)</label>
                   <input 
@@ -855,7 +923,19 @@ export default function Dashboard({
                     placeholder="Cantor ou banda principal"
                     value={singer}
                     onChange={(e) => setSinger(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Parceiros / Divisões Co-autorias</label>
+                  <input 
+                    id="new-track-partners"
+                    type="text" 
+                    placeholder="Ex: Pedro 50%, João 25%"
+                    value={partners}
+                    onChange={(e) => setPartners(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
                   />
                 </div>
               </div>

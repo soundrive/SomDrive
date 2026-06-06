@@ -144,7 +144,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           
           {currentUser ? (
             <div className="flex items-center gap-3">
-              {(currentUser.role === 'admin' || currentUser.email === 'videopremieroficial@gmail.com') && (
+              {(currentUser.role === 'admin' || currentUser.email === 'videopremieroficial@gmail.com' || currentUser.email === 'sertanejopremier@gmail.com') && (
                 <button 
                   id="header-admin-btn"
                   onClick={() => onNavigate('admin')}

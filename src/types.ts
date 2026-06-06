@@ -60,6 +60,11 @@ export interface Music {
   originalFileName?: string;
   createdAt: string;
   updatedAt?: string;
+
+  // New Deduplication parameters
+  audioFileId?: string;
+  partners?: string;
+  audioHash?: string;
 }
 
 export interface Analytics {

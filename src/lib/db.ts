@@ -199,7 +199,12 @@ import {
   collection, 
   getDocs, 
   deleteDoc, 
-  Timestamp 
+  Timestamp,
+  serverTimestamp,
+  query,
+  where,
+  updateDoc,
+  increment
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType } from './firebase';
@@ -212,7 +217,7 @@ export const dbService = {
     const defaultLimit = artist.plan === 'free' ? 5 : (artist.plan === 'pro' ? 15 : 50);
     const plan = artist.plan || 'free';
     const emailLower = (artist.email || '').toLowerCase().trim();
-    const isMainAdmin = emailLower === 'videopremieroficial@gmail.com';
+    const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
 
     return {
       uid: artist.userId,
@@ -223,7 +228,7 @@ export const dbService = {
       instagram: artist.instagram || '',
       city: artist.city || '',
       state: artist.state || '',
-      role: artist.role || (isMainAdmin ? 'admin' : 'user'),
+      role: isMainAdmin ? 'admin' : (artist.role || 'user'),
       plan: plan,
       paymentStatus: artist.paymentStatus || (plan !== 'free' ? 'manual' : 'inactive'),
       accessType: artist.accessType || (plan !== 'free' ? 'trial' : 'free'),
@@ -254,12 +259,11 @@ export const dbService = {
 
     // Set defaults if absent
     if (updated.isBlocked === undefined) updated.isBlocked = false;
-    if (!updated.role) {
-      if (updated.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com') {
-        updated.role = 'admin';
-      } else {
-        updated.role = 'user';
-      }
+    const emailLower = (updated.email || '').toLowerCase().trim();
+    if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
+      updated.role = 'admin';
+    } else if (!updated.role) {
+      updated.role = 'user';
     }
 
     if (updated.accessType === 'trial' && updated.trialEndsAt) {
@@ -375,6 +379,9 @@ export const dbService = {
   async registerUserInFirestore(uid: string, data: Partial<Artist>): Promise<Artist> {
     const defaultLimit = 5; // free limit
     const nowISO = new Date().toISOString();
+    const emailLower = (data.email || '').toLowerCase().trim();
+    const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
+    const role = isMainAdmin ? 'admin' : 'user';
     
     // Build a clean Artist profile
     const newProfile: Artist = {
@@ -390,7 +397,7 @@ export const dbService = {
       genre: data.mainGenre || 'Sertanejo',
       instagram: data.instagram || '',
       userType: data.userType || 'Artista',
-      role: 'user',
+      role: role,
       plan: 'free',
       paymentStatus: 'inactive',
       accessType: 'free',
@@ -418,38 +425,38 @@ export const dbService = {
 
     // Dual-write to Firebase Firestore
     try {
-      const normalizedUser = {
-        uid: uid,
+      // 2. Antes de salvar no Firestore, garantir que o usuário está autenticado:
+      if (auth.currentUser && auth.currentUser.uid === uid) {
+        await auth.currentUser.getIdToken(true);
+      }
+
+      // 3. Salvar o perfil usando setDoc com merge true
+      await setDoc(doc(db, "users", uid), {
+        uid,
         email: newProfile.email,
         artistName: newProfile.artistName,
+        userType: newProfile.userType,
         whatsapp: newProfile.whatsapp,
         city: newProfile.city,
         state: newProfile.state,
         mainGenre: newProfile.mainGenre,
         instagram: newProfile.instagram,
-        userType: newProfile.userType,
-        role: "user",
+        role: role,
         plan: "free",
-        paymentStatus: "inactive",
-        accessType: "free",
         musicLimit: 5,
         songsCount: 0,
         totalPlays: 0,
         totalViews: 0,
         whatsappClicks: 0,
-        isBlocked: false,
-        createdAt: Timestamp.fromDate(new Date(nowISO)),
-        updatedAt: Timestamp.fromDate(new Date(nowISO))
-      };
-
-      // Write 'users'
-      await setDoc(doc(db, "users", uid), normalizedUser, { merge: true });
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
 
       // Write 'artists'
       await setDoc(doc(db, "artists", uid), {
         ...newProfile,
-        createdAt: Timestamp.fromDate(new Date(nowISO)),
-        updatedAt: Timestamp.fromDate(new Date(nowISO))
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       }, { merge: true });
 
       // Write initial analytics
@@ -498,7 +505,7 @@ export const dbService = {
     }
   },
 
-  // Ensure the admin was authenticated anonymously & registered in Firestore users collection
+  // Ensure the admin was authenticated & registered in Firestore users collection
   async ensureAdminAuth(): Promise<void> {
     const localUserStr = localStorage.getItem(LS_CURR_USER);
     if (!localUserStr) return;
@@ -506,18 +513,16 @@ export const dbService = {
     try {
       const localUser = JSON.parse(localUserStr) as Artist;
       const emailLower = (localUser.email || '').toLowerCase().trim();
-      if (emailLower === 'videopremieroficial@gmail.com') {
-        // 1. Silent Firebase Auth login
-        if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
-        
+      
+      if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
         const fireUser = auth.currentUser;
-        if (fireUser) {
-          let updatedUser = { ...localUser };
+        // Verify real signed-in credentials match admin email
+        const fireEmailLower = fireUser?.email?.toLowerCase().trim() || '';
+        if (fireUser && (fireEmailLower === 'videopremieroficial@gmail.com' || fireEmailLower === 'sertanejopremier@gmail.com')) {
+          let updatedUser = { ...localUser, role: 'admin' as const };
           let needsLocalSave = false;
           
-          // 2. Local index/userId mapping sync with current Auth UID
+          // Local index / userId mapping sync with current Auth UID
           if (localUser.userId !== fireUser.uid) {
             console.log(`Migrating admin local userId from '${localUser.userId}' to '${fireUser.uid}'`);
             const artists = this.getAllArtists();
@@ -531,12 +536,14 @@ export const dbService = {
             needsLocalSave = true;
           }
           
-          // 3. Keep Firestore users role matching to satisfy isAdmin() check
+          if (localUser.role !== 'admin') {
+            updatedUser.role = 'admin';
+            needsLocalSave = true;
+          }
+          
+          // Keep Firestore users role matching to satisfy isAdmin() check
           const usersTableRef = doc(db, 'users', fireUser.uid);
-          const adminData = this.getNormalizedUserData({
-            ...updatedUser,
-            role: 'admin'
-          });
+          const adminData = this.getNormalizedUserData(updatedUser);
           
           await setDoc(usersTableRef, {
             ...adminData,
@@ -559,7 +566,7 @@ export const dbService = {
         }
       }
     } catch (error) {
-      console.error("ensureAdminAuth error: ", error);
+      console.warn("ensureAdminAuth skipped or failed: ", error);
     }
   },
 
@@ -604,7 +611,7 @@ export const dbService = {
           instagram: d.instagram || '',
           city: d.city || '',
           state: d.state || '',
-          role: d.role || (d.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' ? 'admin' : 'user'),
+          role: (d.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' || d.email?.toLowerCase().trim() === 'sertanejopremier@gmail.com') ? 'admin' : (d.role || 'user'),
           plan: d.plan || 'free',
           paymentStatus: d.paymentStatus || 'inactive',
           accessType: d.accessType || 'free',
@@ -733,6 +740,55 @@ export const dbService = {
     });
   },
 
+  async findAudioFileByHash(hash: string): Promise<any | null> {
+    try {
+      const q = query(collection(db, 'audioFiles'), where('audioHash', '==', hash));
+      const snap = await getDocs(q).catch(e => {
+        handleFirestoreError(e, OperationType.GET, 'audioFiles');
+        throw e;
+      });
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      return null;
+    } catch (e) {
+      console.error("Error in findAudioFileByHash:", e);
+      return null;
+    }
+  },
+
+  async createAudioFile(id: string, data: any): Promise<void> {
+    try {
+      const docRef = doc(db, 'audioFiles', id);
+      await setDoc(docRef, {
+        ...data,
+        createdAt: Timestamp.fromDate(new Date())
+      }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `audioFiles/${id}`);
+        throw e;
+      });
+    } catch (e) {
+      console.error("Error in createAudioFile:", e);
+      throw e;
+    }
+  },
+
+  async incrementAudioFileUsage(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'audioFiles', id);
+      await updateDoc(docRef, {
+        usageCount: increment(1)
+      }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `audioFiles/${id}`);
+        throw e;
+      });
+    } catch (e) {
+      console.error("Error in incrementAudioFileUsage:", e);
+      throw e;
+    }
+  },
+
   async addMusic(artistId: string, track: Omit<Music, 'playsCount' | 'createdAt'>): Promise<Music> {
     const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
     const tracks: Music[] = musicsMap[artistId] || [];
@@ -760,36 +816,49 @@ export const dbService = {
 
     // Wait for sync to Firestore
     try {
-      const firestoreTrackPayload = {
-        id: newTrack.trackId,
+      const songPayload = {
+        songId: newTrack.trackId,
         ownerId: newTrack.artistId,
         title: newTrack.title,
         composer: newTrack.composer || '',
+        partners: newTrack.partners || '',
         performer: newTrack.performer || newTrack.singer || '',
-        singer: newTrack.singer || newTrack.performer || '',
         genre: newTrack.genre || '',
         lyrics: newTrack.lyrics || '',
         description: newTrack.description || '',
-        status: newTrack.status || 'active',
+        audioFileId: newTrack.audioFileId || '',
         audioUrl: newTrack.audioUrl,
-        storageProvider: newTrack.storageProvider || 'cloudflare_r2',
         storagePath: newTrack.storagePath || '',
+        storageProvider: newTrack.storageProvider || 'cloudflare_r2',
         fileSize: newTrack.fileSize || 0,
         mimeType: newTrack.mimeType || 'audio/mpeg',
         originalFileName: newTrack.originalFileName || '',
-        plays: newTrack.plays !== undefined ? newTrack.plays : 0,
-        playsCount: newTrack.playsCount !== undefined ? newTrack.playsCount : 0,
+        plays: playsValue,
+        createdAt: Timestamp.fromDate(new Date(newTrack.createdAt)),
+        updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt))
+      };
+
+      // Write to new songs root collection
+      await setDoc(doc(db, "songs", newTrack.trackId), songPayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `songs/${newTrack.trackId}`);
+      });
+
+      // Write to legacy artist musics subcollection of course for flawless compatibility
+      const firestoreTrackPayload = {
+        ...songPayload,
+        id: newTrack.trackId,
+        playsCount: playsValue,
         trackId: newTrack.trackId,
         artistId: newTrack.artistId,
         coverUrl: newTrack.coverUrl || '',
-        createdAt: Timestamp.fromDate(new Date(newTrack.createdAt)),
-        updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt)),
       };
 
-      await setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), firestoreTrackPayload, { merge: true });
+      await setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), firestoreTrackPayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `artists/${artistId}/musics/${newTrack.trackId}`);
+      });
     } catch (e: any) {
       console.error("erro ao salvar no Firestore:", e);
-      handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${newTrack.trackId}`);
+      throw e;
     }
 
     return newTrack;
@@ -816,6 +885,14 @@ export const dbService = {
 
       // Async sync specifically playsCount increment to Firestore
       try {
+        setDoc(doc(db, "songs", trackId), {
+          plays: track.plays,
+          updatedAt: Timestamp.fromDate(new Date())
+        }, { merge: true }).catch(e => {
+          console.error(e);
+          handleFirestoreError(e, OperationType.WRITE, `songs/${trackId}`);
+        });
+
         setDoc(doc(db, "artists", artistId, "musics", trackId), {
           playsCount: track.playsCount,
           plays: track.plays,
@@ -838,8 +915,8 @@ export const dbService = {
     if (!analyticsMap[artistId]) {
       analyticsMap[artistId] = {
         artistId,
-        viewsCount: 45, // Prepopulate subtle views
-        whatsappClicks: 12
+        viewsCount: 0,
+        whatsappClicks: 0
       };
       localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
     }
@@ -916,38 +993,109 @@ export const dbService = {
         }
       }
 
-      // Fetch tracks subcollection
-      const musicsColRef = collection(db, 'artists', normalizedId, 'musics');
-      const musicsSnap = await getDocs(musicsColRef).catch(e => {
-        handleFirestoreError(e, OperationType.GET, `artists/${normalizedId}/musics`);
+      // Fetch songs from root 'songs' collection where ownerId == normalizedId
+      let fetchedTracks: Music[] = [];
+      const songsQuery = query(collection(db, 'songs'), where('ownerId', '==', normalizedId));
+      const songsSnap = await getDocs(songsQuery).catch(e => {
+        handleFirestoreError(e, OperationType.GET, 'songs');
         throw e;
       });
-      const fetchedTracks: Music[] = musicsSnap.docs.map(docSnap => {
-        const d = docSnap.data();
-        return {
-          trackId: d.trackId || d.id,
-          artistId: d.artistId || d.ownerId || normalizedId,
-          title: d.title,
-          composer: d.composer || "",
-          singer: d.singer || d.performer || "",
-          performer: d.performer || d.singer || "",
-          genre: d.genre || "",
-          description: d.description || "",
-          audioUrl: d.audioUrl,
-          coverUrl: d.coverUrl || "",
-          lyrics: d.lyrics || "",
-          playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-          plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-          status: d.status || "active",
-          storageProvider: d.storageProvider || "cloudflare_r2",
-          storagePath: d.storagePath || "",
-          fileSize: d.fileSize || 0,
-          mimeType: d.mimeType || "audio/mpeg",
-          originalFileName: d.originalFileName || "",
-          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-          updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
-        };
-      });
+
+      if (!songsSnap.empty) {
+        fetchedTracks = songsSnap.docs.map(docSnap => {
+          const d = docSnap.data();
+          return {
+            trackId: docSnap.id || d.songId || d.trackId,
+            artistId: d.ownerId || d.artistId || normalizedId,
+            title: d.title,
+            composer: d.composer || "",
+            partners: d.partners || "",
+            singer: d.performer || d.singer || "",
+            performer: d.performer || d.singer || "",
+            genre: d.genre || "",
+            description: d.description || "",
+            audioUrl: d.audioUrl,
+            coverUrl: d.coverUrl || "",
+            lyrics: d.lyrics || "",
+            playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+            plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+            status: d.status || "active",
+            storageProvider: d.storageProvider || "cloudflare_r2",
+            storagePath: d.storagePath || "",
+            fileSize: d.fileSize || 0,
+            mimeType: d.mimeType || "audio/mpeg",
+            originalFileName: d.originalFileName || "",
+            audioFileId: d.audioFileId || "",
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+            updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+          };
+        });
+      } else {
+        // Fallback to legacy artist musics subcollection
+        const musicsColRef = collection(db, 'artists', normalizedId, 'musics');
+        const musicsSnap = await getDocs(musicsColRef).catch(e => {
+          handleFirestoreError(e, OperationType.GET, `artists/${normalizedId}/musics`);
+          throw e;
+        });
+        if (!musicsSnap.empty) {
+          fetchedTracks = musicsSnap.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              trackId: d.trackId || d.id || docSnap.id,
+              artistId: d.artistId || d.ownerId || normalizedId,
+              title: d.title,
+              composer: d.composer || "",
+              partners: d.partners || "",
+              singer: d.singer || d.performer || "",
+              performer: d.performer || d.singer || "",
+              genre: d.genre || "",
+              description: d.description || "",
+              audioUrl: d.audioUrl,
+              coverUrl: d.coverUrl || "",
+              lyrics: d.lyrics || "",
+              playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+              plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+              status: d.status || "active",
+              storageProvider: d.storageProvider || "cloudflare_r2",
+              storagePath: d.storagePath || "",
+              fileSize: d.fileSize || 0,
+              mimeType: d.mimeType || "audio/mpeg",
+              originalFileName: d.originalFileName || "",
+              audioFileId: d.audioFileId || "",
+              createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+              updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+            };
+          });
+
+          // Automatically migrate these tracks to the root "songs" collection for future correctness
+          for (const track of fetchedTracks) {
+            const songDocRef = doc(db, 'songs', track.trackId);
+            setDoc(songDocRef, {
+              songId: track.trackId,
+              ownerId: track.artistId,
+              title: track.title,
+              composer: track.composer || '',
+              partners: track.partners || '',
+              performer: track.performer || '',
+              genre: track.genre || '',
+              lyrics: track.lyrics || '',
+              description: track.description || '',
+              audioFileId: track.audioFileId || `migrated-${track.trackId}`,
+              audioUrl: track.audioUrl,
+              storagePath: track.storagePath || '',
+              storageProvider: track.storageProvider || 'cloudflare_r2',
+              fileSize: track.fileSize || 0,
+              mimeType: track.mimeType || 'audio/mpeg',
+              originalFileName: track.originalFileName || '',
+              plays: track.plays !== undefined ? track.plays : 0,
+              createdAt: Timestamp.fromDate(new Date(track.createdAt)),
+              updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
+            }, { merge: true }).catch(err => {
+              console.error("Migration to songs collection failed: ", err);
+            });
+          }
+        }
+      }
 
       if (fetchedTracks.length > 0) {
         const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
@@ -957,9 +1105,36 @@ export const dbService = {
         // If Firestore musics are empty but local has seed files, migrate them up to Firestore!
         const localMusics = this.getArtistMusics(normalizedId);
         for (const localT of localMusics) {
+          const songPayload = {
+            songId: localT.trackId,
+            ownerId: localT.artistId,
+            title: localT.title,
+            composer: localT.composer || '',
+            partners: localT.partners || '',
+            performer: localT.performer || localT.singer || '',
+            genre: localT.genre || '',
+            lyrics: localT.lyrics || '',
+            description: localT.description || '',
+            audioFileId: localT.audioFileId || `seed-${localT.trackId}`,
+            audioUrl: localT.audioUrl,
+            storagePath: localT.storagePath || '',
+            storageProvider: localT.storageProvider || 'cloudflare_r2',
+            fileSize: localT.fileSize || 0,
+            mimeType: localT.mimeType || 'audio/mpeg',
+            originalFileName: localT.originalFileName || '',
+            plays: localT.plays !== undefined ? localT.plays : 0,
+            createdAt: Timestamp.fromDate(new Date(localT.createdAt)),
+            updatedAt: Timestamp.fromDate(new Date(localT.updatedAt || localT.createdAt))
+          };
+
+          setDoc(doc(db, 'songs', localT.trackId), songPayload, { merge: true }).catch(() => {});
           setDoc(doc(db, 'artists', normalizedId, 'musics', localT.trackId), {
-            ...localT,
-            createdAt: Timestamp.fromDate(new Date(localT.createdAt))
+            ...songPayload,
+            id: localT.trackId,
+            playsCount: localT.playsCount || 0,
+            trackId: localT.trackId,
+            artistId: localT.artistId,
+            coverUrl: localT.coverUrl || ''
           }, { merge: true }).catch(err => {
             console.error("Initial track migration err: ", err);
             handleFirestoreError(err, OperationType.WRITE, `artists/${normalizedId}/musics/${localT.trackId}`);
@@ -1012,11 +1187,16 @@ export const dbService = {
 
   async deleteMusic(artistId: string, trackId: string): Promise<boolean> {
     try {
-      // Async delete from firestore
-      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
-      await deleteDoc(musicDocRef).catch(e => {
-        handleFirestoreError(e, OperationType.DELETE, `artists/${artistId}/musics/${trackId}`);
+      // Async delete from firestore (both songs and artists subcol)
+      const songDocRef = doc(db, 'songs', trackId);
+      await deleteDoc(songDocRef).catch(e => {
+        handleFirestoreError(e, OperationType.DELETE, `songs/${trackId}`);
         throw e;
+      });
+
+      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
+      await deleteDoc(musicDocRef).catch(() => {
+        // Fallback catch, the legacy record might not exist or failed, but don't block
       });
 
       // Local storage cleanup
@@ -1036,13 +1216,22 @@ export const dbService = {
   async toggleMusicStatus(artistId: string, trackId: string, currentStatus: string): Promise<string> {
     try {
       const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+      
+      const songDocRef = doc(db, 'songs', trackId);
+      await setDoc(songDocRef, {
+        status: nextStatus,
+        updatedAt: Timestamp.fromDate(new Date())
+      }, { merge: true }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `songs/${trackId}`);
+        throw e;
+      });
+
       const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
       await setDoc(musicDocRef, {
         status: nextStatus,
         updatedAt: Timestamp.fromDate(new Date())
-      }, { merge: true }).catch(e => {
-        handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${trackId}`);
-        throw e;
+      }, { merge: true }).catch(() => {
+        // Legacy fallback
       });
 
       // Update locally

@@ -51,15 +51,32 @@ export default function ArtistPublic({
 
   // Load artist and tracks
   useEffect(() => {
-    // Resolve artist ID
-    const found = dbService.getArtist(artistId) || dbService.getArtist("gabriel-silva");
-    if (found) {
-      setArtist(found);
-      const list = dbService.getArtistMusics(found.userId).filter(t => t.status !== 'inactive');
-      setTracks(list);
-      // Synchronize profile views counter in background
-      dbService.incrementAnalyticsView(found.userId, true, false);
-    }
+    const loadData = async () => {
+      // Resolve artist ID
+      const found = dbService.getArtist(artistId) || dbService.getArtist("gabriel-silva");
+      if (found) {
+        setArtist(found);
+        
+        // Initial instant load from regional cache
+        let list = dbService.getArtistMusics(found.userId).filter(t => t.status !== 'inactive');
+        setTracks(list);
+
+        // Fetch on-demand cloud sync asynchronously
+        try {
+          const success = await dbService.syncArtistData(found.userId);
+          if (success) {
+            list = dbService.getArtistMusics(found.userId).filter(t => t.status !== 'inactive');
+            setTracks(list);
+          }
+        } catch (syncErr) {
+          console.error("Public dynamic sync catch-safe: ", syncErr);
+        }
+
+        // Synchronize profile views counter in background
+        dbService.incrementAnalyticsView(found.userId, true, false);
+      }
+    };
+    loadData();
   }, [artistId]);
 
   // Handle auto launch car mode if passed as param
