@@ -69,7 +69,7 @@ export default function Dashboard({
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [coverOption, setCoverOption] = useState('gradient'); // gradient or custom url
   const [customCoverUrl, setCustomCoverUrl] = useState('');
-  const [audioOption, setAudioOption] = useState('default'); // default demo or custom URL or file
+  const [audioOption, setAudioOption] = useState('file'); // default file upload option
   const [customAudioUrl, setCustomAudioUrl] = useState('');
   const [formError, setFormError] = useState('');
   
@@ -133,6 +133,7 @@ export default function Dashboard({
   ): Promise<{ publicAudioUrl: string; storagePath: string }> => {
     // 1. Obter URL presignada do servidor express do applet
     let response;
+    const fileType = file.type || "audio/mpeg";
     try {
       response = await fetch("/api/r2-presigned-upload", {
         method: "POST",
@@ -141,7 +142,7 @@ export default function Dashboard({
         },
         body: JSON.stringify({
           fileName: file.name,
-          fileType: file.type || "audio/mpeg",
+          fileType: fileType,
           fileSize: file.size,
           userId,
           songId,
@@ -169,35 +170,50 @@ export default function Dashboard({
       throw new Error("step:presigned_url_generation_failed");
     }
 
-    // 2. Upload direto do binário para o Cloudflare R2 usando PUT
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", uploadUrl, true);
-      xhr.setRequestHeader("Content-Type", file.type || "audio/mpeg");
-
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = Math.round((event.loaded / event.total) * 100);
-          onProgress(percentComplete);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve({ publicAudioUrl, storagePath });
-        } else {
-          console.error("erro do PUT para R2 status:", xhr.status, xhr.statusText);
-          reject(new Error("step:r2_upload_put_failed_status"));
-        }
-      };
-
-      xhr.onerror = (e) => {
-        console.error("erro do PUT para R2 rede:", e);
-        reject(new Error("step:r2_upload_put_failed_network"));
-      };
-
-      xhr.send(file);
+    // 7. Adicionar logs detalhados no front-end antes do PUT:
+    console.log("Enviando MP3 para R2", {
+      uploadUrl,
+      fileType: fileType,
+      fileSize: file.size,
+      fileName: file.name
     });
+
+    onProgress(50); // Set progress to 50% visually before putting
+
+    // 2. Upload direto do binário para o Cloudflare R2 usando PUT via fetch (no extra headers)
+    try {
+      const putResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": fileType
+        },
+        body: file
+      });
+
+      if (putResponse.ok) {
+        console.log("Upload PUT direto para R2 concluído com sucesso!");
+        onProgress(100);
+        return { publicAudioUrl, storagePath };
+      } else {
+        // 8. Se o PUT falhar, capturar e mostrar:
+        const responseText = await putResponse.text().catch(() => "Sem resposta textual");
+        console.error("Erro PUT R2", {
+          status: putResponse.status,
+          statusText: putResponse.statusText,
+          responseText,
+          fileType: fileType,
+          fileSize: file.size,
+          fileName: file.name
+        });
+        throw new Error(`step:r2_upload_put_failed_status_real:${putResponse.status}:${putResponse.statusText || "Error"}:${responseText}`);
+      }
+    } catch (e: any) {
+      console.error("erro do PUT para R2 rede:", e);
+      if (e.message && e.message.startsWith("step:r2_upload_put_failed_status_real")) {
+        throw e;
+      }
+      throw new Error("step:r2_upload_put_failed_network");
+    }
   };
 
   const computeSHA256 = async (file: File): Promise<string> => {
@@ -218,7 +234,11 @@ export default function Dashboard({
       return;
     }
 
-    if (audioOption === 'file' && audioFile) {
+    if (audioOption === 'file') {
+      if (!audioFile) {
+        setFormError('Por favor, selecione um arquivo de áudio MP3 para enviar.');
+        return;
+      }
       const maxSizeBytes = 20 * 1024 * 1024; // 20 MB
 
       const fileExt = '.' + audioFile.name.split('.').pop()?.toLowerCase();
@@ -405,8 +425,29 @@ export default function Dashboard({
       console.error("Upload workflow failed: ", err);
       if (err.message === "step:presigned_url_fetch_failed" || err.message === "step:presigned_url_generation_failed") {
         setFormError("Falha ao gerar URL de upload no Cloudflare R2.");
+      } else if (err.message && err.message.startsWith("step:r2_upload_put_failed_status_real")) {
+        // Extract real error details
+        const parts = err.message.split(":");
+        const status = parts[2] || "Desconhecido";
+        const statusText = parts[3] || "Error";
+        const responseText = parts.slice(4).join(":");
+        
+        let displayError = `Falha ao enviar MP3 para R2: ${status} - ${statusText}`;
+        if (responseText && responseText !== "Sem resposta textual") {
+          if (responseText.includes("SignatureDoesNotMatch")) {
+            displayError += " (Erro: SignatureDoesNotMatch — Os parâmetros ou cabeçalhos assinados divergem)";
+          } else if (responseText.includes("AccessDenied")) {
+            displayError += " (Erro: AccessDenied — Credenciais do R2 não possuem permissões de gravação adequadas)";
+          } else {
+            const cleanText = responseText.replace(/<[^>]*>/g, '').substring(0, 100).trim();
+            if (cleanText) {
+              displayError += ` (${cleanText})`;
+            }
+          }
+        }
+        setFormError(displayError);
       } else if (err.message === "step:r2_upload_put_failed_status" || err.message === "step:r2_upload_put_failed_network") {
-        setFormError("Falha ao enviar o MP3 para o Cloudflare R2.");
+        setFormError("Falha ao enviar MP3 para R2: Erro de Rede ou Conexão.");
       } else if (err.message === "step:firestore_save_failed") {
         setFormError("Falha ao salvar os dados da música no Firestore.");
       } else {
@@ -939,66 +980,22 @@ export default function Dashboard({
                   />
                 </div>
               </div>
-
-              {/* Audio Upload Controls */}
               <div className="pt-2 border-t border-slate-850 p-4 bg-slate-950 rounded-2xl space-y-3">
                 <h5 className="text-[11px] font-mono font-bold tracking-widest text-yellow-400 uppercase">1. Arquivo de Áudio da Música (Apenas MP3)</h5>
                 
-                <div className="flex gap-4 text-xs font-semibold py-1">
-                  <button 
-                    type="button" 
-                    onClick={() => setAudioOption('default')} 
-                    className={`px-3 py-1.5 rounded-lg border transition cursor-pointer ${audioOption === 'default' ? 'bg-orange-900/40 border-orange-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-                  >
-                    Estúdio Demo
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setAudioOption('file')} 
-                    className={`px-3 py-1.5 rounded-lg border transition cursor-pointer ${audioOption === 'file' ? 'bg-orange-900/40 border-orange-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-                  >
-                    Enviar do Celular/PC
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setAudioOption('url')} 
-                    className={`px-3 py-1.5 rounded-lg border transition cursor-pointer ${audioOption === 'url' ? 'bg-orange-900/40 border-orange-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-                  >
-                    Link Externo (URL)
-                  </button>
-                </div>
-
-                {audioOption === 'file' && (
-                  <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 p-4 rounded-xl text-center space-y-2 relative bg-slate-900/20">
-                    <UploadCloud className="w-8 h-8 text-slate-500 mx-auto" strokeWidth={1.5} />
-                    <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto font-medium">
-                      “Envie sua música em MP3. Para manter o Soundrive rápido e estável, aceitamos apenas arquivos .mp3 com até 20 MB.”
-                    </p>
-                    <input 
-                      type="file" 
-                      accept=".mp3,audio/mpeg,audio/mp3" 
-                      onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                      className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:border-t file:border-slate-700 file:bg-slate-800 file:text-white file:rounded pointer-events-auto"
-                    />
-                    {audioFile && <p className="text-xs text-emerald-400 font-mono">Selecionado: {audioFile.name}</p>}
-                  </div>
-                )}
-
-                {audioOption === 'url' && (
+                <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 p-4 rounded-xl text-center space-y-2 relative bg-slate-900/20">
+                  <UploadCloud className="w-8 h-8 text-slate-500 mx-auto" strokeWidth={1.5} />
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto font-medium">
+                    “Envie sua música em MP3. Para manter o Soundrive rápido e estável, aceitamos apenas arquivos .mp3 com até 20 MB.”
+                  </p>
                   <input 
-                    type="text" 
-                    placeholder="https://meusite.com/musica.mp3"
-                    value={customAudioUrl}
-                    onChange={(e) => setCustomAudioUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                    type="file" 
+                    accept=".mp3,audio/mpeg,audio/mp3" 
+                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                    className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:border-t file:border-slate-700 file:bg-slate-800 file:text-white file:rounded pointer-events-auto"
                   />
-                )}
-
-                {audioOption === 'default' && (
-                  <div className="flex items-center gap-2 p-2 bg-slate-900/80 rounded-xl text-[10px] text-slate-500 font-mono">
-                    <Info className="w-4 h-4 text-orange-500 shrink-0" /> O sistema irá anexar automaticamente um de nossos arquivos de estúdio (MP3 de alta fidelidade) para que você teste o player imediatamente.
-                  </div>
-                )}
+                  {audioFile && <p className="text-xs text-emerald-400 font-mono">Selecionado: {audioFile.name}</p>}
+                </div>
               </div>
 
               {/* Cover Upload Controls simplified to Notes Only Mode */}
