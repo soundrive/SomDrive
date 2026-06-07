@@ -21,7 +21,8 @@ import {
   Globe,
   UploadCloud,
   Link2,
-  Link2Off
+  Link2Off,
+  Share2
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics } from '../types';
 import { dbService } from '../lib/db';
@@ -104,9 +105,17 @@ export default function Dashboard({
 
   const handleCopyLink = () => {
     const pageUrl = `${window.location.origin}/artista/${profile.userId}`;
-    navigator.clipboard.writeText(pageUrl);
+    const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
+    navigator.clipboard.writeText(beautifulMessage);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
+  };
+
+  const handleShareWhatsApp = () => {
+    const pageUrl = `${window.location.origin}/artista/${profile.userId}`;
+    const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
+    const urlEncoded = encodeURIComponent(beautifulMessage);
+    window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
   };
 
   const handleUpgradePlan = () => {
@@ -584,7 +593,16 @@ export default function Dashboard({
               onClick={handleCopyLink}
               className="px-4.5 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition hover:from-orange-500 hover:to-yellow-400 hover:scale-102"
             >
-              <Copy className="w-4 h-4" /> {copiedAlert ? "Copiado! ✓" : "Copiar Link de Divulgação"}
+              <Copy className="w-4 h-4" /> {copiedAlert ? "Divulgação Copiada! ✓" : "Copiar Divulgação"}
+            </button>
+
+            <button 
+              id="share-whatsapp-btn"
+              onClick={handleShareWhatsApp}
+              className="px-4.5 py-3 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition hover:scale-102"
+              title="Compartilhar no WhatsApp"
+            >
+              <Share2 className="w-4 h-4 text-emerald-400" /> WhatsApp
             </button>
           </div>
         </div>
