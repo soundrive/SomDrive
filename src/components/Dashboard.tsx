@@ -172,11 +172,12 @@ export default function Dashboard({
 
     // 7. Adicionar logs detalhados no front-end antes do PUT:
     console.log("Enviando MP3 para R2", {
-      uploadUrl,
+      uploadUrl: uploadUrl ? uploadUrl.substring(0, 80) + "..." : "",
       fileType: fileType,
       fileSize: file.size,
       fileName: file.name
     });
+    console.log("Início da uploadUrl para confirmar endpoint R2:", uploadUrl ? uploadUrl.split('?')[0] : '');
 
     onProgress(50); // Set progress to 50% visually before putting
 

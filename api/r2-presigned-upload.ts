@@ -81,13 +81,18 @@ export default async function handler(req: any, res: any) {
     const storagePath = `users/${userId}/songs/${songId}/${timestamp}-${baseName}`;
 
     // 5. Inicializar o cliente S3 compatível com Cloudflare R2
+    const endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    console.log("R2 endpoint usado:", endpoint);
+    console.log("R2 bucket:", R2_BUCKET_NAME);
+
     const s3 = new S3Client({
       region: "auto",
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: {
-        accessKeyId: R2_ACCESS_KEY_ID,
-        secretAccessKey: R2_SECRET_ACCESS_KEY,
+        accessKeyId: R2_ACCESS_KEY_ID!,
+        secretAccessKey: R2_SECRET_ACCESS_KEY!,
       },
+      forcePathStyle: true,
     });
 
     // 6. Gerar a URL Presignada de PUT
@@ -103,6 +108,8 @@ export default async function handler(req: any, res: any) {
     const baseSlash = R2_PUBLIC_BASE_URL.endsWith("/") ? R2_PUBLIC_BASE_URL.slice(0, -1) : R2_PUBLIC_BASE_URL;
     const publicAudioUrl = `${baseSlash}/${storagePath}`;
 
+    console.log("R2 storagePath:", storagePath);
+    console.log("R2 publicAudioUrl:", publicAudioUrl);
     console.log("URL Presignada gerada com sucesso:", {
       storagePath,
       publicAudioUrl,
