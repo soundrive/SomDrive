@@ -105,7 +105,7 @@ export default function Dashboard({
 
   const handleCopyLink = () => {
     const pageUrl = `${window.location.origin}/artista/${profile.userId}`;
-    const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
+    const beautifulMessage = `🎧 Olá! Estou compartilhando meu catálogo musical privado no Soundrive.\n\nOuça minhas composições disponíveis aqui:\n${pageUrl}`;
     navigator.clipboard.writeText(beautifulMessage);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -113,7 +113,7 @@ export default function Dashboard({
 
   const handleShareWhatsApp = () => {
     const pageUrl = `${window.location.origin}/artista/${profile.userId}`;
-    const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
+    const beautifulMessage = `🎧 Olá! Estou compartilhando meu catálogo musical privado no Soundrive.\n\nOuça minhas composições disponíveis aqui:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(beautifulMessage);
     window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
   };
