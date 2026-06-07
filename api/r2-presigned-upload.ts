@@ -53,26 +53,44 @@ export default async function handler(req: any, res: any) {
     }
 
     // 3. Validar variáveis de ambiente essenciais do Cloudflare R2
-    const {
-      R2_ACCOUNT_ID,
-      R2_ACCESS_KEY_ID,
-      R2_SECRET_ACCESS_KEY,
-      R2_BUCKET_NAME,
-      R2_PUBLIC_BASE_URL
-    } = process.env;
+    const rawAccountId = process.env.R2_ACCOUNT_ID;
+    const rawBucketName = process.env.R2_BUCKET_NAME;
+    const rawAccessKeyId = process.env.R2_ACCESS_KEY_ID;
+    const rawSecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+    const rawPublicBaseUrl = process.env.R2_PUBLIC_BASE_URL;
 
     const missingEnvVars: string[] = [];
-    if (!R2_ACCOUNT_ID) missingEnvVars.push("R2_ACCOUNT_ID");
-    if (!R2_ACCESS_KEY_ID) missingEnvVars.push("R2_ACCESS_KEY_ID");
-    if (!R2_SECRET_ACCESS_KEY) missingEnvVars.push("R2_SECRET_ACCESS_KEY");
-    if (!R2_BUCKET_NAME) missingEnvVars.push("R2_BUCKET_NAME");
-    if (!R2_PUBLIC_BASE_URL) missingEnvVars.push("R2_PUBLIC_BASE_URL");
+    if (!rawAccountId) missingEnvVars.push("R2_ACCOUNT_ID");
+    if (!rawAccessKeyId) missingEnvVars.push("R2_ACCESS_KEY_ID");
+    if (!rawSecretAccessKey) missingEnvVars.push("R2_SECRET_ACCESS_KEY");
+    if (!rawBucketName) missingEnvVars.push("R2_BUCKET_NAME");
+    if (!rawPublicBaseUrl) missingEnvVars.push("R2_PUBLIC_BASE_URL");
 
     if (missingEnvVars.length > 0) {
       const errMsg = `Configuração do Cloudflare R2 incompleta na Vercel. Faltam as variáveis: ${missingEnvVars.join(", ")}`;
       console.error("Erro de Configuração:", errMsg);
       return res.status(500).json({ error: errMsg });
     }
+
+    // Limpar variáveis de ambiente de possíveis resíduos (espaços, barras, protocolos, etc.)
+    const cleanId = (id: string): string => {
+      let val = id.trim();
+      const hexMatch = val.match(/\b([a-fA-F0-9]{32})\b/);
+      if (hexMatch) return hexMatch[1];
+      val = val.replace(/^https?:\/\//i, "");
+      val = val.split("/")[0];
+      val = val.split(".")[0];
+      return val;
+    };
+
+    const R2_ACCOUNT_ID = cleanId(rawAccountId!);
+    const R2_BUCKET_NAME = rawBucketName!.trim();
+    const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
+    const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
+    const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
+
+    console.log("R2_ACCOUNT_ID bruto:", rawAccountId);
+    console.log("R2_ACCOUNT_ID limpo:", R2_ACCOUNT_ID);
 
     // 4. Criar storagePath seguro
     const timestamp = Date.now();
@@ -89,8 +107,8 @@ export default async function handler(req: any, res: any) {
       region: "auto",
       endpoint,
       credentials: {
-        accessKeyId: R2_ACCESS_KEY_ID!,
-        secretAccessKey: R2_SECRET_ACCESS_KEY!,
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
       forcePathStyle: true,
     });
