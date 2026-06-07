@@ -294,8 +294,8 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
             </div>
           </div>
 
-          {/* Studio Mixing Console Decorative Board */}
-          <div className="absolute -left-28 -bottom-12 w-[380px] h-[190px] bg-[#121319]/90 border border-slate-800 p-5 rounded-3xl -z-10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] hidden md:flex flex-col justify-between overflow-hidden">
+          {/* Studio Mixing Console Decorative Board - Positioned nicely below the aligned phone */}
+          <div className="absolute -left-32 -bottom-20 w-[380px] h-[190px] bg-[#121319]/90 border border-slate-800 p-5 rounded-3xl -z-10 shadow-[0_25px_60px_rgba(0,0,0,0.95)] hidden md:flex flex-col justify-between overflow-hidden">
             <div className="flex justify-between items-center pb-2 border-b border-white/[0.04] mb-2.5">
               <span className="text-[9px] font-mono tracking-widest text-slate-500 font-extrabold uppercase flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-ping"></span> Main Mixer Bus
@@ -379,8 +379,8 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
             </div>
           </div>
 
-          {/* Tilted Smartphone Mock-up */}
-          <div className="relative w-full max-w-[345px] md:max-w-[370px] aspect-[9/18.5] bg-[#0a0c10] rounded-[48px] p-2.5 border-4 border-slate-800 shadow-[0_35px_80px_rgba(0,0,0,0.95),0_0_1px_1px_rgba(249,115,22,0.15)] flex flex-col justify-between overflow-hidden lg:rotate-x-[12deg] lg:-rotate-y-[15deg] lg:rotate-[3deg] lg:skew-y-[-1deg] lg:scale-105 transition-all duration-700 hover:rotate-x-[6deg] hover:-rotate-y-[8deg] hover:rotate-[1deg] hover:scale-107 group relative">
+          {/* Aligned Smartphone Mock-up - Positioned higher and perfectly straight/upright */}
+          <div className="relative w-full max-w-[345px] md:max-w-[370px] aspect-[9/18.5] bg-[#0a0c10] rounded-[48px] p-2.5 border-4 border-slate-800 shadow-[0_35px_80px_rgba(0,0,0,0.95),0_0_1px_1px_rgba(249,115,22,0.15)] flex flex-col justify-between overflow-hidden -translate-y-8 md:-translate-y-16 lg:-translate-y-24 lg:scale-105 transition-all duration-700 hover:scale-107 group">
             
             {/* Edge Glare glossy line */}
             <div className="absolute inset-y-0 left-0 w-[1.5px] bg-gradient-to-b from-transparent via-white/10 to-transparent z-30"></div>

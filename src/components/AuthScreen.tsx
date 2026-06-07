@@ -246,52 +246,7 @@ export default function AuthScreen({
 
       } catch (err: any) {
         console.warn("Firebase Login: ", err);
-        const emailLower = email.trim().toLowerCase();
         const errStr = (err.code || err.message || '').toLowerCase();
-
-        // Safe automatic registration and login recovery fallback for the platform admins
-        if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
-          console.log("Admin account security bypass and auto-recovery fallback initiated...");
-          try {
-            // First attempt: try to auto-create the credential if not registered yet
-            const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
-            const user = userCredential.user;
-
-            const profileData: Partial<Artist> = {
-              name: 'Administrador',
-              artistName: 'Administrador',
-              email: emailLower,
-              whatsapp: '5511999999999',
-              phone: '5511999999999',
-              city: 'Goiânia',
-              state: 'GO',
-              mainGenre: 'Sertanejo',
-              instagram: '',
-              userType: 'Produtor',
-              role: 'admin',
-            };
-
-            const registeredProfile = await dbService.registerUserInFirestore(user.uid, profileData);
-            dbService.setCurrentUser(registeredProfile);
-
-            setSuccessAnimation(true);
-            setTimeout(() => {
-              onLoginSuccess(registeredProfile);
-            }, 1200);
-            return;
-          } catch (regErr: any) {
-            console.warn("Direct admin registration failed or email in use, triggered recovery option...", regErr);
-            // Since anonymous login is disabled on runtime, we trigger a secure password reset email in background
-            // so they can safely redefine their administrative password, and we instruct them to also use Google Login as option!
-            try {
-              await sendPasswordResetEmail(auth, emailLower);
-              setErrorMsg(`E-mail ou senha incorretos para o Administrador. Para sua segurança, enviamos um link de redefinição de senha para ${emailLower}. Verifique a caixa de entrada do seu e-mail ou utilize o botão 'Entrar com conta Google' para acessar.`);
-              return;
-            } catch (resetErr: any) {
-              console.error("Admin reset link failed:", resetErr);
-            }
-          }
-        }
 
         let msg = 'E-mail ou senha incorretos.';
         if (
