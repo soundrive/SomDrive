@@ -78,3 +78,12 @@ export interface AppUser {
   email: string;
   displayName?: string;
 }
+
+export interface PaymentSettings {
+  proMonthlyUrl?: string;
+  proAnnualUrl?: string;
+  premiumMonthlyUrl?: string;
+  premiumAnnualUrl?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}

@@ -123,31 +123,32 @@ export default function Player({
   // 1. IMMERSIVE CAR MODE (FULL SCREEN VIEW)
   if (isCarMode) {
     return (
-      <div id="car-player-fullscreen" onContextMenu={(e) => e.preventDefault()} className="fixed inset-0 bg-[#06080d] text-white z-50 flex flex-col justify-between p-6 md:p-10 font-sans overflow-hidden">
+      <div id="car-player-fullscreen" onContextMenu={(e) => e.preventDefault()} className="fixed inset-0 bg-[#090b10] text-[#f8fafc] z-50 flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-y-auto sm:overflow-hidden select-none">
         
-        {/* Ambient background disc glow */}
-        <div className="absolute right-[-15%] top-[10%] w-[500px] h-[500px] bg-orange-600/10 rounded-full blur-[140px] pointer-events-none"></div>
-        <div className="absolute left-[-15%] bottom-[10%] w-[450px] h-[450px] bg-yellow-600/10 rounded-full blur-[130px] pointer-events-none"></div>
+        {/* Specular Ambient Glow effects */}
+        <div className="absolute right-[-10%] top-[10%] w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-amber-500/5 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none"></div>
+        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] sm:w-[450px] sm:h-[450px] bg-orange-600/5 rounded-full blur-[90px] sm:blur-[130px] pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff01_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none"></div>
 
-        {/* Car Mode Header */}
-        <div className="flex items-center justify-between border-b border-slate-900/60 pb-3.5 z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-orange-500 rounded-full animate-ping"></div>
-            <span className="text-sm font-mono tracking-widest text-slate-400 font-bold uppercase flex items-center gap-2">
-              <Car className="w-5 h-5 text-orange-400" /> Bluetooth Transmissão Carro
+        {/* Dynamic Header Row */}
+        <div className="flex items-center justify-between border-b border-zinc-900 pb-3 z-10 w-full shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping shrink-0"></div>
+            <span className="text-xs sm:text-sm font-mono tracking-widest text-zinc-400 font-bold uppercase flex items-center gap-2">
+              <Car className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" /> Transmissão Bluetooth
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button 
               onClick={() => setCarLyricsActive(!carLyricsActive)}
-              className={`flex items-center gap-1.5 px-4.5 py-2.5 transition rounded-full text-xs font-heading font-black uppercase tracking-wider ${
+              className={`flex items-center gap-1 px-3.5 py-1.5 transition rounded-xl text-[10px] sm:text-xs font-heading font-black uppercase tracking-wider cursor-pointer border select-none ${
                 carLyricsActive 
-                  ? 'bg-orange-950 border border-orange-500 text-orange-200' 
-                  : 'bg-slate-900/80 border border-slate-880 text-slate-400 hover:text-white'
+                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' 
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
               }`}
             >
-              <AlignLeft className="w-4 h-4" /> Letras
+              <AlignLeft className="w-3.5 h-3.5" /> Letras
             </button>
 
             <button 
@@ -156,94 +157,103 @@ export default function Player({
                 setCarMode(false);
                 setCarLyricsActive(false);
               }}
-              className="flex items-center gap-2 px-4.5 py-2.5 bg-slate-900 border border-slate-800 rounded-full hover:bg-slate-800 transition cursor-pointer text-xs font-heading font-black uppercase tracking-wider text-slate-300"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-805 rounded-xl transition cursor-pointer text-[10px] sm:text-xs font-heading font-black uppercase tracking-wide text-zinc-300"
             >
-              <Smartphone className="w-4 h-4 text-orange-450" /> Celular
+              <Smartphone className="w-3.5 h-3.5 text-amber-500" /> Celular
             </button>
           </div>
         </div>
 
-        {/* Core Layout Split */}
-        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 my-4 select-none max-w-7xl mx-auto w-full z-10 overflow-hidden">
+        {/* Adaptive Dynamic Splitting Canvas with scroll safety for smaller devices */}
+        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-8 lg:gap-14 my-4 max-w-6xl mx-auto w-full z-10 overflow-y-visible lg:overflow-hidden min-h-0">
           
-          {/* Cover & metadata info */}
-          <div className={`flex flex-col items-center justify-center gap-6 transition-all duration-500 ${carLyricsActive ? 'lg:w-[45%] lg:items-start text-center lg:text-left' : 'w-full'}`}>
+          {/* Cover Art / Golden Vinyl Spinning graphic */}
+          <div className={`flex flex-col items-center justify-center gap-3 sm:gap-6 transition-all duration-505 ${carLyricsActive ? 'lg:w-[45%] lg:items-start text-center lg:text-left' : 'w-full'}`}>
             <div className="relative flex-shrink-0">
+              {/* Premium Realistic Concentric Glossy Vinyl Disc with optimized viewport-based diameters */}
               <div 
                 id="car-track-cover-notes"
-                className={`rounded-full bg-slate-950 border-4 border-slate-900 shadow-2xl flex flex-col items-center justify-center transition-all duration-[6000ms] ease-in-out relative overflow-hidden ${
-                  carLyricsActive ? 'w-48 h-48 md:w-64 md:h-64' : 'w-60 h-60 md:w-80 md:h-80'
-                } ${isPlaying ? 'animate-spin-slow scale-103 shadow-orange-500/40' : ''}`}
+                className={`rounded-full bg-gradient-to-b from-[#14161f] to-[#04060a] border-[8px] sm:border-[12px] border-zinc-900 shadow-2xl flex flex-col items-center justify-center transition-all duration-[6000ms] ease-in-out relative ${
+                  carLyricsActive 
+                    ? 'w-28 h-28 min-[380px]:w-36 min-[380px]:h-36 sm:w-52 sm:h-52 md:w-60 md:h-60' 
+                    : 'w-36 h-36 min-[380px]:w-44 min-[380px]:h-44 sm:w-64 sm:h-64 md:w-76 md:h-76'
+                } ${isPlaying ? 'animate-spin-slow scale-102 shadow-amber-550/15' : ''}`}
               >
-                {/* Simulated glossy vinyl record grooves */}
-                <div className="absolute inset-4 rounded-full border border-slate-800/45"></div>
-                <div className="absolute inset-10 rounded-full border border-slate-800/30"></div>
-                <div className="absolute inset-16 rounded-full border border-slate-800/20"></div>
+                {/* Mirror finish glossy grooves */}
+                <div className="absolute inset-2 sm:inset-3 rounded-full border border-zinc-850/15"></div>
+                <div className="absolute inset-5 sm:inset-7 rounded-full border border-zinc-850/30"></div>
+                <div className="absolute inset-8 sm:inset-11 rounded-full border border-zinc-850/20"></div>
+                <div className="absolute inset-12 sm:inset-16 rounded-full border border-zinc-850/15"></div>
+                <div className="absolute inset-16 sm:inset-22 rounded-full border border-zinc-850/10"></div>
+                <div className="absolute inset-20 sm:inset-28 rounded-full border border-zinc-850/5"></div>
                 
-                {/* Glowing Center Label */}
-                <div className="w-1/3 h-1/3 rounded-full bg-gradient-to-tr from-orange-600 to-yellow-500 border border-slate-950 flex items-center justify-center text-slate-950 shadow-inner">
-                  <MusicIcon className="w-6 h-6 text-slate-950 animate-bounce" />
+                {/* Golden Center Sticker with concentric lines and spindle opening */}
+                <div className="w-[32%] h-[32%] rounded-full bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-500 border border-zinc-950 flex items-center justify-center text-zinc-950 shadow-inner relative select-none">
+                  <div className="absolute inset-1 rounded-full border border-zinc-950/20"></div>
+                  <MusicIcon className="w-4 h-4 sm:w-6 sm:h-6 text-zinc-950 stroke-[2.5] animate-pulse" />
+                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#090b10] border border-zinc-950/40"></div>
                 </div>
               </div>
               {isPlaying && (
-                <div className="absolute -inset-2 rounded-full bg-gradient-to-tr from-orange-600 to-yellow-500 opacity-20 blur-md -z-10 animate-pulse"></div>
+                <div className="absolute -inset-2.5 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 opacity-15 blur-lg -z-10 animate-pulse"></div>
               )}
             </div>
             
-            <div className={carLyricsActive ? 'lg:max-w-md' : 'max-w-2xl text-center'}>
-              <h1 id="car-track-title" className="text-2xl md:text-3xl lg:text-4xl font-heading font-black tracking-tight leading-tight uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-300 truncate w-full">
+            {/* Metadata overlay with improved sizes for mobile without color clipping */}
+            <div className={carLyricsActive ? 'lg:max-w-md w-full' : 'max-w-2xl text-center w-full'}>
+              <h1 id="car-track-title" className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-heading font-black tracking-tight leading-normal uppercase text-white px-4 truncate">
                 {currentTrack.title}
               </h1>
-              <p id="car-track-artist" className="text-orange-400 text-lg md:text-xl mt-1.5 font-bold tracking-wide">
+              <p id="car-track-artist" className="text-amber-400 text-base sm:text-lg md:text-xl mt-0.5 font-extrabold tracking-wide">
                 {currentTrack.singer || "Artista Independente"}
               </p>
               {currentTrack.composer && (
-                <p className="text-slate-500 text-xs md:text-sm mt-1.5 font-mono uppercase tracking-wide">
-                  Autor: <span className="text-slate-400 font-bold">{currentTrack.composer}</span>
+                <p className="text-zinc-505 text-[10px] sm:text-xs mt-1 uppercase font-mono tracking-widest leading-normal font-bold">
+                  Compositor: <span className="text-zinc-300 font-extrabold">{currentTrack.composer}</span>
                 </p>
               )}
             </div>
           </div>
 
-          {/* Large split-screen lyrics if toggled */}
+          {/* Expanded scrolling lyrics inside Car Modal */}
           {carLyricsActive && (
-            <div className="flex-1 lg:w-[55%] h-[35vh] lg:h-[55vh] w-full bg-slate-950/65 border border-slate-850 p-6 rounded-3xl overflow-y-auto scrollbar-none flex flex-col justify-between relative">
-              <div className="absolute top-0 inset-x-0 h-8 bg-gradient-to-b from-[#06080d] to-transparent pointer-events-none z-10"></div>
+            <div className="flex-1 lg:w-[55%] h-[20vh] sm:h-[30vh] lg:h-[50vh] w-full bg-zinc-950/60 border border-zinc-900/60 p-4 sm:p-6 rounded-3xl overflow-y-auto scrollbar-none flex flex-col justify-between relative select-text transition-all duration-300">
+              <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#090b10] to-transparent pointer-events-none z-10"></div>
               
-              <div className="space-y-4 text-center py-4">
+              <div className="space-y-3.5 text-center py-3">
                 {currentTrack.lyrics ? (
                   currentTrack.lyrics.split('\n').map((line, idx) => {
                     const isHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
                     if (isHeader) {
                       return (
-                        <p key={idx} className="text-[10px] md:text-xs font-mono uppercase tracking-widest text-[#d4af37] font-extrabold pt-3">
+                        <p key={idx} className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-amber-400 font-extrabold pt-2 pb-0.5">
                           {line}
                         </p>
                       );
                     }
                     return (
-                      <p key={idx} className="text-sm md:text-lg font-bold tracking-tight text-slate-300 hover:text-white leading-relaxed">
+                      <p key={idx} className="text-xs sm:text-base font-bold tracking-tight text-zinc-300 hover:text-white leading-relaxed">
                         {line}
                       </p>
                     );
                   })
                 ) : (
-                  <div className="space-y-3 py-10">
-                    <p className="text-slate-500 text-sm font-mono uppercase tracking-widest">Sem Letra Cadastrada</p>
-                    <p className="text-slate-600 text-xs leading-relaxed max-w-sm mx-auto">Compositor ainda não enviou a letra desta música autoral.</p>
+                  <div className="space-y-2 py-8">
+                    <p className="text-zinc-550 text-xs font-mono uppercase tracking-widest font-black">[ Sem Letra Cadastrada ]</p>
+                    <p className="text-zinc-600 text-[11px] leading-relaxed max-w-xs mx-auto">O compositor não arquivou as estrofes originais no painel.</p>
                   </div>
                 )}
               </div>
 
-              <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-[#06080d] to-transparent pointer-events-none z-10"></div>
+              <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-[#090b10] to-transparent pointer-events-none z-10"></div>
             </div>
           )}
 
         </div>
 
-        {/* Large Slider / Progress */}
-        <div className="w-full max-w-4xl mx-auto px-4 space-y-2 z-10">
-          <div className="relative group flex items-center">
+        {/* Compact, elegant timeline slider */}
+        <div className="w-full max-w-2xl mx-auto px-4 space-y-1.5 z-10">
+          <div className="relative flex items-center">
             <input 
               id="car-track-seekbar"
               type="range"
@@ -251,52 +261,52 @@ export default function Player({
               max={duration || 100}
               value={currentTime}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="w-full h-2.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-orange-500 hover:accent-orange-400 transition"
+              className="w-full h-1.5 bg-zinc-900 accent-amber-500 rounded-lg appearance-none cursor-pointer transition-all hover:bg-zinc-850"
             />
           </div>
-          <div className="flex justify-between text-base font-mono text-slate-400 font-bold">
+          <div className="flex justify-between text-[11px] font-mono text-zinc-550 font-bold select-none px-0.5">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
-        {/* GIGANTIC TOUCH CONTROLS (Ideal for mobile/dashboard in-car use) */}
-        <div className="w-full max-w-2xl mx-auto flex items-center justify-center gap-10 md:gap-14 py-4 px-4 z-10 select-none">
+        {/* Central Dashboard Large Touch Controls */}
+        <div className="w-full max-w-xl mx-auto flex items-center justify-center gap-6 sm:gap-9 py-2 sm:py-3.5 px-4 z-10 select-none">
           <button 
             id="car-prev-btn"
             onClick={onPrev}
-            className="p-4.5 bg-slate-900 outline-none border border-slate-800 text-white rounded-full hover:bg-slate-800 hover:scale-105 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-lg shadow-black/40"
+            className="p-3 bg-zinc-905 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md shadow-black/30"
             title="Música anterior"
           >
-            <SkipBack className="w-10 h-10 md:w-12 md:h-12 text-slate-200" />
+            <SkipBack className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-200" />
           </button>
 
           <button 
             id="car-play-pause-btn"
             onClick={onPlayPause}
-            className="p-6.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-full hover:brightness-110 shadow-2xl shadow-orange-500/25 hover:scale-105 active:scale-95 transition cursor-pointer flex items-center justify-center"
+            className="p-4.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-zinc-950 rounded-full hover:brightness-110 shadow-xl shadow-amber-500/10 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
             title={isPlaying ? "Pausar" : "Tocar"}
           >
             {isPlaying ? (
-              <Pause className="w-12 h-12 md:w-16 md:h-16 fill-slate-950" />
+              <Pause className="w-8 h-8 sm:w-10 sm:h-10 fill-zinc-950 text-zinc-950" />
             ) : (
-              <Play className="w-12 h-12 md:w-16 md:h-16 fill-slate-950 ml-1.5" />
+              <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-zinc-950 text-zinc-955 ml-1" />
             )}
           </button>
 
           <button 
             id="car-next-btn"
             onClick={onNext}
-            className="p-4.5 bg-slate-900 outline-none border border-slate-800 text-white rounded-full hover:bg-slate-800 hover:scale-105 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-lg shadow-black/40"
+            className="p-3 bg-zinc-905 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md shadow-black/30"
             title="Próxima música"
           >
-            <SkipForward className="w-10 h-10 md:w-12 md:h-12 text-slate-200" />
+            <SkipForward className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-200" />
           </button>
         </div>
 
-        {/* Touch Warning Help */}
-        <div className="text-center text-slate-500 text-xs font-mono py-1 pb-2 flex items-center justify-center gap-2">
-          <Info className="w-4 h-4 text-yellow-400" /> Toques gigantes otimizados para central de multimídia ou suporte de painel.
+        {/* Bottom guidance banner */}
+        <div className="text-center text-zinc-550 text-[10px] sm:text-xs font-mono py-1 flex items-center justify-center gap-1.5 z-10 select-none">
+          <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Toques ampliados ideais para centrais automotivas ou suporte de para-brisa.
         </div>
       </div>
     );
@@ -308,36 +318,36 @@ export default function Player({
       <div 
         id="bottom-dock-player" 
         onContextMenu={(e) => e.preventDefault()}
-        className="fixed bottom-4 left-4 right-4 md:left-6 md:right-6 md:bottom-6 max-w-5xl mx-auto z-40 rounded-2xl bg-[#090b11]/90 border border-slate-800/80 backdrop-blur-xl transition-all duration-300 shadow-2xl shadow-orange-950/15"
+        className="fixed bottom-4 left-4 right-4 md:left-6 md:right-6 md:bottom-6 max-w-5xl mx-auto z-40 rounded-2xl bg-[#0d0f14]/92 border border-zinc-800/80 backdrop-blur-xl transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.65)] select-none"
       >
         {/* Sleek top edge continuous neon seekbar */}
-        <div className="absolute top-0 inset-x-0 h-[3px] bg-slate-900/60 rounded-t-2xl overflow-hidden">
+        <div className="absolute top-0 inset-x-0 h-[3px] bg-zinc-900/60 rounded-t-2xl overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-orange-500 via-yellow-400 to-yellow-300 transition-all duration-150"
+            className="h-full bg-gradient-to-r from-amber-500 via-amber-450 to-orange-500 transition-all duration-150"
             style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
           ></div>
         </div>
 
-        <div className="p-3.5 px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-3 px-4 md:px-6 flex items-center justify-between gap-3 sm:gap-4">
           
           {/* Left Block: Track Thumbnail & Text Metadata */}
-          <div className="flex items-center gap-3.5 w-full sm:w-[35%] overflow-hidden">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 max-w-[55%] md:max-w-[35%] overflow-hidden">
             <div className="relative flex-shrink-0 group select-none">
               <div 
                 id="player-mini-cover"
-                className={`w-12 h-12 md:w-13 md:h-13 rounded-xl bg-gradient-to-tr ${isPlaying ? 'from-slate-950 to-slate-900 border border-slate-800' : 'from-orange-600 to-yellow-500'} text-slate-950 flex items-center justify-center shadow-lg transition-all duration-500 ${
-                  isPlaying ? 'ring-2 ring-orange-500/40' : ''
+                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr ${isPlaying ? 'from-zinc-950 to-zinc-900 border border-zinc-800' : 'from-amber-505 to-orange-555'} text-zinc-950 flex items-center justify-center shadow-lg transition-all duration-500 ${
+                  isPlaying ? 'ring-2 ring-amber-500/30' : ''
                 }`}
               >
                 {isPlaying ? (
-                  <div className="flex items-end gap-0.5 h-4.5">
-                    <span className="w-0.75 bg-orange-500 animate-bar-1 rounded-full"></span>
-                    <span className="w-0.75 bg-orange-400 animate-bar-2 rounded-full"></span>
-                    <span className="w-0.75 bg-yellow-400 animate-bar-3 rounded-full"></span>
-                    <span className="w-0.75 bg-orange-500 animate-bar-4 rounded-full"></span>
+                  <div className="flex items-end gap-0.5 h-3.5 sm:h-4.5">
+                    <span className="w-0.75 bg-amber-500 animate-bar-1 rounded-full"></span>
+                    <span className="w-0.75 bg-amber-400 animate-bar-2 rounded-full"></span>
+                    <span className="w-0.75 bg-orange-400 animate-bar-3 rounded-full"></span>
+                    <span className="w-0.75 bg-amber-500 animate-bar-4 rounded-full"></span>
                   </div>
                 ) : (
-                  <MusicIcon className="w-5 h-5 text-slate-950" />
+                  <MusicIcon className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-950 stroke-[2]" />
                 )}
               </div>
               <button 
@@ -345,67 +355,67 @@ export default function Player({
                 className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition cursor-pointer"
                 title="Informações da canção"
               >
-                <Info className="w-4.5 h-4.5 text-orange-400" />
+                <Info className="w-4 h-4 text-amber-550" />
               </button>
             </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h4 id="player-track-title" className="font-heading font-black text-sm tracking-tight text-white truncate uppercase leading-none">
+                <h4 id="player-track-title" className="font-heading font-black text-xs sm:text-sm tracking-tight text-[#f8fafc] truncate uppercase leading-none">
                   {currentTrack.title}
                 </h4>
                 <button 
                   onClick={() => setShowFicha(!showFicha)}
-                  className="text-slate-400 hover:text-yellow-450 transition cursor-pointer"
+                  className="text-zinc-500 hover:text-amber-400 transition cursor-pointer shrink-0"
                   title="Ficha da música"
                 >
-                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  <Info className="w-3 h-3" />
                 </button>
               </div>
-              <p id="player-track-artist" className="text-[11px] md:text-sm text-slate-400 truncate font-semibold mt-0.5">
+              <p id="player-track-artist" className="text-[10px] sm:text-xs text-zinc-400 truncate mt-0.5 font-semibold">
                 {currentTrack.singer || "Artista Independente"}
               </p>
             </div>
           </div>
 
-          {/* Center Block: Compact Controls & Small Seekbar */}
-          <div className="flex flex-col items-center w-full sm:w-[40%] gap-2 shrink-0">
+          {/* Center Block: Playback controls on Tablet & Desktop */}
+          <div className="hidden md:flex flex-col items-center flex-1 max-w-[40%] gap-1.5 shrink-0">
             {/* Player Buttons */}
-            <div className="flex items-center gap-4.5 select-none md:gap-5">
+            <div className="flex items-center gap-5 select-none text-zinc-400">
               <button 
                 id="prev-btn"
                 onClick={onPrev}
-                className="text-slate-400 hover:text-white transition p-1 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
+                className="hover:text-white transition p-1 hover:scale-115 active:scale-90 cursor-pointer outline-none" 
                 title="Música anterior"
               >
-                <SkipBack className="w-4 h-4 md:w-4.5 md:h-4.5" />
+                <SkipBack className="w-4.5 h-4.5 text-zinc-400" />
               </button>
 
               <button 
                 id="play-pause-btn"
                 onClick={onPlayPause}
-                className="p-2 md:p-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-full hover:scale-105 active:scale-95 shadow-md shadow-orange-500/15 transition cursor-pointer flex items-center justify-center outline-none font-bold"
+                className="p-2.5 bg-gradient-to-r from-amber-500 to-orange-550 text-zinc-950 rounded-full hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/10 transition cursor-pointer flex items-center justify-center outline-none font-bold"
                 title={isPlaying ? "Deter" : "Reproduzir"}
               >
                 {isPlaying ? (
-                  <Pause className="w-4 h-4 md:w-4.5 md:h-4.5 fill-slate-950" />
+                  <Pause className="w-4.5 h-4.5 fill-zinc-950 text-zinc-950" />
                 ) : (
-                  <Play className="w-4 h-4 md:w-4.5 md:h-4.5 fill-slate-950 ml-0.5" />
+                  <Play className="w-4.5 h-4.5 fill-zinc-950 text-zinc-950 ml-0.5" />
                 )}
               </button>
 
               <button 
                 id="next-btn"
                 onClick={onNext}
-                className="text-slate-400 hover:text-white transition p-1 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
+                className="hover:text-white transition p-1 hover:scale-115 active:scale-90 cursor-pointer outline-none" 
                 title="Próxima música"
               >
-                <SkipForward className="w-4 h-4 md:w-4.5 md:h-4.5" />
+                <SkipForward className="w-4.5 h-4.5 text-zinc-400" />
               </button>
             </div>
 
-            {/* Micro Slider Seek Progress Row */}
-            <div className="w-full flex items-center gap-2.5 text-[10px] font-mono text-slate-500 font-bold select-none">
+            {/* Progress Bar */}
+            <div className="w-full flex items-center gap-2.5 text-[10px] font-mono text-zinc-550 font-bold select-none text-zinc-500">
               <span>{formatTime(currentTime)}</span>
               <input 
                 id="track-seekbar"
@@ -414,44 +424,58 @@ export default function Player({
                 max={duration || 100}
                 value={currentTime}
                 onChange={(e) => handleSeek(Number(e.target.value))}
-                className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500 hover:accent-yellow-400 transition outline-none"
+                className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition outline-none"
               />
               <span>{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* Right Block: Volume control, Letras Toggle & Car Mode */}
-          <div className="flex items-center justify-end gap-3 w-full sm:w-[25%] shrink-0">
+          {/* Right Block: Controls & Option Toggles */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2.5 max-w-[45%] md:max-w-[25%] shrink-0">
             
-            {/* Letra button section (Main feature requested) */}
+            {/* Play/Pause Button on Mobile Only */}
+            <button 
+              id="mobile-play-pause-btn"
+              onClick={onPlayPause}
+              className="md:hidden p-2.5 bg-gradient-to-tr from-amber-500 to-orange-550 text-zinc-950 rounded-full active:scale-95 transition-all flex items-center justify-center shadow-md cursor-pointer select-none border border-transparent"
+              title={isPlaying ? "Pausar" : "Tocar"}
+            >
+              {isPlaying ? (
+                <Pause className="w-4 h-4 fill-zinc-950 text-zinc-950" />
+              ) : (
+                <Play className="w-4 h-4 fill-zinc-950 text-zinc-950 ml-0.5" />
+              )}
+            </button>
+
+            {/* Lyrics Toggle Button */}
             <button 
               onClick={() => setShowLyrics(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-950/50 border border-orange-500/20 text-orange-300 hover:text-slate-950 hover:bg-orange-500 rounded-lg text-xs font-semibold uppercase tracking-wider transition cursor-pointer select-none font-bold hover:border-transparent"
+              className="flex items-center gap-1 px-2 py-2 sm:px-3 sm:py-2.5 bg-amber-500/10 border border-amber-500/20 hover:border-amber-550/40 text-amber-400 hover:bg-amber-500 hover:text-zinc-950 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-95 font-heading"
               title="Letra da canção"
             >
-              <AlignLeft className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
-              <span>Letra</span>
+              <AlignLeft className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden min-[380px]:inline">Letra</span>
             </button>
 
             {/* Car Mode Launcher button */}
             <button 
               id="launch-car-mode-btn"
               onClick={() => setCarMode(true)}
-              className="flex items-center gap-1 px-2 py-1.5 md:px-3 md:py-1.5 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-lg transition hover:scale-102 active:scale-98 cursor-pointer uppercase tracking-wider group select-none hover:border-slate-700"
-              title="Transmissão para Carro"
+              className="flex items-center gap-1 px-2 py-2 sm:px-3 sm:py-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 select-none"
+              title="Para Carro"
             >
-              <Car className="w-3.5 h-3.5 text-orange-450 group-hover:animate-bounce" />
-              <span className="text-orange-450 ml-1 text-[10px] md:text-[11px] font-bold uppercase tracking-wide">Carro</span>
+              <Car className="w-3.5 h-3.5 text-amber-500 cursor-pointer" />
+              <span className="hidden min-[380px]:inline text-[10px] sm:text-xs font-bold uppercase tracking-wide text-zinc-300">Carro</span>
             </button>
 
-            {/* Simple Volume Node (hidden on mobile, gorgeous compact size) */}
-            <div className="hidden lg:flex items-center gap-1.5 select-none">
+            {/* Desktop Volume Node */}
+            <div className="hidden lg:flex items-center gap-1.5 select-none text-zinc-500">
               <button 
                 onClick={() => setIsMuted(!isMuted)} 
-                className="text-slate-400 hover:text-white transition p-1 cursor-pointer outline-none"
+                className="text-zinc-500 hover:text-white transition p-1 cursor-pointer outline-none"
               >
                 {isMuted || volume === 0 ? (
-                  <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                  <VolumeX className="w-3.5 h-3.5 text-red-500" />
                 ) : (
                   <Volume2 className="w-3.5 h-3.5" />
                 )}
@@ -466,7 +490,7 @@ export default function Player({
                   setVolume(Number(e.target.value));
                   if (isMuted) setIsMuted(false);
                 }}
-                className="w-12 h-1 bg-slate-850 rounded-lg appearance-none cursor-pointer accent-slate-400 outline-none"
+                className="w-12 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-500 outline-none"
               />
             </div>
 
@@ -476,37 +500,37 @@ export default function Player({
 
       {/* COMPACT TECHNICAL SLIDE DIALOG */}
       {showFicha && (
-        <div className="fixed bottom-24 left-4 md:left-8 bg-[#0b0e14] border border-slate-800 p-4 rounded-xl shadow-2xl max-w-sm w-[calc(100vw-32px)] z-50 text-slate-300 animate-slide-up select-none">
-          <div className="flex justify-between items-start border-b border-slate-850 pb-2 mb-2">
-            <h5 className="font-heading font-black text-xs tracking-widest text-yellow-450 uppercase flex items-center gap-1.5 font-bold">
-              <Disc className="w-4 h-4 text-orange-400 animate-spin-slow" /> Ficha Técnica Autor
+        <div className="fixed bottom-24 left-4 md:left-8 bg-[#0b0e14]/95 border border-zinc-800/80 p-4 rounded-2xl shadow-2xl max-w-sm w-[calc(100vw-32px)] z-50 text-zinc-300 animate-slide-up select-none backdrop-blur-xl">
+          <div className="flex justify-between items-start border-b border-zinc-900 pb-2 mb-2 w-full">
+            <h5 className="font-heading font-black text-xs tracking-widest text-amber-400 uppercase flex items-center gap-1.5 font-bold">
+              <Disc className="w-4 h-4 text-amber-550 animate-spin-slow" /> Ficha Técnica Autor
             </h5>
             <button 
               onClick={() => setShowFicha(false)} 
-              className="hover:text-white text-slate-500 transition cursor-pointer text-[10px] uppercase font-bold"
+              className="hover:text-white text-zinc-500 transition cursor-pointer text-[10px] uppercase font-bold"
             >
               Fechar
             </button>
           </div>
-          <div className="space-y-1 text-[11px] text-slate-300">
-            <p><strong className="text-slate-500 font-bold uppercase">Música:</strong> {currentTrack.title}</p>
-            <p><strong className="text-slate-500 font-bold uppercase">Cantor/Banda:</strong> {currentTrack.singer || "Não especificado"}</p>
-            {currentTrack.composer && <p><strong className="text-slate-500 font-bold uppercase">Compositores:</strong> {currentTrack.composer}</p>}
-            {currentTrack.genre && <p><strong className="text-slate-500 font-bold uppercase">Estilo Musical:</strong> {currentTrack.genre}</p>}
+          <div className="space-y-1.5 text-[11px] text-zinc-300 leading-relaxed">
+            <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Música:</strong> {currentTrack.title}</p>
+            <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Intérprete:</strong> {currentTrack.singer || "Não especificado"}</p>
+            {currentTrack.composer && <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Compositores:</strong> {currentTrack.composer}</p>}
+            {currentTrack.genre && <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Estilo:</strong> {currentTrack.genre}</p>}
             {currentTrack.description && (
-              <p className="mt-2 text-slate-400 italic border-l-2 border-orange-500 pl-2 py-0.5 leading-relaxed bg-slate-900/35 rounded-r">
+              <p className="mt-2 text-zinc-400 italic border-l-2 border-amber-500 pl-2 py-0.5 leading-relaxed bg-zinc-900/30 rounded-r">
                 "{currentTrack.description}"
               </p>
             )}
-            <p className="text-[9px] text-orange-500 font-mono text-right pt-2.5 uppercase tracking-wider">Registrado no acervo pen drive</p>
+            <p className="text-[9px] text-amber-550 font-mono text-right pt-2.5 uppercase tracking-wider select-none leading-none">Registrado no acervo digital</p>
           </div>
         </div>
       )}
 
-      {/* ELEGANT COMPACT GLASS BACKDROP OVERLAY */}
+      {/* Backdrop overlay */}
       {showLyrics && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-45 transition-all duration-300"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-45 transition-all duration-300"
           onClick={() => setShowLyrics(false)}
         />
       )}
@@ -514,44 +538,44 @@ export default function Player({
       {/* SLIDING PREMIER LYRICS SIDE DRAWER */}
       <div 
         id="side-lyrics-drawer"
-        className={`fixed top-0 right-0 bottom-0 w-full sm:w-[420px] bg-[#07090e]/98 border-l border-slate-900/80 backdrop-blur-2xl z-50 flex flex-col justify-between p-6 select-text transition-transform duration-500 ease-out shadow-2xl shadow-black/80 ${
+        className={`fixed top-0 right-0 bottom-0 w-full sm:w-[420px] bg-[#090b10]/98 border-l border-zinc-900 backdrop-blur-3xl z-50 flex flex-col justify-between p-6 select-text transition-transform duration-500 ease-out shadow-2xl shadow-black/80 ${
           showLyrics ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        {/* Decorative subtle top edge ambient light */}
-        <div className="absolute right-0 top-0 w-80 h-80 bg-orange-600/10 rounded-full blur-[90px] pointer-events-none"></div>
+        {/* Specular premium gradient orb */}
+        <div className="absolute right-0 top-0 w-80 h-80 bg-amber-500/5 rounded-full blur-[90px] pointer-events-none"></div>
 
         {/* Header Block of Lyrics Drawer */}
-        <div className="relative flex items-center justify-between z-10 border-b border-slate-900/60 pb-3.5 select-none">
+        <div className="relative flex items-center justify-between z-10 border-b border-zinc-900 pb-3.5 select-none w-full">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-orange-950/40 border border-orange-500/25 flex items-center justify-center text-orange-400 shadow-lg flex-shrink-0">
-              <Disc className={`w-5 h-5 ${isPlaying ? 'animate-spin-slow text-orange-400' : 'text-slate-500'}`} />
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shadow-lg flex-shrink-0">
+              <Disc className={`w-5 h-5 ${isPlaying ? 'animate-spin-slow text-amber-550' : 'text-zinc-555'}`} />
             </div>
             <div className="min-w-0">
-              <h4 className="text-[9px] font-mono uppercase tracking-widest text-slate-500 font-bold">Tocando Agora</h4>
-              <h3 className="text-sm font-heading font-black uppercase text-white truncate w-full">{currentTrack.title}</h3>
+              <h4 className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 font-bold leading-none">Tocando Agora</h4>
+              <h3 className="text-sm font-heading font-black uppercase text-white truncate w-full mt-1">{currentTrack.title}</h3>
             </div>
           </div>
           
           <button 
             onClick={() => setShowLyrics(false)}
-            className="px-3.5 py-1.5 bg-slate-900/90 border border-slate-850 hover:bg-slate-800 hover:text-white rounded-lg transition cursor-pointer text-[10px] font-heading font-black uppercase tracking-wider text-slate-400"
+            className="px-3.5 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 hover:text-white rounded-xl transition cursor-pointer text-[10px] font-heading font-black uppercase tracking-wider text-zinc-400"
           >
             Fechar
           </button>
         </div>
 
-        {/* Scrollable Lyric Lines with Fading Gradient mask */}
+        {/* Dynamic scrollable lyric text block with fading masks */}
         <div className="relative flex-1 flex flex-col my-5 overflow-hidden z-10">
-          <div className="absolute top-0 inset-x-0 h-8 bg-gradient-to-b from-[#07090e] to-transparent pointer-events-none z-10"></div>
+          <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#090b10] to-transparent pointer-events-none z-10"></div>
           
-          <div className="flex-1 overflow-y-auto px-2 space-y-5 py-6 text-center scroll-smooth scrollbar-none">
+          <div className="flex-1 overflow-y-auto px-2 space-y-4 py-5 text-center scroll-smooth scrollbar-none">
             {currentTrack.lyrics ? (
               currentTrack.lyrics.split('\n').map((line, idx) => {
                 const isSectionHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
                 if (isSectionHeader) {
                   return (
-                    <p key={idx} className="text-[10px] font-mono uppercase tracking-widest text-yellow-405 font-extrabold pt-4 pb-1">
+                    <p key={idx} className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-extrabold pt-3.5 pb-0.5 select-none">
                       {line}
                     </p>
                   );
@@ -559,30 +583,30 @@ export default function Player({
                 return (
                   <p 
                     key={idx} 
-                    className="text-base font-extrabold tracking-tight text-slate-300 hover:text-white hover:scale-101 transition-all cursor-default leading-relaxed font-sans"
+                    className="text-base font-extrabold tracking-tight text-zinc-300 hover:text-white transition-all cursor-default leading-relaxed font-sans"
                   >
                     {line}
                   </p>
                 );
               })
             ) : (
-              <div className="space-y-4 py-16">
-                <BookOpen className="w-9 h-9 text-slate-800 mx-auto animate-bounce" />
-                <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest">Essa obra não possui letra arquivada</p>
-                <p className="text-slate-600 text-xs max-w-xs mx-auto leading-relaxed">
-                  O compositor de "{currentTrack.title}" ainda não editou as estrofes desta música.
+              <div className="space-y-3 py-16">
+                <BookOpen className="w-8 h-8 text-zinc-700 mx-auto animate-bounce" />
+                <p className="text-zinc-555 text-[10px] font-mono uppercase tracking-widest">[ Obra instrumental / sem letra arquivada ]</p>
+                <p className="text-zinc-600 text-xs max-w-xs mx-auto leading-relaxed">
+                  O compositor de "{currentTrack.title}" ainda não disponibilizou o arquivo literário para esta demo.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 h-8 bg-gradient-to-t from-[#07090e] to-transparent pointer-events-none z-10"></div>
+          <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-[#090b10] to-transparent pointer-events-none z-10"></div>
         </div>
 
-        {/* Micro Synced Player Controls inside Bottom Drawer */}
-        <div className="relative border-t border-slate-900/60 pt-4 space-y-3 z-10 select-none">
-          {/* Seekbar and timings */}
-          <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-slate-500 font-bold">
+        {/* Micro Synced Player Controls inside Drawer */}
+        <div className="relative border-t border-zinc-900 pt-4 space-y-3 z-10 select-none w-full">
+          {/* Progress seekbar */}
+          <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-zinc-500 font-bold w-full">
             <span>{formatTime(currentTime)}</span>
             <input 
               type="range"
@@ -590,16 +614,16 @@ export default function Player({
               max={duration || 100}
               value={currentTime}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="flex-1 h-1 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-orange-500 transition outline-none"
+              className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500 transition outline-none"
             />
             <span>{formatTime(duration)}</span>
           </div>
 
-          {/* Core Player buttons */}
-          <div className="flex items-center justify-center gap-5">
+          {/* Core Player control layout */}
+          <div className="flex items-center justify-center gap-5 w-full">
             <button 
               onClick={onPrev} 
-              className="p-2.5 bg-slate-900/80 border border-slate-850 hover:border-slate-700 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+              className="p-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-xl transition cursor-pointer"
               title="Anterior"
             >
               <SkipBack className="w-4 h-4" />
@@ -607,15 +631,15 @@ export default function Player({
             
             <button 
               onClick={onPlayPause} 
-              className="p-3.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-full hover:brightness-110 shadow-lg shadow-orange-500/15 transition cursor-pointer font-bold"
+              className="p-3.5 bg-gradient-to-r from-amber-500 to-orange-555 text-zinc-950 rounded-full hover:brightness-110 shadow-lg shadow-amber-555/15 transition cursor-pointer font-bold"
               title={isPlaying ? "Deter" : "Tocar"}
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-slate-950" /> : <Play className="w-5 h-5 fill-slate-950 ml-0.5" />}
+              {isPlaying ? <Pause className="w-5 h-5 fill-slate-950 text-zinc-950" /> : <Play className="w-5 h-5 fill-slate-950 text-zinc-950 ml-0.5" />}
             </button>
             
             <button 
               onClick={onNext} 
-              className="p-2.5 bg-slate-900/80 border border-slate-850 hover:border-slate-700 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+              className="p-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-xl transition cursor-pointer"
               title="Seguinte"
             >
               <SkipForward className="w-4 h-4" />

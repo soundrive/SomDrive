@@ -40,10 +40,26 @@ export default function AdminArea({
   onLogout,
   onNavigate
 }: AdminAreaProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings'>('dashboard');
   const [users, setUsers] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // PaymentSettings states
+  const [paymentSettings, setPaymentSettings] = useState<{
+    proMonthlyUrl: string;
+    proAnnualUrl: string;
+    premiumMonthlyUrl: string;
+    premiumAnnualUrl: string;
+    updatedAt?: string;
+    updatedBy?: string;
+  }>({
+    proMonthlyUrl: '',
+    proAnnualUrl: '',
+    premiumMonthlyUrl: '',
+    premiumAnnualUrl: '',
+  });
+  const [loadingPayments, setLoadingPayments] = useState(false);
   const [planFilter, setPlanFilter] = useState<'all' | 'free' | 'pro' | 'premium'>('all');
   const [blockedFilter, setBlockedFilter] = useState<'all' | 'active' | 'blocked'>('all');
   
@@ -67,6 +83,27 @@ export default function AdminArea({
   const [trialDuration, setTrialDuration] = useState('7'); // days
   const [trialLimit, setTrialLimit] = useState(15);
 
+  const loadPaymentSettings = async () => {
+    setLoadingPayments(true);
+    try {
+      const data = await dbService.getPaymentSettings();
+      if (data) {
+        setPaymentSettings({
+          proMonthlyUrl: data.proMonthlyUrl || '',
+          proAnnualUrl: data.proAnnualUrl || '',
+          premiumMonthlyUrl: data.premiumMonthlyUrl || '',
+          premiumAnnualUrl: data.premiumAnnualUrl || '',
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingPayments(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -81,7 +118,19 @@ export default function AdminArea({
 
   useEffect(() => {
     loadData();
+    loadPaymentSettings();
   }, []);
+
+  const handleSavePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await dbService.updatePaymentSettings(paymentSettings, currentUser.email || 'Admin');
+      triggerNotification("Links de pagamento atualizados com sucesso!");
+      loadPaymentSettings();
+    } catch (e) {
+      triggerNotification("Erro ao salvar links de pagamento.", true);
+    }
+  };
 
   const triggerNotification = (message: string, isError = false) => {
     if (isError) {
@@ -341,6 +390,15 @@ export default function AdminArea({
               <div className="flex items-center space-x-3">
                 <Clock className="h-4 w-4" />
                 <span>Liberações & Testes</span>
+              </div>
+            </button>
+            <button
+              onClick={() => { setActiveTab('payments'); setSelectedUser(null); }}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium transition ${activeTab === 'payments' ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/5 text-orange-500 border-l-4 border-orange-500' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+            >
+              <div className="flex items-center space-x-3">
+                <CreditCard className="h-4 w-4" />
+                <span>Configurações de Pagamento</span>
               </div>
             </button>
             <button
@@ -1071,6 +1129,147 @@ export default function AdminArea({
                 </form>
               </div>
 
+            </div>
+          )}
+
+          {/* TAB: PAYMENT CONFIGURATIONS */}
+          {activeTab === 'payments' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6 animate-fade-in">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center">
+                  <CreditCard className="h-5 w-5 text-orange-500 mr-2" />
+                  Configurações de Pagamento (Mercado Pago)
+                </h3>
+                <p className="text-slate-400 text-xs mt-1">
+                  Configure os links de checkout do Mercado Pago para os planos Pro e Premium (Mensal e Anual).
+                </p>
+              </div>
+
+              {/* Information / Instruction Alert Box */}
+              <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-start space-x-3">
+                <Info className="h-5 w-5 text-orange-550 shrink-0 mt-0.5" />
+                <div className="text-xs text-orange-200 leading-relaxed">
+                  <span className="font-bold block text-white mb-0.5">Observação de Processamento:</span>
+                  Após o pagamento no Mercado Pago, confirme manualmente o plano do usuário na área de <strong>Gerenciar Usuários</strong> deste painel admin. O Soundrive não ativa os acessos de forma automatizada por enquanto.
+                </div>
+              </div>
+
+              {loadingPayments ? (
+                <div className="py-12 text-center text-slate-500 text-sm flex flex-col items-center justify-center space-y-2">
+                  <RefreshCw className="h-6 w-6 text-orange-500 animate-spin" />
+                  <span>Carregando links de pagamento...</span>
+                </div>
+              ) : (
+                <form onSubmit={handleSavePaymentSettings} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* SECTION 1: PRO MONTHLY */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">1. Soundrive Pro Mensal</span>
+                        <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 19,90/mês</span>
+                      </div>
+                      <div className="text-slate-400 text-[11px] space-y-1">
+                        <p><strong>Limite:</strong> 15 músicas</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-slate-300 font-semibold" htmlFor="pro-monthly-url">Link de Pagamento (Mercado Pago)</label>
+                        <input
+                          id="pro-monthly-url"
+                          type="url"
+                          placeholder="https://link.mercadopago.com.br/..."
+                          value={paymentSettings.proMonthlyUrl}
+                          onChange={(e) => setPaymentSettings({ ...paymentSettings, proMonthlyUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-850 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SECTION 2: PRO ANNUAL */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">2. Soundrive Pro Anual</span>
+                        <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 199,00/ano</span>
+                      </div>
+                      <div className="text-slate-400 text-[11px] space-y-1">
+                        <p><strong>Limite:</strong> 15 músicas</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-slate-300 font-semibold" htmlFor="pro-annual-url">Link de Pagamento (Mercado Pago)</label>
+                        <input
+                          id="pro-annual-url"
+                          type="url"
+                          placeholder="https://link.mercadopago.com.br/..."
+                          value={paymentSettings.proAnnualUrl}
+                          onChange={(e) => setPaymentSettings({ ...paymentSettings, proAnnualUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-850 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SECTION 3: PREMIUM MONTHLY */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">3. Soundrive Premium Mensal</span>
+                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 39,90/mês</span>
+                      </div>
+                      <div className="text-slate-400 text-[11px] space-y-1">
+                        <p><strong>Limite:</strong> 50 músicas</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-slate-300 font-semibold" htmlFor="premium-monthly-url">Link de Pagamento (Mercado Pago)</label>
+                        <input
+                          id="premium-monthly-url"
+                          type="url"
+                          placeholder="https://link.mercadopago.com.br/..."
+                          value={paymentSettings.premiumMonthlyUrl}
+                          onChange={(e) => setPaymentSettings({ ...paymentSettings, premiumMonthlyUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-850 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SECTION 4: PREMIUM ANNUAL */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">4. Soundrive Premium Anual</span>
+                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 399,00/ano</span>
+                      </div>
+                      <div className="text-slate-400 text-[11px] space-y-1">
+                        <p><strong>Limite:</strong> 50 músicas</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-slate-300 font-semibold" htmlFor="premium-annual-url">Link de Pagamento (Mercado Pago)</label>
+                        <input
+                          id="premium-annual-url"
+                          type="url"
+                          placeholder="https://link.mercadopago.com.br/..."
+                          value={paymentSettings.premiumAnnualUrl}
+                          onChange={(e) => setPaymentSettings({ ...paymentSettings, premiumAnnualUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-850 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-mono"
+                        />
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {paymentSettings.updatedAt && (
+                    <div className="text-[10px] font-mono text-slate-500 text-right">
+                      Última atualização: {new Date(paymentSettings.updatedAt).toLocaleString('pt-BR')} por {paymentSettings.updatedBy}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-slate-950 rounded-xl font-extrabold text-sm transition uppercase tracking-wider flex items-center space-x-2"
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>Salvar Configurações</span>
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
 

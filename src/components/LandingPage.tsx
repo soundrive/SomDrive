@@ -112,6 +112,66 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
   const [showcaseIndex, setShowcaseIndex] = useState(0);
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0);
   const [isSimulatedPlaying, setIsSimulatedPlaying] = useState(true);
+
+  const landingPlans = {
+    free: {
+      name: 'Soundrive Free',
+      description: 'Para começar e testar seu catálogo privado.',
+      price: 'Grátis',
+      badge: 'Grátis',
+      features: [
+        { name: 'Até 5 músicas cadastradas', highlight: true },
+        { name: 'Catálogo privado por link' },
+        { name: 'Upload de músicas em MP3' },
+        { name: 'Limite de 20 MB por música' },
+        { name: 'Player para celular' },
+        { name: 'Modo carro' },
+        { name: 'Ficha técnica da música' },
+        { name: 'Letra da composição' },
+        { name: 'Botão WhatsApp do compositor' },
+        { name: 'Compartilhamento do catálogo' }
+      ]
+    },
+    pro: {
+      name: 'Soundrive Pro',
+      description: 'Para compositores que querem enviar mais repertório.',
+      price: billingCycle === 'monthly' ? 'R$ 19,90' : 'R$ 199,90',
+      period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
+      badge: 'Mais Escolhido',
+      features: [
+        { name: 'Até 15 músicas cadastradas', highlight: true },
+        { name: 'Catálogo privado por link' },
+        { name: 'Upload de músicas em MP3' },
+        { name: 'Limite de 20 MB por música' },
+        { name: 'Player para celular' },
+        { name: 'Modo carro' },
+        { name: 'Ficha técnica da música' },
+        { name: 'Letra da composição' },
+        { name: 'Botão WhatsApp do compositor' },
+        { name: 'Compartilhamento do catálogo' }
+      ]
+    },
+    premium: {
+      name: 'Soundrive Premium',
+      description: 'Para quem trabalha com maior volume de composições.',
+      price: billingCycle === 'monthly' ? 'R$ 39,90' : 'R$ 399,90',
+      period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
+      badge: 'Elite',
+      features: [
+        { name: 'Até 50 músicas cadastradas', highlight: true },
+        { name: 'Catálogo privado por link' },
+        { name: 'Upload de músicas em MP3' },
+        { name: 'Limite de 20 MB por música' },
+        { name: 'Player para celular' },
+        { name: 'Modo carro' },
+        { name: 'Ficha técnica da música' },
+        { name: 'Letra da composição' },
+        { name: 'Botão WhatsApp do compositor' },
+        { name: 'Compartilhamento do catálogo' }
+      ]
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-orange-500 selection:text-white pb-20 relative overflow-hidden">
       
@@ -582,15 +642,17 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
         </div>
       </section>
 
-      {/* Planos / Pricing Grid */}
       <section id="planos" className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-32">
-        <div className="text-center max-w-2xl mx-auto mb-12 space-y-3">
-          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-bold">Impulsione Sua Carreira</h3>
+        <div className="text-center max-w-2xl mx-auto mb-12 space-y-4">
+          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-bold">Planos e Limites</h3>
           <h2 className="text-3xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
-            Escolha o Plano Ideal para Você
+            Escolha o Plano Ideal
           </h2>
-          <p className="text-slate-400 text-sm">
-            Disponibilize seu repertório com som cristalino, métricas em tempo real e designs de alta conversão. Sem burocracia ou intermediários.
+          <p className="text-slate-200 text-base leading-relaxed font-semibold">
+            Crie seu catálogo musical privado, envie suas composições por link e permita que cantores, produtores e contratantes ouçam suas músicas com facilidade.
+          </p>
+          <p className="text-slate-400 text-xs md:text-sm">
+            Todos os planos incluem os mesmos recursos principais. A diferença está na quantidade de músicas que você pode cadastrar.
           </p>
         </div>
 
@@ -623,51 +685,37 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
           
           {/* Soundrive Free Card */}
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative">
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
             <div className="space-y-6">
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold font-bold">Grátis</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">Soundrive Free</h4>
+                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold">{landingPlans.free.badge}</span>
+                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.free.name}</h4>
                 </div>
-                <h5 className="text-3xl font-heading font-black text-slate-100">Grátis</h5>
+                <h5 className="text-3xl font-heading font-black text-slate-100">{landingPlans.free.price}</h5>
               </div>
 
-              <p className="text-slate-400 text-xs leading-relaxed">Ideal para começar e testar seu catálogo privado.</p>
+              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.free.description}</p>
 
               {/* Feature bullet list */}
-              <ul className="space-y-2.5 text-xs">
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Até 5 músicas</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Até 20 MB por arquivo</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Catálogo privado por link</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Player de áudio básico</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Ficha técnica da música</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Botão WhatsApp integrado</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Modo carro básico</span>
-                </li>
+              <ul className="space-y-3 text-xs">
+                {landingPlans.free.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-slate-300">
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
+                        ★ {feat.name}
+                      </div>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
               </ul>
             </div>
 
@@ -682,65 +730,46 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           </div>
 
           {/* Soundrive Pro Card (Highlighted!) */}
-          <div className="relative bg-gradient-to-b from-[#14100c] to-[#0c0d12] border-2 border-orange-500 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.02] transition duration-300 shadow-2xl shadow-orange-950/30">
+          <div className="relative bg-gradient-to-b from-[#14100c] to-[#0c0d12] border-2 border-orange-500 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.02] transition duration-300 shadow-2xl shadow-orange-950/30 h-full">
             {/* Top recommendation bubble */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-orange-600 to-yellow-500 px-3.5 py-1 text-slate-950 text-[10px] uppercase font-heading font-black tracking-widest rounded-full shadow-lg font-bold flex items-center gap-1 whitespace-nowrap z-20">
-              <Star className="w-3.5 h-3.5 fill-slate-950" /> Mais Escolhido
+              <Star className="w-3.5 h-3.5 fill-slate-950" /> {landingPlans.pro.badge}
             </div>
 
             <div className="space-y-6 pt-2">
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
                   <span className="px-2 py-0.5 bg-orange-955 text-orange-400 rounded text-[9px] font-mono uppercase tracking-widest font-extrabold border border-orange-500/20">Recomendado</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">Soundrive Pro</h4>
+                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.pro.name}</h4>
                 </div>
                 <div className="text-right">
                   <div className="flex items-baseline justify-end gap-0.5">
-                    <span className="text-xs font-mono text-slate-400">R$</span>
                     <h5 className="text-3xl font-heading font-black text-white">
-                      {billingCycle === 'monthly' ? '19,90' : '199,90'}
+                      {landingPlans.pro.price}
                     </h5>
                   </div>
-                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{billingCycle === 'monthly' ? '/ mês' : '/ ano'}</p>
+                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.pro.period}</p>
                 </div>
               </div>
 
-              <p className="text-slate-400 text-xs leading-relaxed">Ideal para compositores que querem apresentar repertório com mais profissionalismo.</p>
+              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.pro.description}</p>
 
               {/* Feature bullet list */}
-              <ul className="space-y-2.5 text-xs">
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Até 15 músicas</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Até 30 MB por arquivo</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Tudo do plano Free</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Links privados para compartilhar</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Analytics básico de acessos e plays</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Música mais ouvida</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Botão “Tenho interesse nessa música”</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Status da música: inédita, demo, disponível, reservada ou vendida</span>
-                </li>
+              <ul className="space-y-3 text-xs">
+                {landingPlans.pro.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-slate-300">
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-550/15 border border-orange-500 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs shadow-md">
+                        ★ {feat.name}
+                      </div>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
               </ul>
             </div>
 
@@ -755,64 +784,41 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           </div>
 
           {/* Soundrive Premium Card */}
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative">
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
             <div className="space-y-6">
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold font-bold">Elite</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">Soundrive Premium</h4>
+                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold font-bold">{landingPlans.premium.badge}</span>
+                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.premium.name}</h4>
                 </div>
                 <div className="text-right">
                   <div className="flex items-baseline justify-end gap-0.5">
-                    <span className="text-xs font-mono text-slate-400">R$</span>
                     <h5 className="text-3xl font-heading font-black text-white">
-                      {billingCycle === 'monthly' ? '39,90' : '399,90'}
+                      {landingPlans.premium.price}
                     </h5>
                   </div>
-                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{billingCycle === 'monthly' ? '/ mês' : '/ ano'}</p>
+                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.premium.period}</p>
                 </div>
               </div>
 
-              <p className="text-slate-400 text-xs leading-relaxed">Ideal para produtores, selos, escritórios e compositores com mais repertório.</p>
+              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.premium.description}</p>
 
               {/* Feature bullet list */}
-              <ul className="space-y-2.5 text-xs">
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Até 50 músicas</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Até 30 MB por arquivo</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Tudo do plano Pro</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Catálogo premium personalizado</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Analytics avançado</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Organização por repertório, álbum ou projeto</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Links personalizados</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Suporte prioritário</span>
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                  <span className="text-slate-200">Mais controle para envio de músicas</span>
-                </li>
+              <ul className="space-y-3 text-xs">
+                {landingPlans.premium.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-slate-300">
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
+                        ★ {feat.name}
+                      </div>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
               </ul>
             </div>
 

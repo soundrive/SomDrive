@@ -38,60 +38,85 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [simulatedStatus, setSimulatedStatus] = useState<'ativo' | 'pendente' | 'cancelado'>('ativo');
 
+  // Mercado Pago Checkout integration settings loaded from database
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [paymentSettings, setPaymentSettings] = useState<any>(null);
+  const [loadingLinks, setLoadingLinks] = useState(true);
+
+  React.useEffect(() => {
+    const fetchLinks = async () => {
+      try {
+        const settings = await dbService.getPaymentSettings();
+        setPaymentSettings(settings);
+      } catch (e) {
+        console.error("Error loading payment links:", e);
+      } finally {
+        setLoadingLinks(false);
+      }
+    };
+    fetchLinks();
+  }, []);
+
   // Plan Details Card Structuring
   const planDetails = {
     free: {
       name: 'Soundrive Free',
-      description: 'Ideal para começar e testar seu catálogo privado.',
+      description: 'Para começar e testar seu catálogo privado.',
       price: 0,
       limitTracks: 5,
       limitSize: 20,
       badge: 'Grátis',
       features: [
-        { name: 'Até 5 músicas', included: true },
-        { name: 'Até 20 MB por arquivo', included: true },
+        { name: 'Até 5 músicas cadastradas', included: true, highlight: true },
         { name: 'Catálogo privado por link', included: true },
-        { name: 'Player de áudio básico', included: true },
+        { name: 'Upload de músicas em MP3', included: true },
+        { name: 'Limite de 20 MB por música', included: true },
+        { name: 'Player para celular', included: true },
+        { name: 'Modo carro', included: true },
         { name: 'Ficha técnica da música', included: true },
-        { name: 'Botão WhatsApp integrado', included: true },
-        { name: 'Modo carro básico', included: true },
+        { name: 'Letra da composição', included: true },
+        { name: 'Botão WhatsApp do compositor', included: true },
+        { name: 'Compartilhamento do catálogo', included: true },
       ]
     },
     pro: {
       name: 'Soundrive Pro',
-      description: 'Ideal para compositores que querem apresentar repertório com mais profissionalismo.',
-      price: billingCycle === 'monthly' ? 19.90 : 199.90,
+      description: 'Para compositores que querem enviar mais repertório.',
+      price: billingCycle === 'monthly' ? 19.90 : 199.00,
       limitTracks: 15,
-      limitSize: 30,
+      limitSize: 20,
       badge: 'Mais Escolhido',
       features: [
-        { name: 'Até 15 músicas', included: true },
-        { name: 'Até 30 MB por arquivo', included: true },
-        { name: 'Tudo do plano Free', included: true },
-        { name: 'Links privados para compartilhar', included: true },
-        { name: 'Analytics básico de acessos e plays', included: true },
-        { name: 'Música mais ouvida', included: true },
-        { name: 'Botão "Tenho interesse nessa música"', included: true },
-        { name: 'Status da música: inédita, demo, disponível, reservada ou vendida', included: true },
+        { name: 'Até 15 músicas cadastradas', included: true, highlight: true },
+        { name: 'Catálogo privado por link', included: true },
+        { name: 'Upload de músicas em MP3', included: true },
+        { name: 'Limite de 20 MB por música', included: true },
+        { name: 'Player para celular', included: true },
+        { name: 'Modo carro', included: true },
+        { name: 'Ficha técnica da música', included: true },
+        { name: 'Letra da composição', included: true },
+        { name: 'Botão WhatsApp do compositor', included: true },
+        { name: 'Compartilhamento do catálogo', included: true },
       ]
     },
     premium: {
       name: 'Soundrive Premium',
-      description: 'Ideal para produtores, selos, escritórios e compositores com mais repertório.',
-      price: billingCycle === 'monthly' ? 39.90 : 399.90,
+      description: 'Para quem trabalha com maior volume de composições.',
+      price: billingCycle === 'monthly' ? 39.90 : 399.00,
       limitTracks: 50,
-      limitSize: 30,
-      badge: 'Profissional',
+      limitSize: 20,
+      badge: 'Premium',
       features: [
-        { name: 'Até 50 músicas', included: true },
-        { name: 'Até 30 MB por arquivo', included: true },
-        { name: 'Tudo do plano Pro', included: true },
-        { name: 'Catálogo premium personalizado', included: true },
-        { name: 'Analytics avançado', included: true },
-        { name: 'Organização por repertório, álbum ou projeto', included: true },
-        { name: 'Links personalizados', included: true },
-        { name: 'Suporte prioritário', included: true },
-        { name: 'Mais controle para envio de músicas', included: true },
+        { name: 'Até 50 músicas cadastradas', included: true, highlight: true },
+        { name: 'Catálogo privado por link', included: true },
+        { name: 'Upload de músicas em MP3', included: true },
+        { name: 'Limite de 20 MB por música', included: true },
+        { name: 'Player para celular', included: true },
+        { name: 'Modo carro', included: true },
+        { name: 'Ficha técnica da música', included: true },
+        { name: 'Letra da composição', included: true },
+        { name: 'Botão WhatsApp do compositor', included: true },
+        { name: 'Compartilhamento do catálogo', included: true },
       ]
     }
   };
@@ -100,6 +125,24 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     setSelectedPlan(planKey);
     setIsCheckoutOpen(true);
     setCheckoutStep('payment');
+  };
+
+  const handlePlanCheckout = (planKey: 'pro' | 'premium') => {
+    setSelectedPlan(planKey);
+    const isYearly = billingCycle === 'yearly';
+    let url = '';
+
+    if (planKey === 'pro') {
+      url = isYearly ? paymentSettings?.proAnnualUrl : paymentSettings?.proMonthlyUrl;
+    } else if (planKey === 'premium') {
+      url = isYearly ? paymentSettings?.premiumAnnualUrl : paymentSettings?.premiumMonthlyUrl;
+    }
+
+    if (url && url.trim().startsWith('http')) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      setCheckoutError("Pagamento ainda não configurado. Fale com o suporte.");
+    }
   };
 
   const handleDowngradeToFree = () => {
@@ -144,15 +187,18 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
         <div className="absolute bottom-[15%] right-[10%] w-[350px] h-[350px] bg-yellow-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
         {/* Plan Header */}
-        <div className="text-center space-y-4 max-w-2xl mx-auto relative z-10">
+        <div className="text-center space-y-4 max-w-2xl mx-auto relative z-10 w-full">
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-gradient-to-r from-orange-950 to-yellow-950 border border-orange-500/20 text-orange-400 rounded-full text-[10px] font-mono font-bold uppercase tracking-widest leading-none">
             <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Planos de Assinatura Soundrive
           </div>
           <h2 className="text-3xl md:text-5xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-400 tracking-tight leading-tight">
-            Seu Portfólio, Seus Limites Expandidos
+            Planos e Limites
           </h2>
-          <p className="text-slate-400 text-xs md:text-sm leading-relaxed">
-            Selecione a velocidade que deseja para impulsionar suas vendas de guias e composições autorais. Identidade visual exclusiva Lava & Amber.
+          <p className="text-slate-200 text-xs sm:text-sm md:text-base leading-relaxed font-medium">
+            Crie seu catálogo musical privado, envie suas composições por link e permita que cantores, produtores e contratantes ouçam suas músicas com facilidade.
+          </p>
+          <p className="text-slate-400 text-xs md:text-sm leading-indigo">
+            Todos os planos incluem os mesmos recursos principais. A diferença está na quantidade de músicas que você pode cadastrar.
           </p>
 
           {/* Current plan status readout banner */}
@@ -210,7 +256,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
         </div>
 
         {/* 2. Plan Grid Structure */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch relative z-10">
           
           {/* Soundrive Free Card */}
           <div className={`bg-slate-900/60 border rounded-2xl p-6 flex flex-col justify-between hover:scale-101 hover:border-slate-800 transition duration-300 ${profile.plan === 'free' ? 'border-orange-500/40 shadow-xl shadow-orange-950/5' : 'border-slate-850'}`}>
@@ -226,15 +272,19 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               <p className="text-slate-400 text-xs leading-relaxed">{planDetails.free.description}</p>
 
               {/* Feature bullet list */}
-              <ul className="space-y-2.5 text-xs">
+              <ul className="space-y-3 text-xs">
                 {planDetails.free.features.map((feat, idx) => (
                   <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.included ? (
-                      <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-black tracking-wide text-xs">
+                        ★ {feat.name}
+                      </div>
                     ) : (
-                      <X className="w-4 h-4 text-slate-700 shrink-0 mt-0.5" />
+                      <>
+                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
                     )}
-                    <span className={feat.included ? 'text-slate-200 font-medium' : 'text-slate-600 line-through'}>{feat.name}</span>
                   </li>
                 ))}
               </ul>
@@ -281,15 +331,19 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               <p className="text-slate-400 text-xs leading-relaxed">{planDetails.pro.description}</p>
 
               {/* Feature bullet list */}
-              <ul className="space-y-2.5 text-xs">
+              <ul className="space-y-3 text-xs">
                 {planDetails.pro.features.map((feat, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.included ? (
-                      <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                  <li key={idx} className="flex items-start gap-2 text-slate-400">
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-550/15 border border-orange-500 px-3 py-1.5 rounded-lg text-orange-400 font-black tracking-wide text-xs shadow-md">
+                        ★ {feat.name}
+                      </div>
                     ) : (
-                      <X className="w-4 h-4 text-slate-700 shrink-0 mt-0.5" />
+                      <>
+                        <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
                     )}
-                    <span className={feat.included ? 'text-slate-200 font-medium' : 'text-slate-600 line-through'}>{feat.name}</span>
                   </li>
                 ))}
               </ul>
@@ -302,7 +356,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                 </div>
               ) : (
                 <button 
-                  onClick={() => handleOpenCheckout('pro')}
+                  onClick={() => handlePlanCheckout('pro')}
                   className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10"
                 >
                   Quero ser Pro
@@ -331,15 +385,19 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               <p className="text-slate-400 text-xs leading-relaxed">{planDetails.premium.description}</p>
 
               {/* Feature bullet list */}
-              <ul className="space-y-2.5 text-xs">
+              <ul className="space-y-3 text-xs">
                 {planDetails.premium.features.map((feat, idx) => (
                   <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.included ? (
-                      <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-black tracking-wide text-xs">
+                        ★ {feat.name}
+                      </div>
                     ) : (
-                      <X className="w-4 h-4 text-slate-700 shrink-0 mt-0.5" />
+                      <>
+                        <Check className="w-4 h-4 text-orange-550 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
                     )}
-                    <span className={feat.included ? 'text-slate-200 font-medium' : 'text-slate-600 line-through'}>{feat.name}</span>
                   </li>
                 ))}
               </ul>
@@ -352,7 +410,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                 </div>
               ) : (
                 <button 
-                  onClick={() => handleOpenCheckout('premium')}
+                  onClick={() => handlePlanCheckout('premium')}
                   className="w-full text-center py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
                 >
                   Quero ser Premium
@@ -543,6 +601,46 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* ERROR MODAL FOR UNCONFIGURED PAYMENT */}
+      {checkoutError && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0b0e14] border border-red-500/30 rounded-3xl w-full max-w-sm p-6 space-y-6 shadow-2xl relative text-center">
+            <div className="w-12 h-12 bg-red-950/50 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-400">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-heading font-black text-sm uppercase text-white">Aviso do Sistema</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">{checkoutError}</p>
+            </div>
+            <div className="pt-2 flex flex-col space-y-3">
+              {currentUser.whatsapp ? (
+                <a
+                  href={`https://wa.me/${currentUser.whatsapp.replace(/\D/g, '')}?text=Olá! Gostaria de ajuda para assinar o plano ${selectedPlan === 'pro' ? 'Pro' : 'Premium'} no Soundrive.`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 font-bold rounded-2xl text-xs transition cursor-pointer flex items-center justify-center space-x-2 font-extrabold uppercase"
+                >
+                  <span>Falar com Suporte</span>
+                </a>
+              ) : (
+                <a
+                  href="mailto:suporte@soundrive.com.br"
+                  className="w-full py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 font-bold rounded-2xl text-xs transition cursor-pointer flex items-center justify-center space-x-2 font-extrabold uppercase"
+                >
+                  <span>Falar com Suporte</span>
+                </a>
+              )}
+              <button 
+                onClick={() => setCheckoutError(null)}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-850 text-slate-400 font-bold rounded-2xl text-xs border border-slate-850 transition cursor-pointer font-bold uppercase"
+              >
+                Voltar
+              </button>
+            </div>
           </div>
         </div>
       )}

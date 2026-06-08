@@ -96,6 +96,19 @@
         "updatedAt": { "type": "string", "description": "Date of track last modification" }
       },
       "required": ["songId", "ownerId", "title", "audioFileId", "audioUrl", "storagePath", "plays", "createdAt", "updatedAt"]
+    },
+    "PaymentSettings": {
+      "title": "PaymentSettings",
+      "description": "Payment checkout configurations, pricing options and links",
+      "type": "object",
+      "properties": {
+        "proMonthlyUrl": { "type": "string", "description": "Checkout URL for Pro Monthly plan" },
+        "proAnnualUrl": { "type": "string", "description": "Checkout URL for Pro Annual plan" },
+        "premiumMonthlyUrl": { "type": "string", "description": "Checkout URL for Premium Monthly plan" },
+        "premiumAnnualUrl": { "type": "string", "description": "Checkout URL for Premium Annual plan" },
+        "updatedAt": { "type": "string", "description": "Audit updated timestamp" },
+        "updatedBy": { "type": "string", "description": "Email address of the admin who updated the links" }
+      }
     }
   },
   "firestore": {
@@ -118,6 +131,10 @@
     "/songs/{songId}": {
       "schema": "Song",
       "description": "Comprehensive index of user compositions with unique metrics"
+    },
+    "/settings/{settingId}": {
+      "schema": "PaymentSettings",
+      "description": "General settings and dynamic integration configs used by the app"
     }
   }
 }

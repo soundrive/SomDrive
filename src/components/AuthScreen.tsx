@@ -26,7 +26,11 @@ import {
 import { 
   doc, 
   getDoc, 
-  Timestamp 
+  Timestamp,
+  collection,
+  query,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 
@@ -69,29 +73,64 @@ export default function AuthScreen({
   const [successAnimation, setSuccessAnimation] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handlePasswordResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!email.trim()) {
-      setErrorMsg('Por favor, informe seu endereço de e-mail.');
+    const emailValue = email.trim();
+    if (!emailValue) {
+      setErrorMsg('Digite seu e-mail para recuperar a senha.');
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailValue)) {
+      setErrorMsg('Digite um e-mail válido.');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
-      setSuccessMsg('Enviamos um link de recuperação para seu e-mail.');
-    } catch (err: any) {
-      console.warn("Firebase Password Reset: ", err);
-      let msg = 'Erro ao enviar e-mail de recuperação. Verifique o endereço digitado.';
-      if (err.code === 'auth/user-not-found') {
-        msg = 'Nenhum usuário encontrado com este e-mail.';
-      } else if (err.message) {
-        msg = err.message;
+      // Direct Firestore check to confirm user is registered
+      const artistsRef = collection(db, 'artists');
+      const q = query(artistsRef, where('email', '==', emailValue.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setErrorMsg('Este e-mail não está cadastrado em nosso sistema. Verifique o endereço digitado ou crie um novo cadastro.');
+        setIsLoading(false);
+        return;
+      }
+
+      await sendPasswordResetEmail(auth, emailValue.toLowerCase());
+      setSuccessMsg('Enviamos um link de recuperação para seu e-mail. Verifique também a caixa de spam.');
+    } catch (error: any) {
+      console.error("Erro ao enviar recuperação de senha:", error);
+      let msg = 'Não foi possível enviar o e-mail de recuperação. Tente novamente.';
+      if (error.code === 'auth/user-not-found') {
+        msg = 'Não encontramos uma conta com este e-mail.';
+      } else if (error.code === 'auth/invalid-email') {
+        msg = 'Digite um e-mail válido.';
+      } else if (error.code === 'auth/too-many-requests') {
+        msg = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+      } else if (error.message && error.message.includes('permission')) {
+        // Fallback if Firestore lookup gets blocked or disabled
+        try {
+          await sendPasswordResetEmail(auth, emailValue.toLowerCase());
+          setSuccessMsg('Enviamos um link de recuperação para o seu e-mail.');
+          setIsLoading(false);
+          return;
+        } catch (innerErr: any) {
+          msg = innerErr.message || msg;
+        }
       }
       setErrorMsg(msg);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -833,10 +872,11 @@ export default function AuthScreen({
                     id="reset-email-input"
                     required
                     type="email" 
+                    disabled={isLoading}
                     placeholder="voce@exemplo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-medium"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-medium disabled:opacity-60"
                   />
                 </div>
               </div>
@@ -844,9 +884,10 @@ export default function AuthScreen({
               <button 
                 id="reset-submit-btn"
                 type="submit"
-                className="w-full py-4 mt-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition-transform active:scale-98 select-none text-slate-950 font-bold"
+                disabled={isLoading}
+                className="w-full py-4 mt-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition-transform active:scale-98 select-none text-slate-950 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Enviar Link de Recuperação
+                {isLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}
               </button>
             </form>
 

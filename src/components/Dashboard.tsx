@@ -3,6 +3,7 @@ import {
   Plus, 
   Disc, 
   Trash2, 
+  Pencil,
   Copy, 
   ExternalLink, 
   TrendingUp, 
@@ -54,6 +55,17 @@ export default function Dashboard({
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
   const [showLimitPrompt, setShowLimitPrompt] = useState(false);
+  
+  // Editing state block
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editComposer, setEditComposer] = useState('');
+  const [editSinger, setEditSinger] = useState('');
+  const [editPartners, setEditPartners] = useState('');
+  const [editGenre, setEditGenre] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editLyrics, setEditLyrics] = useState('');
   
   // Storage Upload state block
   const [isUploading, setIsUploading] = useState(false);
@@ -140,9 +152,46 @@ export default function Dashboard({
     file: File,
     onProgress: (percent: number) => void
   ): Promise<{ publicAudioUrl: string; storagePath: string }> => {
-    // 1. Obter URL presignada do servidor express do applet
-    let response;
     const fileType = file.type || "audio/mpeg";
+
+    // 1. Tentar fazer o upload robusto usando o proxy local para evitar qualquer erro de CORS ou PUT direto do navegador
+    let proxyErrorMessage = "";
+    try {
+      console.log("Iniciando tentativa de upload super-seguro via proxy local (CORS-Bypass)...");
+      onProgress(30);
+      const proxyResponse = await fetch("/api/r2-proxy-upload", {
+        method: "POST",
+        headers: {
+          "X-File-Name": encodeURIComponent(file.name),
+          "X-File-Type": fileType,
+          "X-File-Size": file.size.toString(),
+          "X-User-Id": userId,
+          "X-Song-Id": songId,
+        },
+        body: file, // Envia o binário bruto do arquivo
+      });
+
+      if (proxyResponse.ok) {
+        const proxyData = await proxyResponse.json();
+        console.log("Upload via Proxy concluído com sucesso total!", proxyData);
+        onProgress(100);
+        return {
+          publicAudioUrl: proxyData.publicAudioUrl,
+          storagePath: proxyData.storagePath,
+        };
+      } else {
+        const proxyJson = await proxyResponse.json().catch(() => null);
+        proxyErrorMessage = proxyJson?.error || `Falha de proxy HTTP ${proxyResponse.status}`;
+        console.warn(`Tentativa via Proxy falhou. Usando fallback presigned. Detalhe: ${proxyErrorMessage}`);
+      }
+    } catch (proxyError: any) {
+      proxyErrorMessage = proxyError?.message || "Erro de conexão com o proxy local";
+      console.warn("Falha de rede/conexão na tentativa via Proxy, usando fallback presigned:", proxyError);
+    }
+
+    // 2. FALLBACK: Fluxo de upload original via URL Presignada de PUT direto para o bucket R2
+    console.log("Iniciando fluxo de fallback (URL Presignada S3)...");
+    let response;
     try {
       response = await fetch("/api/r2-presigned-upload", {
         method: "POST",
@@ -159,13 +208,14 @@ export default function Dashboard({
       });
     } catch (e: any) {
       console.error("erro ao chamar rota R2:", e);
-      throw new Error("step:presigned_url_fetch_failed");
+      throw new Error(`step:presigned_url_fetch_failed:proxy_error:${proxyErrorMessage}`);
     }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      const detailedMessage = errorData?.error || "Falha na geração";
       console.error("resposta da rota (R2 presigned upload falhou):", response.status, errorData);
-      throw new Error("step:presigned_url_generation_failed");
+      throw new Error(`step:presigned_url_generation_failed:proxy_error:${proxyErrorMessage}:detailed:${detailedMessage}`);
     }
 
     let uploadUrl, storagePath, publicAudioUrl;
@@ -176,11 +226,11 @@ export default function Dashboard({
       publicAudioUrl = resData.publicAudioUrl;
     } catch (e: any) {
       console.error("erro ao decodificar JSON da rota R2:", e);
-      throw new Error("step:presigned_url_generation_failed");
+      throw new Error(`step:presigned_url_generation_failed:json_parse_error:proxy_error:${proxyErrorMessage}`);
     }
 
-    // 7. Adicionar logs detalhados no front-end antes do PUT:
-    console.log("Enviando MP3 para R2", {
+    // Adicionar logs detalhados no front-end antes do PUT:
+    console.log("Enviando MP3 para R2 (Fallback PUT)", {
       uploadUrl: uploadUrl ? uploadUrl.substring(0, 80) + "..." : "",
       fileType: fileType,
       fileSize: file.size,
@@ -190,7 +240,7 @@ export default function Dashboard({
 
     onProgress(50); // Set progress to 50% visually before putting
 
-    // 2. Upload direto do binário para o Cloudflare R2 usando PUT via fetch (no extra headers)
+    // Upload direto do binário para o Cloudflare R2 usando PUT via fetch (no extra headers)
     try {
       const putResponse = await fetch(uploadUrl, {
         method: "PUT",
@@ -201,11 +251,10 @@ export default function Dashboard({
       });
 
       if (putResponse.ok) {
-        console.log("Upload PUT direto para R2 concluído com sucesso!");
+        console.log("Upload PUT direto para R2 (Fallback) concluído com sucesso!");
         onProgress(100);
         return { publicAudioUrl, storagePath };
       } else {
-        // 8. Se o PUT falhar, capturar e mostrar:
         const responseText = await putResponse.text().catch(() => "Sem resposta textual");
         console.error("Erro PUT R2", {
           status: putResponse.status,
@@ -222,7 +271,7 @@ export default function Dashboard({
       if (e.message && e.message.startsWith("step:r2_upload_put_failed_status_real")) {
         throw e;
       }
-      throw new Error("step:r2_upload_put_failed_network");
+      throw new Error(`step:r2_upload_put_failed_network:proxy_error:${proxyErrorMessage}`);
     }
   };
 
@@ -264,7 +313,7 @@ export default function Dashboard({
 
       // Validação de tamanho <= 20MB
       if (audioFile.size > maxSizeBytes) {
-        setFormError('Este MP3 ultrapassa o limite de 20 MB. Reduza o tamanho do arquivo e envie novamente.');
+        setFormError('Este MP3 ultrapassa o limite de 20 MB. Reduza o áudio para MP3 em 96 kbps ou 128 kbps e tente novamente.');
         return;
       }
     }
@@ -433,11 +482,25 @@ export default function Dashboard({
       refreshData();
     } catch (err: any) {
       console.error("Upload workflow failed: ", err);
-      if (err.message === "step:presigned_url_fetch_failed" || err.message === "step:presigned_url_generation_failed") {
-        setFormError("Falha ao gerar URL de upload no Cloudflare R2.");
-      } else if (err.message && err.message.startsWith("step:r2_upload_put_failed_status_real")) {
+      const errMsg = err.message || "";
+      
+      // Extract proxy error if present
+      let extractedProxyError = "";
+      if (errMsg.includes("proxy_error:")) {
+        const proxyParts = errMsg.split("proxy_error:");
+        // Decode and strip colon
+        extractedProxyError = decodeURIComponent(proxyParts[1].split(":")[0]).trim();
+      }
+
+      if (errMsg.startsWith("step:presigned_url_fetch_failed") || errMsg.startsWith("step:presigned_url_generation_failed")) {
+        let text = "Falha ao gerar URL de upload no Cloudflare R2.";
+        if (extractedProxyError) {
+          text += ` (R2 Error: ${extractedProxyError})`;
+        }
+        setFormError(text);
+      } else if (errMsg.startsWith("step:r2_upload_put_failed_status_real")) {
         // Extract real error details
-        const parts = err.message.split(":");
+        const parts = errMsg.split(":");
         const status = parts[2] || "Desconhecido";
         const statusText = parts[3] || "Error";
         const responseText = parts.slice(4).join(":");
@@ -456,12 +519,16 @@ export default function Dashboard({
           }
         }
         setFormError(displayError);
-      } else if (err.message === "step:r2_upload_put_failed_status" || err.message === "step:r2_upload_put_failed_network") {
-        setFormError("Falha ao enviar MP3 para R2: Erro de Rede ou Conexão.");
-      } else if (err.message === "step:firestore_save_failed") {
+      } else if (errMsg.startsWith("step:r2_upload_put_failed_status") || errMsg.startsWith("step:r2_upload_put_failed_network")) {
+        let text = "Falha ao enviar MP3 para R2: Erro de Rede ou Conexão.";
+        if (extractedProxyError) {
+          text += ` (R2 Error: ${extractedProxyError})`;
+        }
+        setFormError(text);
+      } else if (errMsg.startsWith("step:firestore_save_failed")) {
         setFormError("Falha ao salvar os dados da música no Firestore.");
       } else {
-        setFormError(err.message || "Erro inesperado ao registrar a música.");
+        setFormError(errMsg || "Erro inesperado ao registrar a música.");
       }
     } finally {
       setIsUploading(false);
@@ -492,6 +559,66 @@ export default function Dashboard({
       }
     } catch (err) {
       console.error("Error toggling music link status:", err);
+    }
+  };
+
+  const handleStartEdit = (track: Track, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setEditingTrack(track);
+    setEditTitle(track.title || '');
+    setEditComposer(track.composer || '');
+    setEditSinger(track.singer || track.performer || '');
+    setEditPartners(track.partners || '');
+    setEditGenre(track.genre || '');
+    setEditDesc(track.description || '');
+    setEditLyrics(track.lyrics || '');
+    setFormError('');
+    setShowEditForm(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!editingTrack) return;
+    if (!editTitle.trim()) {
+      setFormError('O título da música é obrigatório.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(50);
+
+    try {
+      setUploadProgress(80);
+      const updatedTrack = await dbService.updateMusic(profile.userId, editingTrack.trackId, {
+        title: editTitle.trim(),
+        composer: editComposer.trim(),
+        singer: editSinger.trim(),
+        performer: editSinger.trim(),
+        partners: editPartners.trim(),
+        genre: editGenre.trim(),
+        description: editDesc.trim(),
+        lyrics: editLyrics.trim()
+      });
+
+      // Synchronously update active status list
+      setTracks(prev => prev.map(t => t.trackId === editingTrack.trackId ? { ...t, ...updatedTrack } : t));
+
+      if (activeTrack?.trackId === editingTrack.trackId) {
+        onSelectTrack({ ...activeTrack, ...updatedTrack }, tracks.map(t => t.trackId === editingTrack.trackId ? { ...t, ...updatedTrack } : t));
+      }
+
+      setUploadProgress(100);
+      setShowEditForm(false);
+      setEditingTrack(null);
+      refreshData();
+    } catch (err: any) {
+      console.error("Error updating music:", err);
+      setFormError(err.message || 'Erro ao salvar alterações da música.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -619,60 +746,60 @@ export default function Dashboard({
         )}
 
         {/* METRICS Bento Block */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
           
           {/* Metric 1: Tracks count */}
-          <div className="bg-slate-900 border border-slate-850 p-6 rounded-2xl flex items-center justify-between shadow-lg">
-            <div className="space-y-2">
-              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Músicas Enviadas</p>
-              <h4 className="text-3xl font-heading font-black tracking-tight">
-                {tracks.length} <span className="text-slate-500 text-sm font-normal">/ {limitCount}</span>
+          <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
+            <div className="space-y-1 sm:space-y-2">
+              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Músicas</p>
+              <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight">
+                {tracks.length} <span className="text-slate-500 text-xs md:text-sm font-normal">/ {limitCount}</span>
               </h4>
-              <div className="w-24 h-1 bg-slate-850 rounded-full overflow-hidden">
+              <div className="w-16 sm:w-24 h-1 bg-slate-850 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-orange-500 rounded-full" 
                   style={{ width: `${Math.min(100, (tracks.length / limitCount) * 100)}%` }}
                 ></div>
               </div>
             </div>
-            <div className="p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-xl">
-              <Music className="w-6 h-6" />
+            <div className="p-2 md:p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-lg md:rounded-xl self-start sm:self-center">
+              <Music className="w-4 h-4 md:w-6 md:h-6" />
             </div>
           </div>
 
           {/* Metric 2: Plays global */}
-          <div className="bg-slate-900 border border-slate-850 p-6 rounded-2xl flex items-center justify-between shadow-lg">
-            <div className="space-y-1">
-              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Total de Plays</p>
-              <h4 className="text-3xl font-heading font-black tracking-tight font-mono text-[#d4af37]">{totalPlays}</h4>
-              <p className="text-[10px] font-mono text-slate-400">Cliques no botão play</p>
+          <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Total Plays</p>
+              <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight font-mono text-[#d4af37]">{totalPlays}</h4>
+              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Cliques no play</p>
             </div>
-            <div className="p-3 bg-yellow-950/40 border border-yellow-500/20 text-[#d4af37] rounded-xl">
-              <TrendingUp className="w-6 h-6" />
+            <div className="p-2 md:p-3 bg-yellow-950/40 border border-yellow-500/20 text-[#d4af37] rounded-lg md:rounded-xl self-start sm:self-center">
+              <TrendingUp className="w-4 h-4 md:w-6 md:h-6" />
             </div>
           </div>
 
           {/* Metric 3: Profile Visits */}
-          <div className="bg-slate-900 border border-slate-850 p-6 rounded-2xl flex items-center justify-between shadow-lg">
-            <div className="space-y-1">
-              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Acessos no Catálogo</p>
-              <h4 className="text-3xl font-heading font-black tracking-tight font-mono text-yellow-400">{analytics.viewsCount}</h4>
-              <p className="text-[10px] font-mono text-slate-400">Total de visitas únicas</p>
+          <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Acessos</p>
+              <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight font-mono text-yellow-400">{analytics.viewsCount}</h4>
+              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Visitas únicas</p>
             </div>
-            <div className="p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-xl">
-              <Eye className="w-6 h-6" />
+            <div className="p-2 md:p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-lg md:rounded-xl self-start sm:self-center">
+              <Eye className="w-4 h-4 md:w-6 md:h-6" />
             </div>
           </div>
 
           {/* Metric 4: WhatsApp clicks */}
-          <div className="bg-slate-900 border border-slate-850 p-6 rounded-2xl flex items-center justify-between shadow-lg">
-            <div className="space-y-1">
-              <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Cliques no WhatsApp</p>
-              <h4 className="text-3xl font-heading font-black tracking-tight font-mono text-emerald-400">{analytics.whatsappClicks}</h4>
-              <p className="text-[10px] font-mono text-slate-400">Propostas e negócios</p>
+          <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">WhatsApp</p>
+              <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight font-mono text-emerald-400">{analytics.whatsappClicks}</h4>
+              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Contatos</p>
             </div>
-            <div className="p-3 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-xl">
-               <MessageSquare className="w-6 h-6" />
+            <div className="p-2 md:p-3 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-lg md:rounded-xl self-start sm:self-center">
+               <MessageSquare className="w-4 h-4 md:w-6 md:h-6" />
             </div>
           </div>
 
@@ -706,9 +833,9 @@ export default function Dashboard({
               {profile.plan === 'premium' && 'Você está no Soundrive Premium (50 Músicas)'}
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-              {profile.plan === 'free' && 'Você está no limite de 5 músicas do seu plano Free. Faça upgrade para o Pro ou Premium hoje mesmo para receber até 50 faixas, analytics completo com plays e visitas, e remover todos os anúncios!'}
-              {profile.plan === 'pro' && 'Seu plano Pro está ativo! Ofereça até 15 músicas de demonstração de alta fidelidade, desfrute do acompanhamento básico de plays e do botão de contato "Quero gravar essa música" diretamente na sua guia pública.'}
-              {profile.plan === 'premium' && 'Parabéns! Seu plano Premium está totalmente liberado com espaço máximo de 50 músicas, organização avançada por repertórios e álbuns personalizados, estatísticas detalhadas e suporte VIP prioritário de nossa equipe.'}
+              {profile.plan === 'free' && 'Sua conta gratuita permite até 5 músicas em seu catálogo privado. Faça upgrade para expandir seu limite para até 50 faixas.'}
+              {profile.plan === 'pro' && 'Seu plano Pro está ativo! Agora você pode cadastrar e compartilhar até 15 músicas em MP3 de alta conversão.'}
+              {profile.plan === 'premium' && 'Seu plano Premium está ativo! Aproveite o limite expandido de até 50 músicas cadastradas em seu portfólio.'}
             </p>
           </div>
           <div className="px-4.5 py-2 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 text-[10px] font-mono rounded-full font-black uppercase tracking-wider shrink-0 font-bold hover:scale-102 transition shadow-md">
@@ -765,7 +892,7 @@ export default function Dashboard({
             </button>
           </div>
         ) : (
-          <div id="songs-list-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div id="songs-list-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {tracks.map((track) => {
               const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
               
@@ -773,13 +900,13 @@ export default function Dashboard({
                 <div 
                   key={track.trackId}
                   onClick={() => onSelectTrack(track, tracks)}
-                  className={`bg-slate-900 hover:bg-slate-850 border rounded-2xl overflow-hidden shadow-lg transition-transform hover:scale-101 cursor-pointer flex flex-col justify-between ${
+                  className={`bg-slate-900 hover:bg-slate-850 border rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-transform hover:scale-101 cursor-pointer flex flex-col justify-between h-full ${
                     isCurrentlyPlaying ? 'ring-2 ring-orange-500 border-transparent bg-slate-850' : 'border-slate-850'
                   }`}
                 >
                   <div>
                     {/* Premium Musical Note Card Header */}
-                    <div className="relative aspect-video w-full bg-[#07090e] border-b border-slate-850 flex flex-col items-center justify-center p-6 text-center overflow-hidden">
+                    <div className="relative aspect-[21/9] sm:aspect-video w-full bg-[#07090e] border-b border-slate-850 flex flex-col items-center justify-center p-3 sm:p-6 text-center overflow-hidden">
                       {/* Ambient glows inside mock card header */}
                       <div className="absolute -right-6 -top-6 w-24 h-24 bg-orange-500/10 rounded-full blur-xl pointer-events-none"></div>
                       <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-yellow-400/10 rounded-full blur-xl pointer-events-none"></div>
@@ -787,7 +914,7 @@ export default function Dashboard({
                       {/* Interactive Link Status Toggler */}
                       <button
                         onClick={(e) => handleToggleMusicStatus(track, e)}
-                        className={`absolute top-3 right-3 px-2 py-0.5 border text-[9px] font-mono rounded uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1 z-20 ${
+                        className={`absolute top-2 sm:top-3 right-2 sm:right-3 px-2 py-0.5 border text-[9px] font-mono rounded uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1 z-20 ${
                           (track.status || 'active') === 'active'
                             ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900'
                             : 'bg-rose-950/90 border-rose-500/40 text-rose-400 hover:bg-rose-900'
@@ -807,45 +934,45 @@ export default function Dashboard({
                         ) }
                       </button>
                       
-                      <div className={`w-12 h-12 rounded-full bg-gradient-to-tr ${isCurrentlyPlaying ? 'from-orange-600 to-yellow-500 text-slate-950 shadow-md shadow-orange-500/20' : 'from-slate-950 to-slate-900 border border-slate-800 text-orange-400'} flex items-center justify-center shadow-lg relative z-10 transition-transform`}>
-                        <Music className="w-5 h-5 animate-bounce" />
+                      <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr ${isCurrentlyPlaying ? 'from-orange-600 to-yellow-500 text-slate-950 shadow-md shadow-orange-500/20' : 'from-slate-950 to-slate-900 border border-slate-800 text-orange-400'} flex items-center justify-center shadow-lg relative z-10 transition-transform`}>
+                        <Music className="w-3.5 h-3.5 sm:w-5 sm:h-5 animate-bounce" />
                       </div>
                       
                       {/* Neon wave simulation bar graph */}
-                      <div className="flex items-end gap-1 mt-4 z-10 h-7">
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-2'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-4'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-3' : 'bg-orange-400/30 h-6'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-4' : 'bg-orange-400/30 h-3'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-5'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-2'}`}></span>
+                      <div className="flex items-end gap-1 mt-2 sm:mt-4 z-10 h-4 sm:h-7">
+                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-1.5'}`}></span>
+                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-3'}`}></span>
+                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-3' : 'bg-orange-400/30 h-4.5'}`}></span>
+                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-4' : 'bg-orange-400/30 h-2.5'}`}></span>
+                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-3.5'}`}></span>
+                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-1.5'}`}></span>
                       </div>
                       
-                      <span className="absolute bottom-3 left-3 px-2 py-0.5 bg-orange-950/80 border border-orange-500/20 text-orange-400 text-[9px] font-mono rounded uppercase font-bold tracking-wider">
+                      <span className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 px-2 py-0.5 bg-orange-950/80 border border-orange-500/20 text-orange-400 text-[9px] font-mono rounded uppercase font-bold tracking-wider">
                         {track.genre || profile.genre}
                       </span>
                     </div>
 
                     {/* Metadata body */}
-                    <div className="p-5 space-y-2">
-                      <h4 className="font-heading font-black text-base tracking-tight text-white uppercase truncate">
+                    <div className="p-3.5 sm:p-5 space-y-1 sm:space-y-2">
+                      <h4 className="font-heading font-black text-sm sm:text-base tracking-tight text-white uppercase truncate">
                         {track.title}
                       </h4>
-                      <p className="text-xs text-slate-400 font-semibold truncate leading-tight">
+                      <p className="text-[11px] sm:text-xs text-slate-400 font-semibold truncate leading-tight">
                         Intérprete: {track.singer || profile.name}
                       </p>
                       {track.composer && (
-                        <p className="text-[10px] font-mono text-slate-500 uppercase">
+                        <p className="text-[9px] sm:text-[10px] font-mono text-slate-500 uppercase">
                           Autor: {track.composer}
                         </p>
                       )}
                       {track.partners && (
-                        <p className="text-[10px] font-mono text-slate-400/80 hover:text-white uppercase truncate" title={track.partners}>
+                        <p className="text-[9px] sm:text-[10px] font-mono text-slate-400/80 hover:text-white uppercase truncate" title={track.partners}>
                           Parceiros: {track.partners}
                         </p>
                       )}
                       {track.description && (
-                        <p className="text-slate-400 text-xs italic line-clamp-2 pt-1 border-t border-slate-850/60 leading-relaxed">
+                        <p className="text-slate-400 text-[11px] sm:text-xs italic line-clamp-1 sm:line-clamp-2 pt-1 border-t border-slate-850/60 leading-relaxed">
                           {track.description}
                         </p>
                       )}
@@ -853,30 +980,35 @@ export default function Dashboard({
                   </div>
 
                   {/* Foot action panel */}
-                  <div className="px-5 py-4 bg-slate-950 border-t border-slate-850/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-slate-400 font-bold flex items-center gap-1">
-                        <TrendingUp className="w-3.5 h-3.5 text-yellow-400" /> {track.playsCount} plays
+                  <div className="px-3.5 py-2.5 sm:px-5 sm:py-4 bg-slate-955 border-t border-slate-850/50 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] sm:text-[11px] font-mono text-slate-400 font-bold flex items-center gap-0.5 sm:gap-1">
+                        <TrendingUp className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-yellow-400" /> {track.playsCount} <span className="text-[9px] font-sans text-slate-500 font-normal hidden sm:inline">plays</span>
                       </span>
                       {track.lyrics && (
                         <span className="px-1.5 py-0.5 bg-orange-955/80 border border-orange-550/25 text-orange-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider">
                           Letra
                         </span>
                       )}
-                      {track.audioFileId && (
-                        <span className="px-1.5 py-0.5 bg-emerald-950/60 border border-emerald-500/20 text-emerald-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider" title="Otimizado e Deduplicado no Cloudflare R2">
-                          ✓ R2
-                        </span>
-                      )}
                     </div>
 
-                    <button 
-                      onClick={(e) => handleDeleteMusic(track.trackId, e)}
-                      className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-red-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer"
-                      title="Excluir música"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        onClick={(e) => handleStartEdit(track, e)}
+                        className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer flex items-center justify-center"
+                        title="Editar detalhes"
+                      >
+                        <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                      </button>
+
+                      <button 
+                        onClick={(e) => handleDeleteMusic(track.trackId, e)}
+                        className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-red-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer flex items-center justify-center"
+                        title="Excluir música"
+                      >
+                        <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1002,18 +1134,83 @@ export default function Dashboard({
               <div className="pt-2 border-t border-slate-850 p-4 bg-slate-950 rounded-2xl space-y-3">
                 <h5 className="text-[11px] font-mono font-bold tracking-widest text-yellow-400 uppercase">1. Arquivo de Áudio da Música (Apenas MP3)</h5>
                 
-                <div className="border-2 border-dashed border-slate-800 hover:border-slate-700/80 p-4 rounded-xl text-center space-y-2 relative bg-slate-900/20">
-                  <UploadCloud className="w-8 h-8 text-slate-500 mx-auto" strokeWidth={1.5} />
-                  <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto font-medium">
-                    “Envie sua música em MP3. Para manter o Soundrive rápido e estável, aceitamos apenas arquivos .mp3 com até 20 MB.”
-                  </p>
-                  <input 
-                    type="file" 
-                    accept=".mp3,audio/mpeg,audio/mp3" 
-                    onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                    className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:border-t file:border-slate-700 file:bg-slate-800 file:text-white file:rounded pointer-events-auto"
-                  />
-                  {audioFile && <p className="text-xs text-emerald-400 font-mono">Selecionado: {audioFile.name}</p>}
+                <div className="border border-slate-850 p-4.5 rounded-2xl bg-slate-950/60 space-y-4 text-left">
+                  {/* Clear orientation panel for composer before uploading */}
+                  <div className="p-4 bg-slate-900 border border-slate-850/60 rounded-xl space-y-2.5">
+                    <h4 className="text-xs font-heading font-black text-white uppercase tracking-wider flex items-center gap-1.5 leading-snug">
+                      <Music className="w-4 h-4 text-orange-500 shrink-0" />
+                      Envie sua música em MP3
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                      Para tocar rápido no celular e no carro, envie um arquivo MP3 leve, de preferência entre 96 kbps e 128 kbps.
+                    </p>
+                    <div className="border-t border-slate-800/40 pt-2.5 mt-2">
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-slate-400 text-[10px] font-mono uppercase tracking-wider leading-relaxed">
+                        <li className="flex items-center gap-1"><span className="text-orange-500 font-bold">•</span> Tamanho recomendado: <span className="text-zinc-200">até 5 MB</span></li>
+                        <li className="flex items-center gap-1"><span className="text-orange-500 font-bold">•</span> Formatos aceitos: <span className="text-zinc-200">apenas .mp3</span></li>
+                        <li className="flex items-center gap-1"><span className="text-orange-500 font-bold">•</span> Tamanho máximo: <span className="text-zinc-200">20 MB</span></li>
+                        <li className="flex items-center gap-1 text-[9px] text-red-400 font-semibold"><span className="text-red-450 font-bold">•</span> Não aceitar WAV, FLAC, M4A, AAC, OGG ou áudio pesado</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Interactive Drag & Drop Upload Zone */}
+                  <div 
+                    onClick={() => {
+                      document.getElementById('hidden-audio-input')?.click();
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.currentTarget.classList.add('border-orange-500', 'bg-orange-500/10', 'scale-[1.01]');
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.currentTarget.classList.remove('border-orange-500', 'bg-orange-500/10', 'scale-[1.01]');
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.currentTarget.classList.remove('border-orange-500', 'bg-orange-500/10', 'scale-[1.01]');
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        const file = e.dataTransfer.files[0];
+                        setAudioFile(file);
+                      }
+                    }}
+                    className="border-2 border-dashed border-slate-800 hover:border-orange-500/50 p-6 rounded-xl text-center space-y-3 cursor-pointer relative bg-slate-900/10 hover:bg-slate-900/20 transition-all duration-200 group flex flex-col items-center justify-center min-h-[140px]"
+                  >
+                    <UploadCloud className="w-10 h-10 text-slate-500 group-hover:text-orange-400 transition-colors animate-pulse duration-[3000ms]" strokeWidth={1.5} />
+                    
+                    <div className="space-y-1 select-none">
+                      <p className="text-xs text-slate-200 font-bold">
+                        Arraste seu MP3 aqui ou clique para selecionar.
+                      </p>
+                      <p className="text-[11px] text-slate-405 leading-normal">
+                        Recomendado: MP3 de até 5 MB para carregar rápido no 4G.
+                      </p>
+                      <p className="text-[10px] font-mono uppercase text-slate-500 font-extrabold tracking-wider pt-0.5">
+                        Máximo permitido: 20 MB.
+                      </p>
+                    </div>
+
+                    <input 
+                      id="hidden-audio-input"
+                      type="file" 
+                      accept=".mp3,audio/mpeg,audio/mp3" 
+                      onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                      className="hidden" 
+                    />
+                    
+                    {audioFile && (
+                      <div className="p-2 px-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center gap-2 mt-2 max-w-sm animate-fade-in">
+                        <Music className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <p className="text-xs text-emerald-400 font-mono font-bold truncate">
+                          Selecionado: {audioFile.name} ({(audioFile.size / (1024 * 1024)).toFixed(2)} MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1072,6 +1269,173 @@ export default function Dashboard({
                   className="px-6 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition-transform active:scale-98 font-bold"
                 >
                   Salvar Música no Soundrive
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL / EDIT MUSIC LAYOVER DIALOG */}
+      {showEditForm && editingTrack && (
+        <div id="edit-music-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
+            
+            {isUploading && (
+              <div className="absolute inset-0 z-30 bg-slate-950/95 rounded-3xl backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-4 border-orange-500/20 animate-pulse"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-t-orange-500 animate-spin"></div>
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-heading font-black tracking-wide text-white uppercase">Sincronizando Alterações</h4>
+                  <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                    Salvando as modificações da sua música com segurança em nossos bancos corporativos e sincronizando seus dados públicos...
+                  </p>
+                </div>
+                <div className="w-48 bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-gradient-to-r from-orange-500 to-yellow-400 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                </div>
+                <span className="text-[10px] font-mono text-orange-400 font-bold">{uploadProgress}% concluído</span>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+              <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-orange-400" /> Editar Detalhes da Música
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowEditForm(false);
+                  setEditingTrack(null);
+                  setFormError('');
+                }}
+                className="text-slate-400 hover:text-white transition cursor-pointer text-xs font-bold uppercase"
+              >
+                Fechar
+              </button>
+            </div>
+
+            {formError && (
+              <div id="edit-form-error-msg" className="p-3 bg-red-950 border border-red-500/40 text-red-300 text-xs font-mono rounded-xl text-center">
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              
+              {/* Row 1: Title & Style */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Título da Música *</label>
+                  <input 
+                    id="edit-track-title"
+                    type="text" 
+                    placeholder="Ex: Coração de Pedra"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Musical (Genre)</label>
+                  <input 
+                    id="edit-track-genre"
+                    type="text" 
+                    placeholder="Ex: Sertanejo Universitário"
+                    value={editGenre}
+                    onChange={(e) => setEditGenre(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Composer, Singer & Partners */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome do Compositor (Autor)</label>
+                  <input 
+                    id="edit-track-composer"
+                    type="text" 
+                    placeholder="Nome do compositor"
+                    value={editComposer}
+                    onChange={(e) => setEditComposer(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome do Intérprete / Cantor</label>
+                  <input 
+                    id="edit-track-singer"
+                    type="text" 
+                    placeholder="Cantor ou banda principal"
+                    value={editSinger}
+                    onChange={(e) => setEditSinger(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Parceiros / Divisões Co-autorias</label>
+                  <input 
+                    id="edit-track-partners"
+                    type="text" 
+                    placeholder="Ex: Pedro 55%, João 45%"
+                    value={editPartners}
+                    onChange={(e) => setEditPartners(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                  />
+                </div>
+              </div>
+
+              {/* Description bio */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Descrição da Música (Ficha criativa / Detalhes)</label>
+                <textarea 
+                  placeholder="Ex: Escrita após assistir o pôr do sol na beira do rio. Ritmo romântico com arranjo de cordas de aço e violoncelo."
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={2}
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white resize-none transition"
+                ></textarea>
+              </div>
+
+              {/* Lyrics text box */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Letra da Música (Opcional)</label>
+                <textarea 
+                  placeholder="Cole aqui a letra completa da música para os seus ouvintes e intérpretes acompanharem."
+                  value={editLyrics}
+                  onChange={(e) => setEditLyrics(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                ></textarea>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowEditForm(false);
+                    setEditingTrack(null);
+                    setFormError('');
+                  }}
+                  className="px-4 py-3 bg-slate-950 text-slate-400 hover:text-white text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  id="submit-edit-track"
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition-transform active:scale-98 font-bold"
+                >
+                  Salvar Alterações
                 </button>
               </div>
 

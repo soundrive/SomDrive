@@ -1,4 +1,4 @@
-import { Artist, Music, Analytics } from '../types';
+import { Artist, Music, Analytics, PaymentSettings } from '../types';
 
 // Static Royalty-Free MP3 links that are reliable and beautiful
 export const DEMO_SONGS = [
@@ -1244,6 +1244,103 @@ export const dbService = {
       return nextStatus;
     } catch (e) {
       console.error("Error toggling music status:", e);
+      throw e;
+    }
+  },
+
+  async updateMusic(artistId: string, trackId: string, updatedFields: Partial<Music>): Promise<Music> {
+    try {
+      // Local storage tables update
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const currentList: Music[] = musicsMap[artistId] || [];
+      const updatedList = currentList.map(t => {
+        if (t.trackId === trackId) {
+          return {
+            ...t,
+            ...updatedFields,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return t;
+      });
+      musicsMap[artistId] = updatedList;
+      localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+      const updatedTrack = updatedList.find(t => t.trackId === trackId)!;
+
+      // Firestore update in 'songs' collection
+      const songsDocRef = doc(db, 'songs', trackId);
+      const songsPayload: any = {
+        title: updatedTrack.title,
+        genre: updatedTrack.genre || '',
+        composer: updatedTrack.composer || '',
+        performer: updatedTrack.performer || updatedTrack.singer || '',
+        singer: updatedTrack.singer || updatedTrack.performer || '',
+        partners: updatedTrack.partners || '',
+        description: updatedTrack.description || '',
+        lyrics: updatedTrack.lyrics || '',
+        updatedAt: Timestamp.fromDate(new Date())
+      };
+      
+      if (updatedTrack.coverUrl) {
+        songsPayload.coverUrl = updatedTrack.coverUrl;
+      }
+
+      await setDoc(songsDocRef, songsPayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `songs/${trackId}`);
+        throw err;
+      });
+
+      // Firestore update in parent subcollection for seamless UI compatibility
+      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
+      const legacyPayload = {
+        ...songsPayload,
+        playsCount: updatedTrack.playsCount,
+        plays: updatedTrack.plays || updatedTrack.playsCount,
+        id: trackId,
+        trackId: trackId,
+        artistId: artistId,
+        coverUrl: updatedTrack.coverUrl || '',
+      };
+      await setDoc(musicDocRef, legacyPayload, { merge: true }).catch(() => {
+        // Fallback for subcollection if it doesn't exist or is legacy
+      });
+
+      return updatedTrack;
+    } catch (e) {
+      console.error("Error updating music:", e);
+      throw e;
+    }
+  },
+
+  async getPaymentSettings(): Promise<PaymentSettings | null> {
+    try {
+      const docRef = doc(db, 'settings', 'payment');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as PaymentSettings;
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching payment settings:", e);
+      return null;
+    }
+  },
+
+  async updatePaymentSettings(settings: Partial<PaymentSettings>, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'payment');
+      const dataToSave = {
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/payment');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating payment settings:", e);
       throw e;
     }
   }

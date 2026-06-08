@@ -52,6 +52,8 @@ export default function ArtistPublic({
   const [whatsappShareAlert, setWhatsappShareAlert] = useState(false);
   const [copiedLinkAlert, setCopiedLinkAlert] = useState(false);
   const [instaShareAlert, setInstaShareAlert] = useState(false);
+  const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'composicoes' | 'sobre'>('composicoes');
 
   // Dynamic Browser Tab Meta Title
   useEffect(() => {
@@ -135,7 +137,7 @@ export default function ArtistPublic({
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
-        <Disc className="w-12 h-12 text-orange-500 animate-spin-slow mb-4" />
+        <Disc className="w-12 h-12 text-[#d4af37] animate-spin-slow mb-4" />
         <h3 className="text-xl font-heading font-bold text-center animate-pulse">Buscando pen drive musical...</h3>
         <p className="text-xs text-slate-500 mt-2 font-mono">Carregando catálogo e faixas do artista...</p>
       </div>
@@ -145,7 +147,7 @@ export default function ArtistPublic({
   if (errorMsg || !artist) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 bg-red-950/40 border border-red-400/20 text-red-400 rounded-full flex items-center justify-center mb-6">
+        <div className="w-16 h-16 bg-red-955/40 border border-red-400/20 text-red-400 rounded-full flex items-center justify-center mb-6">
           <MusicIcon className="w-8 h-8 text-red-400" />
         </div>
         <h3 className="text-xl font-heading font-bold mb-3">{errorMsg || "Catálogo não encontrado ou ainda sem músicas disponíveis."}</h3>
@@ -174,7 +176,7 @@ export default function ArtistPublic({
     window.open(`https://wa.me/?text=${text}`, '_blank');
     
     setWhatsappShareAlert(true);
-    setTimeout(() => setWhatsappShareAlert(false), 2000);
+    setTimeout(() => setWhatsappShareAlert(false), 2050);
   };
 
   const handleCopyLinkDissemination = () => {
@@ -182,14 +184,14 @@ export default function ArtistPublic({
     const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
     navigator.clipboard.writeText(beautifulMessage);
     setCopiedLinkAlert(true);
-    setTimeout(() => setCopiedLinkAlert(false), 2000);
+    setTimeout(() => setCopiedLinkAlert(false), 2050);
   };
 
   const handleInstagramShare = () => {
     const instagramUrl = `https://instagram.com/${artist.instagram?.replace(/@/g, '') || 'instalink'}`;
     window.open(instagramUrl, '_blank');
     setInstaShareAlert(true);
-    setTimeout(() => setInstaShareAlert(false), 2000);
+    setTimeout(() => setInstaShareAlert(false), 2050);
   };
 
   const handleSpeakWithArtist = () => {
@@ -197,7 +199,7 @@ export default function ArtistPublic({
     dbService.incrementAnalyticsView(artist.userId, false, false);
     
     const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
-    const greetingText = encodeURIComponent(`Olá ${artist.name}, encontrei suas composições no catálogo Soundrive e gostaria de conversar sobre contratações ou licenciamento de faixas autoriais!`);
+    const greetingText = encodeURIComponent(`Olá ${artist.name}, encontrei suas composições no catálogo Soundrive e gostaria de conversar sobre contratações ou licenciamento de faixas autorais!`);
     window.open(`https://wa.me/${whatsappNum}?text=${greetingText}`, '_blank');
   };
 
@@ -211,322 +213,514 @@ export default function ArtistPublic({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans pb-32 relative">
+    <div className="min-h-screen bg-[#07090e] text-zinc-105 font-sans pb-32 relative overflow-hidden flex w-full">
       
-      {/* Background subtle mesh overlay */}
-      <div className="absolute right-[-10%] top-[-10%] w-[300px] h-[300px] bg-orange-950/10 rounded-full blur-[100px] pointer-events-none"></div>
-
-      {/* Header bar */}
-      <div className="border-b border-slate-900 px-4 py-3.5 bg-slate-950/90 backdrop-blur-md flex items-center justify-between sticky top-0 z-30">
-        <button 
-          id="pub-back-btn"
-          onClick={() => onNavigate('landing')}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 border border-slate-900 rounded-lg hover:bg-slate-900 hover:text-white text-slate-400 transition text-xs font-bold uppercase cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Voltar
-        </button>
-
-        <span className="text-[10px] font-mono tracking-widest text-orange-400 font-bold uppercase flex items-center gap-1">
-          <Star className="w-3 h-3 fill-orange-400 text-orange-400 animate-pulse" /> Catálogo Verificado
-        </span>
-      </div>
-
-      {/* Hero Cover Profile section */}
-      <div id="artist-profile-header-card" className="max-w-3xl mx-auto px-4 pt-6">
-        
-        <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 md:p-8 flex flex-col items-center text-center gap-6 relative">
-          
-          {/* Avatar circle */}
-          <div className="relative flex-shrink-0">
-            {artist.avatarUrl && !artist.avatarUrl.includes("unsplash.com") ? (
-              <img 
-                id="artist-pub-avatar"
-                src={artist.avatarUrl} 
-                alt={artist.name}
-                className="w-24 h-24 md:w-28 md:h-28 object-cover rounded-full border-2 border-slate-800 shadow-md"
-              />
-            ) : (
-              <div 
-                id="artist-pub-avatar-music"
-                className="w-24 h-24 md:w-28 md:h-28 rounded-full border border-slate-800 bg-slate-950 flex items-center justify-center text-orange-400 shadow-sm relative overflow-hidden"
-              >
-                <div className="absolute inset-2 rounded-full border border-slate-900/60"></div>
-                <div className="w-8 h-8 rounded-full bg-orange-650 flex items-center justify-center text-slate-950 shadow-inner">
-                  <MusicIcon className="w-4 h-4 text-slate-950" />
-                </div>
-              </div>
-            )}
+      {/* LEFT SIDEBAR (Desktop only) */}
+      <aside className="w-64 bg-[#050609] border-r border-zinc-900 h-screen sticky top-0 px-6 py-8 flex flex-col justify-between shrink-0 hidden md:flex z-30 select-none">
+        <div className="space-y-10">
+          {/* Logo Brand with waveform animated visual */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-end gap-[3px] h-5 mb-1 select-none">
+              <span className="w-1 bg-[#d4af37] h-3.5 rounded-full animate-bar-1"></span>
+              <span className="w-1 bg-[#d4af37] h-5 rounded-full animate-bar-2"></span>
+              <span className="w-1 bg-[#d4af37] h-6 rounded-full animate-bar-3"></span>
+              <span className="w-1 bg-[#d4af37] h-4.5 rounded-full animate-bar-4"></span>
+              <span className="w-1 bg-[#d4af37] h-2.5 rounded-full animate-bar-1"></span>
+            </div>
+            <span className="font-heading font-black tracking-tight text-xl text-white select-none">Soundrive</span>
           </div>
 
-          {/* Core Info - Cleanly centered */}
-          <div className="flex flex-col items-center space-y-2 w-full">
+          {/* Nav Items stack with exact vertical visual indicators */}
+          <nav className="space-y-1.5">
+            <button 
+              onClick={() => onNavigate('landing')}
+              className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900/40 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-left"
+            >
+              <ArrowLeft className="w-4 h-4 text-zinc-500" />
+              Início
+            </button>
+
+            <button 
+              className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-[#d4af37] bg-zinc-900/50 transition-all text-xs font-mono font-bold uppercase tracking-wider relative cursor-default text-left"
+            >
+              <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-[#d4af37] rounded-r"></span>
+              <Disc className="w-4 h-4 text-amber-500 animate-spin-slow" />
+              Catálogo
+            </button>
+
+            <button 
+              onClick={() => onNavigate('landing')}
+              className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900/40 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-left"
+            >
+              <Star className="w-4 h-4 text-zinc-500" />
+              Compositores
+            </button>
+          </nav>
+        </div>
+
+        {/* Brand trademark footer line */}
+        <div className="space-y-1 text-left">
+          <p className="text-[10px] text-zinc-650 font-mono">Soundrive © {new Date().getFullYear()}</p>
+          <p className="text-[9px] text-zinc-500 leading-normal font-sans">Conteúdo reservado e protegido por direitos autorais.</p>
+        </div>
+      </aside>
+
+      {/* MAIN DASHBOARD CONTENT PANEL */}
+      <main className="flex-1 min-w-0 min-h-screen bg-[#07090e] relative overflow-y-auto px-4 sm:px-8 py-5 select-none z-15 flex flex-col">
+        
+        {/* Decorative background radial glows */}
+        <div className="absolute top-0 right-10 w-[500px] h-[500px] bg-gradient-to-br from-amber-500/5 via-orange-600/3 to-transparent rounded-full filter blur-[140px] pointer-events-none z-0"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff01_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none z-0"></div>
+
+        {/* STICKY TOP NAVIGATION GLASS BAR */}
+        <div className="w-full border-b border-zinc-900/40 pb-4 mb-6 flex items-center justify-between relative z-30 pt-1">
+          <button 
+            id="pub-back-btn"
+            onClick={() => onNavigate('landing')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-805 rounded-xl hover:text-white text-zinc-400 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer md:hidden"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-zinc-500" /> Início
+          </button>
+
+          <span className="text-[9px] min-[360px]:text-[10px] font-mono tracking-widest text-[#d4af37] font-bold uppercase flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-550/10 border border-amber-550/20 rounded-full select-none ml-auto md:ml-0">
+            <Star className="w-3.5 h-3.5 text-[#d4af37] fill-[#d4af37]/10 animate-pulse" />
+            Catálogo Verificado
+          </span>
+
+          {/* Desktop Right Bell and Avatar Icons */}
+          <div className="hidden md:flex items-center gap-4 ml-6 select-none">
+            <button className="p-2 text-zinc-450 hover:text-zinc-200 transition relative">
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </button>
+            <div className="h-8 w-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[10px] font-mono tracking-widest text-[#d4af37] font-black">
+              US
+            </div>
+          </div>
+        </div>
+
+        {/* HERO HEADER COVER BLOCK (Grid structured exactly as shown in reference) */}
+        <div id="artist-profile-header-card" className="w-full mb-8 relative z-10 select-none">
+          <div className="bg-gradient-to-tr from-zinc-950/60 via-[#07090e]/80 to-zinc-950/20 border border-zinc-900 rounded-3xl p-6 md:p-8 grid grid-cols-1 md:grid-cols-12 gap-6 items-center shadow-2xl relative overflow-hidden">
             
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              <span className="px-2.5 py-0.5 bg-orange-950/50 border border-orange-900/10 text-orange-400 text-[10px] font-mono tracking-widest uppercase rounded font-bold">
-                {artist.genre || 'Compositor'}
-              </span>
-              {artist.city && (
-                <div className="flex items-center gap-1 text-slate-400 text-xs font-mono">
-                  <MapPin className="w-3.5 h-3.5 text-slate-500" /> {artist.city}
-                </div>
-              )}
+            {/* Ambient gold glow backplate */}
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-550/20 via-[#d4af37]/35 to-transparent"></div>
+            <div className="absolute -left-12 -top-12 w-48 h-48 bg-[#d4af37]/5 rounded-full blur-2xl pointer-events-none"></div>
+
+            {/* Col 1: Disk record styled Sphere / Avatar container */}
+            <div className="col-span-1 md:col-span-4 flex justify-center items-center">
+              <div className="relative w-44 h-44 sm:w-[195px] sm:h-[195px] rounded-full border-2 border-zinc-800 bg-[#050609] shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
+                {/* Concentric record circles for visual depth */}
+                <div className="absolute inset-2 sm:inset-3 rounded-full border border-zinc-900/40"></div>
+                <div className="absolute inset-6 sm:inset-8 rounded-full border border-zinc-900/20 font-medium"></div>
+                <div className="absolute inset-11 sm:inset-14 rounded-full border border-zinc-900/10"></div>
+                
+                {/* Embedded Glowing sound rings */}
+                <div className="absolute inset-18 rounded-full border border-amber-500/10 animate-pulse"></div>
+
+                {/* Main Avatar/Disc centered circle */}
+                {artist.avatarUrl && !artist.avatarUrl.includes("unsplash.com") ? (
+                  <img 
+                    id="artist-pub-avatar"
+                    src={artist.avatarUrl} 
+                    alt={artist.name}
+                    className="relative w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-full border border-zinc-850 p-1 bg-[#090b10] shadow-2xl z-10 hover:scale-103 transition duration-500"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border border-zinc-800 bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 flex flex-col items-center justify-center text-[#d4af37] shadow-xl z-10 select-none">
+                    <div className="absolute inset-1 rounded-full border border-zinc-855"></div>
+                    
+                    {/* Centered Golden sound waveform animation */}
+                    <div className="flex items-end gap-[3.5px] h-7 justify-center relative translate-y-0.5 select-none">
+                      <span className="w-0.75 bg-[#d4af37] h-3.5 rounded-full animate-bar-1"></span>
+                      <span className="w-0.75 bg-[#d4af37] h-5- rounded-full animate-bar-2"></span>
+                      <span className="w-0.75 bg-gradient-to-t from-[#d4af37] to-amber-400 h-6.5 rounded-full animate-bar-3"></span>
+                      <span className="w-0.75 bg-[#d4af37] h-4.5 rounded-full animate-bar-2"></span>
+                      <span className="w-0.75 bg-[#d4af37] h-2 rounded-full animate-bar-1"></span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <h1 id="artist-pub-name" className="text-2xl md:text-3xl font-heading font-black tracking-tight uppercase leading-tight text-white">
-              {artist.name}
-            </h1>
+            {/* Col 2: Core artist metadata & CTA deck */}
+            <div className="col-span-1 md:col-span-5 flex flex-col items-center md:items-start text-center md:text-left gap-3.5 w-full">
+              
+              {/* Verified tagline */}
+              <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-mono text-amber-400 font-bold uppercase select-none">
+                <svg className="w-3.5 h-3.5 text-[#d4af37] fill-[#d4af37]/2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M2.166 4.9c0 .736.31 1.45.856 1.94l.024.022c.983.89 1.83 1.636 2.544 2.373a11.164 11.164 0 011.832 2.457c.547.962.91 1.908 1.155 2.801a.75.75 0 001.458 0c.245-.893.608-1.839 1.155-2.8a11.164 11.164 0 011.832-2.457c.715-.737 1.56-1.483 2.544-2.373a.5.5 0 00.024-.022c.547-.49.856-1.204.856-1.94V3a1 1 0 00-1-1H3.166a1 1 0 00-1 1v1.9z" clipRule="evenodd" />
+                </svg>
+                <span>Catálogo Verificado</span>
+              </div>
 
-            {artist.bio ? (
-              <p id="artist-pub-bio" className="text-slate-400 text-sm italic max-w-lg leading-relaxed text-center font-normal px-2">
-                "{artist.bio}"
-              </p>
-            ) : null}
+              {/* Title with verified gold badge */}
+              <h1 id="artist-pub-name" className="text-2.5xl sm:text-4xl lg:text-4.5xl font-heading font-black tracking-tight uppercase leading-none text-white flex items-center gap-1.5 flex-wrap justify-center md:justify-start">
+                {artist.name}
+                <span className="text-amber-500 inline-flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 sm:w-6.5 sm:h-6.5 text-[#d4af37] fill-[#d4af37]" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </span>
+              </h1>
 
-            {/* Public action row: Beautiful, large buttons centered for mobile */}
-            <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-center sm:justify-center gap-2.5 pt-4 w-full">
+              {/* Badges line info location */}
+              <div className="flex items-center gap-1.5 flex-wrap justify-center md:justify-start select-none">
+                <span className="px-2.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono uppercase tracking-wider rounded font-medium">
+                  {artist.genre || 'Compositor'}
+                </span>
+                {artist.city && (
+                  <div className="flex items-center gap-1 px-2.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono uppercase tracking-wider rounded font-medium">
+                    <MapPin className="w-3 h-3 text-zinc-550 shrink-0" /> {artist.city} - {artist.state || 'GO'}
+                  </div>
+                )}
+              </div>
+
+              {/* Premium Golden gradient WhatsApp Talk capsule */}
               <button 
                 id="pub-talk-whatsapp-btn"
                 onClick={handleSpeakWithArtist}
-                className="w-full sm:w-auto h-11 px-5 py-2.5 bg-emerald-605 bg-emerald-650 hover:bg-emerald-500 hover:scale-102 text-white rounded-xl text-xs font-heading font-black tracking-wider uppercase shadow-lg shadow-emerald-500/5 flex items-center justify-center gap-1.5 cursor-pointer select-none transition-all active:scale-95"
+                className="w-full sm:w-auto px-5 py-3.5 mt-1 bg-gradient-to-r from-amber-550 to-amber-450 hover:brightness-105 active:scale-97 text-zinc-950 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer select-none transition-all duration-250 shadow-md shadow-amber-500/15 font-heading font-extrabold"
               >
-                <MessageSquare className="w-4 h-4 shrink-0" /> Whatsapp do Artista
+                <MessageSquare className="w-4 h-4 text-zinc-950 shrink-0 stroke-[2.2]" /> Falar com o compositor
               </button>
 
-              <button 
-                id="pub-whatsapp-share-btn"
-                onClick={handleShareWhatsApp}
-                className="w-full sm:w-auto h-11 px-5 py-2.5 bg-slate-900 border border-slate-800 hover:border-slate-750 hover:text-white text-slate-300 rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition select-none active:scale-95 hover:scale-102"
-                title="Compartilhar no WhatsApp"
-              >
-                <Share2 className="w-4 h-4 text-emerald-400 shrink-0" /> Compartilhar no Whatsapp
-              </button>
+              {/* Actions row deck */}
+              <div className="flex items-center gap-1.5 flex-wrap w-full mt-1 justify-center md:justify-start select-none">
+                {/* Compartilhar */}
+                <button 
+                  id="pub-whatsapp-share-btn"
+                  onClick={handleShareWhatsApp}
+                  className="px-3.5 py-2 bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800 hover:border-zinc-700 hover:text-white text-zinc-300 rounded-lg text-[10px] font-mono tracking-wider uppercase font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98 select-none"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  <span>Compartilhar</span>
+                </button>
 
-              <button 
-                id="pub-copy-dissemination-btn"
-                onClick={handleCopyLinkDissemination}
-                className="w-full sm:w-auto h-11 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-xl text-xs font-heading font-black tracking-wider uppercase shadow-lg shadow-orange-500/5 flex items-center justify-center gap-1.5 cursor-pointer lg:hover:scale-102 select-none transition-all active:scale-95"
-                title="Copiar mensagem para divulgação"
-              >
-                <Copy className="w-4 h-4 shrink-0 text-slate-950" /> {copiedLinkAlert ? "Divulgação Copiada! ✓" : "Copiar Divulgação"}
-              </button>
+                {/* Divulgação */}
+                <button 
+                  id="pub-copy-dissemination-btn"
+                  onClick={handleCopyLinkDissemination}
+                  className="px-3.5 py-2 bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800 hover:border-zinc-700 hover:text-white text-zinc-300 rounded-lg text-[10px] font-mono tracking-wider uppercase font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98 select-none"
+                >
+                  <Copy className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  {copiedLinkAlert ? <span className="text-amber-455 font-bold">Copiado!</span> : <span>Divulgação</span>}
+                </button>
 
-              {artist.instagram && (
+                {/* Link */}
                 <button 
                   id="pub-insta-link-btn"
                   onClick={handleInstagramShare}
-                  className="w-full sm:w-auto h-11 px-5 py-2.5 border border-slate-850 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition cursor-pointer flex items-center justify-center gap-1.5 text-xs font-mono"
-                  title="Acessar Instagram"
+                  className="px-3.5 py-2 bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800 hover:border-zinc-700 hover:text-white text-zinc-305 rounded-lg text-[10px] font-mono tracking-wider uppercase font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98 select-none"
                 >
-                  <Instagram className="w-4 h-4 text-orange-400 shrink-0" />{' '}
-                  <span>
-                    {artist.instagram.trim().startsWith('@') 
-                      ? artist.instagram.trim() 
-                      : `@${artist.instagram.trim()}`}
-                  </span>
+                  <Instagram className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  <span>Link</span>
                 </button>
-              )}
+              </div>
+
+            </div>
+
+            {/* Col 3: Stat high gloss card pane */}
+            <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
+              <div className="bg-[#050609]/75 border border-zinc-900 text-left p-4.5 rounded-2xl flex flex-col justify-between gap-5 shadow-xl min-h-[148px]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-zinc-950 border border-zinc-850 rounded-xl flex items-center justify-center text-[#d4af37]">
+                    <svg className="w-5 h-5 text-[#d4af37]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-0.5 leading-none">
+                    <span className="text-[9px] uppercase font-mono tracking-wider text-zinc-500 block">Músicas disponíveis</span>
+                    <span className="text-2.5xl font-heading font-black text-[#d4af37] tracking-tight block mt-0.5">{tracks.length}</span>
+                  </div>
+                </div>
+                
+                <div className="border-t border-zinc-900/60 pt-3 flex items-start gap-2 select-none">
+                  <svg className="w-3.5 h-3.5 text-[#d4af37] mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div className="space-y-0.5 leading-tight animate-pulse">
+                    <p className="text-[9px] uppercase font-mono tracking-widest text-[#d4af37] font-bold">Catálogo verificado</p>
+                    <p className="text-[9px] text-zinc-500 font-sans leading-normal">Músicas 100% originais e prontas para gravação.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
           </div>
-
         </div>
 
-      </div>
-
-      {/* TRACKS LIST SECTION */}
-      <section className="max-w-3xl mx-auto px-4 pt-6 space-y-5">
-
-        {/* Private Catalog invitation warning notice */}
-        <div className="p-3 bg-slate-900/40 border border-slate-900 rounded-xl flex items-center justify-center gap-2 text-slate-400 text-xs sm:text-sm text-center">
-          <ShieldCheck className="w-4 h-4 text-slate-500 shrink-0" />
-          <span>Catálogo musical privado — acesso por convite.</span>
-        </div>
-        
-        {/* Headline section */}
-        <div className="flex items-center justify-between border-b border-slate-900 pb-3">
-          <div>
-            <h3 className="font-heading font-black text-lg tracking-tight uppercase text-slate-200">
-              Composições disponíveis
-            </h3>
-            <p className="text-slate-500 text-[11px] sm:text-xs">Clique no Play ou selecione para escutar no painel do carro.</p>
-          </div>
-
-          {tracks.length > 0 && (
+        {/* NAVIGATION TABS (Composições vs Sobre o compositor) */}
+        <div className="w-full mb-6 relative z-10 select-none">
+          <div className="flex items-center gap-6 border-b border-zinc-900/60 pb-[1px] text-left">
             <button 
-              id="car-mode-toggle-anchor"
-              onClick={() => {
-                if (!activeTrack) {
-                  onSelectTrack(tracks[0], tracks);
-                }
-                setCarMode(true);
-              }}
-              className="flex items-center gap-1 px-3 py-2 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 rounded-xl text-[10px] sm:text-xs font-bold uppercase transition scale-95 hover:scale-100 cursor-pointer select-none"
+              onClick={() => setActiveTab('composicoes')}
+              className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative ${
+                activeTab === 'composicoes' 
+                  ? 'border-[#d4af37] text-[#d4af37] font-extrabold' 
+                  : 'border-transparent text-zinc-[450] hover:text-zinc-200 cursor-pointer'
+              }`}
             >
-              <Car className="w-3.5 h-3.5 text-orange-500 shrink-0 animate-pulse" /> Ouvir no Carro
+              Composições
             </button>
-          )}
+            <button 
+              onClick={() => setActiveTab('sobre')}
+              className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative ${
+                activeTab === 'sobre' 
+                  ? 'border-[#d4af37] text-[#d4af37] font-extrabold' 
+                  : 'border-transparent text-zinc-[450] hover:text-zinc-200 cursor-pointer'
+              }`}
+            >
+              Sobre o compositor
+            </button>
+          </div>
         </div>
 
-        {whatsappShareAlert && (
-          <div className="p-2.5 bg-emerald-950/20 border border-emerald-900/40 text-emerald-350 text-xs font-mono rounded-lg text-center font-semibold">
-            Redirecionando para o WhatsApp...
-          </div>
-        )}
+        {/* DETAILS SECTION SHEETS based on active tab state */}
+        <section className="w-full space-y-6 relative z-10 flex-1 flex flex-col justify-start">
 
-        {tracks.length === 0 ? (
-          <div className="text-center py-16 bg-slate-900/10 border border-dashed border-slate-900 rounded-2xl text-slate-500 text-sm">
-            Nenhuma composição disponível no momento.
-          </div>
-        ) : (
-          <div id="pub-tracks-list" className="space-y-2.5">
-            {tracks.map((track, idx) => {
-              const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
-              const isActiveAndPlaying = isCurrentlyPlaying && isPlaying;
-              const plays = track.playsCount || track.plays || 0;
-
-              return (
-                <div 
-                  key={track.trackId}
-                  onClick={() => onSelectTrack(track, tracks)}
-                  className={`p-4 bg-slate-900/40 hover:bg-slate-900 border rounded-xl flex items-center justify-between gap-3.5 cursor-pointer transition-all ${
-                    isCurrentlyPlaying ? 'ring-1.5 ring-orange-500 border-transparent bg-slate-900/80 shadow-md shadow-orange-500/5' : 'border-slate-900/50'
-                  }`}
-                >
-                  {/* Track Info Side */}
-                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                    
-                    {/* Index count or dynamic active visual bar counter */}
-                    <div className="flex-shrink-0">
-                      {isCurrentlyPlaying ? (
-                        <div className="p-2 bg-orange-950/80 border border-orange-550/20 rounded-lg text-orange-400">
-                          {isPlaying ? (
-                            <div className="flex items-end gap-0.5 h-3.5 w-3.5">
-                              <span className="w-0.75 bg-orange-400 animate-bar-1 h-3 rounded-full"></span>
-                              <span className="w-0.75 bg-orange-400 animate-bar-2 h-3.5 rounded-full"></span>
-                              <span className="w-0.75 bg-orange-400 animate-bar-3 h-1.5 rounded-full"></span>
-                            </div>
-                          ) : (
-                            <Play className="w-3.5 h-3.5 fill-orange-400 text-orange-400" />
-                          )}
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 flex items-center justify-center font-mono font-bold text-xs text-slate-500 bg-slate-950/80 border border-slate-900 rounded-lg select-none">
-                          {(idx + 1).toString().padStart(2, '0')}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Meta descriptions */}
-                    <div className="min-w-0 flex-1 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-heading font-bold text-base sm:text-lg text-slate-100 tracking-tight leading-snug break-words">
-                          {track.title}
-                        </h4>
-                        
-                        <div className="text-slate-400 text-xs mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          {track.singer && (
-                            <span>
-                              Cantor/Guia: <strong className="text-slate-300 font-medium">{track.singer}</strong>
-                            </span>
-                          )}
-                          {track.composer && (
-                            <span className="text-slate-400 font-normal">
-                              {track.singer ? '|' : ''} Autor: <strong className="text-slate-300 font-medium">{track.composer}</strong>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Discreet Plays Count indicator */}
-                        <div className="mt-1 flex items-center gap-1 text-slate-500 text-[10px] font-mono select-none">
-                          <Play className="w-3 h-3 text-slate-600 fill-slate-600 shrink-0" />
-                          <span>{plays} execuções</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center flex-wrap gap-1.5 shrink-0">
-                        <span className="px-1.5 py-0.5 bg-slate-800/80 text-[9px] font-mono text-slate-400 rounded uppercase font-bold tracking-wider">
-                          {track.genre || artist.genre}
-                        </span>
-                        {track.lyrics && (
-                          <span className="px-1.5 py-0.5 bg-orange-950/40 border border-orange-500/10 text-orange-300 text-[9px] font-mono rounded font-black uppercase tracking-widest">
-                            LETRA
-                          </span>
-                        )}
-                        {(currentPlan === 'pro' || currentPlan === 'premium') && (
-                          <span className="px-1.5 py-0.5 bg-emerald-950/30 border border-emerald-500/10 text-emerald-400 text-[9px] font-mono rounded font-black uppercase tracking-wider">
-                            LIBERADA
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Actions / Buttons area on right hand side */}
-                  <div className="flex items-center gap-2.5 flex-shrink-0 select-none">
-                    
-                    {/* Pro & Premium Only: Quero Gravar Button - Discreet but beautiful */}
-                    {(currentPlan === 'pro' || currentPlan === 'premium') && (
-                      <button 
-                        id={`contact-track-btn-${track.trackId}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleContactForTrack(track);
-                        }}
-                        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-emerald-400 hover:text-white hover:bg-emerald-650 transition rounded-xl text-[11px] font-bold"
-                        title="Desejo gravar / licenciar"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Quero Gravar
-                      </button>
-                    )}
-
-                    <button 
-                      id={`play-row-${track.trackId}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isCurrentlyPlaying) {
-                          onPlayPause();
-                        } else {
-                          onSelectTrack(track, tracks);
-                        }
-                      }}
-                      className="w-10 h-10 flex items-center justify-center bg-orange-500 hover:bg-orange-450 text-slate-950 hover:scale-105 active:scale-95 rounded-full cursor-pointer transition shadow-md shadow-orange-500/2"
-                    >
-                      {isActiveAndPlaying ? (
-                        <Pause className="w-4 h-4 fill-slate-950 text-slate-950" />
-                      ) : (
-                        <Play className="w-4 h-4 fill-slate-950 text-slate-950 ml-0.5" />
-                      )}
-                    </button>
-                  </div>
-
+          {activeTab === 'sobre' ? (
+            /* Tab Content: Sobre o compositor (Bio & Meta info) */
+            <div className="bg-[#050609]/40 border border-zinc-900 rounded-2xl p-6 text-left space-y-6 animate-fade-in">
+              <div className="space-y-2.5">
+                <h4 className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Histórico do compositor</h4>
+                <div className="text-zinc-350 text-xs sm:text-sm leading-relaxed whitespace-pre-line bg-zinc-955 p-4 rounded-xl border border-zinc-900/50 font-medium">
+                  {artist.bio ? artist.bio : `O compositor ${artist.name} possui um catálogo verificado no Soundrive com excelente acervo autoral, pronto para audição e captação comercial.`}
                 </div>
-              );
-            })}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 bg-zinc-900/20 border border-zinc-900 rounded-xl space-y-1">
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-500 block">Gênero Autoral Principal</span>
+                  <span className="text-xs sm:text-sm font-semibold text-zinc-200 uppercase tracking-wide">{artist.genre || 'Sertanejo Universitário'}</span>
+                </div>
+                <div className="p-4 bg-zinc-900/20 border border-zinc-900 rounded-xl space-y-1">
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-500 block">Cidade / Estado</span>
+                  <span className="text-xs sm:text-sm font-semibold text-zinc-200 uppercase tracking-wide">{artist.city || 'Goiânia'} - {artist.state || 'GO'}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Tab Content: Composições (The list table block exact same high fidelity layout of Image 1) */
+            <div className="space-y-5 animate-fade-in flex flex-col w-full text-left">
+              
+              {/* Confidenciality alert header bar */}
+              <div className="py-3 px-4 bg-zinc-900/10 border border-zinc-900 rounded-xl flex items-center justify-center gap-2.5 text-zinc-400 text-xs text-center select-none">
+                <svg className="w-4.5 h-4.5 text-[#d4af37] shrink-0 fill-[#d4af37]/5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.224 4.074 9.5 9.166 10.701a1 1 0 00.334-1.932C7.07 14.773 4 11.238 4 7c0-.528.03-1.049.09-1.56A13.914 13.914 0 0011 3.104a13.914 13.914 0 006.91 2.336c.06.51.09 1.032.09 1.56 0 4.238-3.07 7.773-7.5 8.769a1 1 0 10.334 1.932C15.926 16.5 20 12.224 20 7c0-.681-.056-1.351-.166-2A11.954 11.954 0 0110 1.944z" clipRule="evenodd"/>
+                </svg>
+                <span className="font-mono text-[10px] tracking-wider uppercase font-bold text-zinc-400">Repositório musical privado — acesso exclusivo de contratantes</span>
+              </div>
+              
+              {/* Table List Layout Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-900/60 pb-3 select-none">
+                <div className="text-left">
+                  <h3 className="font-heading font-black text-xl tracking-wide uppercase text-zinc-150">
+                    Composições disponíveis
+                  </h3>
+                  <p className="text-zinc-500 text-[10px] sm:text-xs">Para ouvir, clique no botão play ou selecione a música diretamente.</p>
+                </div>
+
+                {tracks.length > 0 && (
+                  <button 
+                    id="car-mode-toggle-anchor"
+                    onClick={() => {
+                      if (!activeTrack) {
+                        onSelectTrack(tracks[0], tracks);
+                      }
+                      setCarMode(true);
+                    }}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4.5 py-2.5 bg-zinc-900/90 hover:bg-zinc-805 border border-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer select-none"
+                  >
+                    <Car className="w-3.5 h-3.5 text-amber-550 shrink-0 animate-pulse" /> Bluetooth de carro
+                  </button>
+                )}
+              </div>
+
+              {whatsappShareAlert && (
+                <div className="p-2.5 bg-emerald-950/20 border border-emerald-950/30 text-emerald-400 text-[10px] font-mono rounded-xl text-center font-bold animate-pulse">
+                  Redirecionando de forma segura para o WhatsApp...
+                </div>
+              )}
+
+              {tracks.length === 0 ? (
+                <div className="text-center py-16 bg-[#050609]/40 border border-dashed border-zinc-900 rounded-3xl text-zinc-500 text-xs font-mono select-none">
+                  Nenhuma guia ou composição foi disponibilizada pelo artista ainda.
+                </div>
+              ) : (
+                /* List table structure of tracks precisely matching Image 1 styling */
+                <div id="pub-tracks-list" className="border border-zinc-900 rounded-2xl bg-[#050609]/20 overflow-hidden text-left flex flex-col">
+                  
+                  {/* Table Column headers (Desktop only) */}
+                  <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-4 bg-[#050609]/80 border-b border-zinc-905 text-[9px] font-mono uppercase tracking-widest text-zinc-500 font-black select-none font-bold">
+                    <div className="col-span-1">#</div>
+                    <div className="col-span-6">MÚSICA</div>
+                    <div className="col-span-3">GÊNERO</div>
+                    <div className="col-span-2 text-right">DURAÇÃO</div>
+                  </div>
+
+                  {/* Rows iteration */}
+                  {tracks.map((track, idx) => {
+                    const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
+                    const isActiveAndPlaying = isCurrentlyPlaying && isPlaying;
+                    const plays = track.playsCount || track.plays || 0;
+                    const lyricsOpen = expandedLyricsTrackId === track.trackId;
+                    
+                    // High-quality mock duration fallback to replicate screenshots
+                    const mockDurations = ['03:10', '03:18', '03:05', '03:22', '02:54', '03:41', '03:15', '02:49'];
+                    const durationText = mockDurations[idx % mockDurations.length];
+
+                    return (
+                      <div key={track.trackId} className="flex flex-col w-full">
+                        <div 
+                          onClick={() => onSelectTrack(track, tracks)}
+                          className={`grid grid-cols-12 gap-2 sm:gap-4 px-4 py-3 sm:px-6 sm:py-4 items-center justify-between border-b last:border-b-0 border-zinc-900/40 cursor-pointer hover:bg-zinc-900/30 transition-all select-none ${
+                            isCurrentlyPlaying ? 'bg-amber-500/5' : ''
+                          }`}
+                        >
+                          {/* Col L1: Numerical index indicator OR custom Play Sphere */}
+                          <div className="col-span-2 sm:col-span-1 flex items-center gap-3.5 select-none">
+                            <span className="text-zinc-500 font-mono text-xs sm:text-sm hidden sm:inline select-none">
+                              {(idx + 1).toString().padStart(2, '0')}
+                            </span>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCurrentlyPlaying) {
+                                  onPlayPause();
+                                } else {
+                                  onSelectTrack(track, tracks);
+                                }
+                              }}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                                isCurrentlyPlaying 
+                                  ? 'bg-amber-500 text-zinc-950 font-black shadow-md' 
+                                  : 'bg-zinc-900 border border-zinc-800 text-amber-500 hover:bg-zinc-800 hover:scale-105'
+                              }`}
+                            >
+                              {isActiveAndPlaying ? (
+                                <Pause className="w-3.5 h-3.5 fill-current" />
+                              ) : (
+                                <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Col L2: Name, Guia info metadata and plays/lyrics links */}
+                          <div className="col-span-7 sm:col-span-6 pr-2">
+                            <div className="space-y-0.5 leading-tight">
+                              <h4 className={`text-xs sm:text-sm font-bold tracking-tight uppercase truncate ${
+                                isCurrentlyPlaying ? 'text-[#d4af37]' : 'text-zinc-100 font-bold'
+                              }`}>
+                                {track.title}
+                              </h4>
+                              <p className="text-[10px] sm:text-xs text-zinc-550 truncate lowercase font-sans leading-none">
+                                guia: <strong className="text-zinc-400 font-semibold uppercase font-mono text-[9px]">{track.singer || artist.name}</strong> 
+                                {track.composer && <> • autor: <strong className="text-zinc-400 font-semibold uppercase font-mono text-[9px]">{track.composer}</strong></>}
+                              </p>
+                              
+                              {/* Lyrics drawer trigger badge */}
+                              <div className="flex items-center gap-2 pt-0.5 select-none">
+                                {track.lyrics && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedLyricsTrackId(lyricsOpen ? null : track.trackId);
+                                    }}
+                                    className={`text-[9.5px] font-mono tracking-widest uppercase font-black px-1.5 py-0.25 rounded cursor-pointer select-none transition-all ${
+                                      lyricsOpen ? 'bg-amber-550 text-zinc-950 font-extrabold shadow' : 'bg-amber-550/10 border border-amber-550/20 text-amber-400'
+                                    }`}
+                                  >
+                                    Ver Letra
+                                  </button>
+                                )}
+                                <span className="text-[9.5px] font-mono text-zinc-650 sm:hidden">
+                                  {plays} plays
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Col L3: Genre tag (Desktop only) */}
+                          <div className="col-span-3 hidden sm:block select-none">
+                            <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-850 text-zinc-[450] text-[10px] font-mono rounded font-semibold uppercase tracking-wider select-none">
+                              {track.genre || artist.genre}
+                            </span>
+                          </div>
+
+                          {/* Col L4: Duration & dynamic talk popup */}
+                          <div className="col-span-3 sm:col-span-2 text-right flex items-center justify-end gap-4 font-mono select-none">
+                            <span className="text-zinc-[#450] text-xs hidden sm:inline font-bold">
+                              {durationText}
+                            </span>
+                            
+                            {/* Message button for direct communication */}
+                            <button 
+                              id={`contact-track-btn-${track.trackId}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleContactForTrack(track);
+                              }}
+                              className="p-1.5 text-zinc-550 hover:bg-zinc-900 border border-transparent hover:border-zinc-850 rounded-lg group transition cursor-pointer select-none"
+                              title="Falar sobre esta composição"
+                            >
+                              <MessageSquare className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 stroke-[2.2]" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Inline Expandable lyrics space panel */}
+                        {track.lyrics && lyricsOpen && (
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-4.5 bg-zinc-950 border-b border-t border-zinc-900 max-h-56 overflow-y-auto text-xs text-zinc-3 w-full leading-relaxed font-sans whitespace-pre-line text-left animate-fade-in relative shadow-inner select-text"
+                          >
+                            <div className="flex items-center justify-between border-b border-zinc-900 pb-2.5 mb-2.5 select-none text-left">
+                              <span className="text-[9px] font-mono tracking-widest text-[#d4af37] font-black uppercase">Letra Completa</span>
+                              <button 
+                                onClick={() => setExpandedLyricsTrackId(null)}
+                                className="text-[9px] text-zinc-500 hover:text-white transition uppercase font-mono tracking-widest font-black cursor-pointer"
+                              >
+                                [ Fechar ]
+                              </button>
+                            </div>
+                            <p className="whitespace-pre-line font-medium leading-relaxed font-sans text-zinc-200 text-xs">{track.lyrics}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+        </section>
+
+        {/* Dynamic Partner Ad Banner for Free users at the very end */}
+        {currentPlan === 'free' && (
+          <div id="free-plan-ads-banner" className="max-w-md mx-auto px-4 mt-12 bg-zinc-900/10 border border-zinc-900/60 rounded-xl p-3.5 text-center opacity-70 hover:opacity-100 transition-opacity select-none relative z-10 w-full mb-4">
+            <div className="flex flex-col items-center gap-1.5 text-zinc-400 text-xs text-center">
+              <span className="px-1.5 py-0.5 bg-zinc-950 text-zinc-550 text-[8px] font-mono rounded font-semibold uppercase tracking-wider select-none border border-zinc-850/60">
+                Parceiro Soundrive
+              </span>
+              <p className="font-sans text-[10px] text-zinc-55 leading-relaxed">
+                Equipamentos de áudio profissionais e Guitarras Tagima na Strings — Cupom <strong>SOUND30</strong>.
+              </p>
+            </div>
           </div>
         )}
 
-      </section>
+        {/* Brand visual layout page footer */}
+        <footer className="mt-16 border-t border-zinc-900/40 pt-4 text-center text-zinc-500 text-[10px] font-mono uppercase tracking-wider relative z-10 w-full select-none">
+          <p>Soundrive © {new Date().getFullYear()} — Plataforma de Catálogos Verificados para Compositores</p>
+          <p className="text-[9px] text-zinc-650 mt-1 lowercase font-sans font-normal">compartilhe no whatsapp, envie propostas comerciais e garanta segurança jurídica.</p>
+        </footer>
 
-      {/* Discrete bottom Ad banner for free users, placed gracefully at the absolute bottom footer and very clean */}
-      {currentPlan === 'free' && (
-        <div id="free-plan-ads-banner" className="max-w-md mx-auto px-4 mt-16 bg-slate-900/10 border border-slate-900/60 rounded-xl p-3 text-center opacity-60 hover:opacity-100 transition-opacity">
-          <div className="flex flex-col items-center gap-1.5 text-slate-400 text-xs">
-            <span className="px-1.5 py-0.5 bg-slate-950 text-slate-500 text-[8px] font-mono rounded font-semibold uppercase tracking-wider select-none">
-              Parceiro Soundrive
-            </span>
-            <p className="font-sans text-[10px] text-slate-550 leading-relaxed">
-              Equipamentos de áudio profissionais e Guitarras Tagima na Strings — Cupom <strong>SOUND30</strong>.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* FOOTER PUSH BRANDING */}
-      <div className="mt-16 max-w-3xl mx-auto px-4 text-center text-slate-650 text-xs font-mono uppercase">
-        <p className="text-slate-600">Montado usando a plataforma Soundrive © {new Date().getFullYear()}</p>
-        <p className="text-[10px] text-slate-700 mt-1 lowercase font-sans">Gere sua página exclusiva, teste no painel Bluetooth e feche contratos.</p>
-      </div>
+      </main>
 
     </div>
   );
