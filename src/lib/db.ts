@@ -732,7 +732,7 @@ export const dbService = {
   getArtistMusics(artistId: string): Music[] {
     const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
     const tracks: Music[] = musicsMap[artistId] || [];
-    return tracks.map((t, idx) => {
+    const sorted = tracks.map((t, idx) => {
       if (artistId === "gabriel-silva" && !t.lyrics) {
         return {
           ...t,
@@ -741,6 +741,41 @@ export const dbService = {
       }
       return t;
     });
+    return sorted.sort((a, b) => {
+      const posA = a.position !== undefined ? a.position : 99999;
+      const posB = b.position !== undefined ? b.position : 99999;
+      if (posA !== posB) return posA - posB;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  },
+
+  async saveMusicOrder(artistId: string, orderedTrackIds: string[]): Promise<void> {
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    const tracks: Music[] = musicsMap[artistId] || [];
+
+    const updatedTracks = tracks.map(track => {
+      const newPos = orderedTrackIds.indexOf(track.trackId);
+      return {
+        ...track,
+        position: newPos !== -1 ? newPos : 99999
+      };
+    });
+
+    updatedTracks.sort((a, b) => (a.position ?? 99999) - (b.position ?? 99999));
+    musicsMap[artistId] = updatedTracks;
+    localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+    try {
+      for (const track of updatedTracks) {
+        const songRef = doc(db, 'songs', track.trackId);
+        await updateDoc(songRef, { position: track.position }).catch(() => {});
+
+        const legacyRef = doc(db, 'artists', artistId, 'musics', track.trackId);
+        await updateDoc(legacyRef, { position: track.position }).catch(() => {});
+      }
+    } catch (e) {
+      console.error("Error committing track reorder to Firestore:", e);
+    }
   },
 
   async findAudioFileByHash(hash: string): Promise<any | null> {

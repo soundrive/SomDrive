@@ -648,6 +648,33 @@ async function startServer() {
     }
   });
 
+  // Serve dynamic and cached favicon.svg
+  app.get("/favicon.svg", (req, res) => {
+    const faviconContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="fav-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe259" />
+      <stop offset="100%" stop-color="#ffa751" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="#081224" />
+  <g transform="translate(4, 4)">
+    <path d="M16 6 L16 16" stroke="url(#fav-grad)" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M16 7 C19 7, 21 9, 21 9" stroke="url(#fav-grad)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+    <ellipse cx="12" cy="16" rx="4.5" ry="3.5" fill="url(#fav-grad)" transform="rotate(-15 12 16)" />
+    <text x="12" y="14" font-family="-apple-system, system-ui, sans-serif" font-size="7" font-weight="900" fill="#081224" text-anchor="middle" letter-spacing="-0.5">SD</text>
+  </g>
+</svg>`;
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+    return res.status(200).send(faviconContent);
+  });
+
+  // Support /favicon.ico queries by serving the SVG with the right content-type or redirecting
+  app.get("/favicon.ico", (req, res) => {
+    return res.redirect("/favicon.svg");
+  });
+
   // Helper to escape special XML characters securely inside generated SVG
   const escapeXml = (unsafe: string): string => {
     return unsafe.replace(/[<>&'"]/g, (c) => {
@@ -719,7 +746,7 @@ async function startServer() {
         }
       }
     } catch (adminErr) {
-      console.warn("Firestore Admin fallback exception (expected if service-account roles are limited):", adminErr);
+      console.warn("Firestore Admin fallback exception:", adminErr);
     }
 
     return { name, genre, city };
@@ -731,14 +758,14 @@ async function startServer() {
       const userId = req.params.userId;
       const { name, genre, city } = await fetchArtistRest(userId);
 
-      // Safe formatting
-      const cleanName = escapeXml(name.trim().toUpperCase());
-      const cleanGenre = escapeXml(genre.trim());
-      const cleanCity = escapeXml(city.trim());
+      // Safe formatting with guaranteed string values
+      const cleanName = escapeXml((name || "Compositor").trim().toUpperCase());
+      const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
+      const cleanCity = escapeXml((city || "Brasil").trim());
 
       let subtitle = "";
       if (cleanGenre && cleanCity) {
-        subtitle = `${cleanGenre}  •  ${cleanCity}`;
+        subtitle = `${cleanGenre} &#8226; ${cleanCity}`;
       } else if (cleanGenre) {
         subtitle = cleanGenre;
       } else if (cleanCity) {
@@ -749,44 +776,45 @@ async function startServer() {
 
       const initialLetter = escapeXml((name || "S").trim().substring(0, 1).toUpperCase());
 
-      // Beautiful SVG open graph card template (1200x630px)
+      // Beautiful SVG open graph card template (1200x630px) with CDATA block to bypass XML/CORS font-loading issues
       const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap');
+    <style type="text/css"><![CDATA[
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
       .title-text {
-        font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Space Grotesk', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         font-weight: 700;
         fill: #ffffff;
       }
       .sub-text {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         font-weight: 600;
         fill: #94a3b8;
       }
       .badge-text {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         font-weight: 700;
         fill: #ffd700;
       }
       .button-text {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         font-weight: 700;
         fill: #081224;
       }
       .logo-text {
-        font-family: 'Space Grotesk', sans-serif;
+        font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
         font-weight: 700;
         fill: #ffffff;
         letter-spacing: 2px;
       }
       .footer-text {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         font-weight: 600;
         fill: #475569;
         letter-spacing: 1px;
       }
-    </style>
+    ]]></style>
+  </defs>
     
     <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#081224" />

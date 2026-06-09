@@ -23,7 +23,9 @@ import {
   UploadCloud,
   Link2,
   Link2Off,
-  Share2
+  Share2,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics } from '../types';
 import { dbService } from '../lib/db';
@@ -210,6 +212,29 @@ export default function Dashboard({
     setProfile(artistData);
     setTracks(dbService.getArtistMusics(currentUser.userId));
     setAnalytics(dbService.getAnalytics(currentUser.userId));
+  };
+
+  const handleMoveTrack = async (trackId: string, direction: 'up' | 'down', e: React.MouseEvent) => {
+    e.stopPropagation();
+    const trackIdx = tracks.findIndex(t => t.trackId === trackId);
+    if (trackIdx === -1) return;
+
+    const newIdx = direction === 'up' ? trackIdx - 1 : trackIdx + 1;
+    if (newIdx < 0 || newIdx >= tracks.length) return;
+
+    const newTracks = [...tracks];
+    const [movedTrack] = newTracks.splice(trackIdx, 1);
+    newTracks.splice(newIdx, 0, movedTrack);
+
+    // Set updated local state index sequentially
+    const orderedIds = newTracks.map(t => t.trackId);
+    try {
+      setTracks(newTracks.map((t, idx) => ({ ...t, position: idx })));
+      await dbService.saveMusicOrder(profile.userId, orderedIds);
+      refreshData();
+    } catch (err) {
+      console.error("Erro ao reordenar faixa:", err);
+    }
   };
 
   useEffect(() => {
@@ -1104,21 +1129,21 @@ export default function Dashboard({
             </button>
           </div>
         ) : (
-          <div id="songs-list-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {tracks.map((track) => {
+          <div id="songs-list-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            {tracks.map((track, trackIdx) => {
               const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
               
               return (
                 <div 
                   key={track.trackId}
                   onClick={() => onSelectTrack(track, tracks)}
-                  className={`bg-slate-900 hover:bg-slate-850 border rounded-xl sm:rounded-2xl overflow-hidden shadow-lg transition-transform hover:scale-101 cursor-pointer flex flex-col justify-between h-full ${
+                  className={`bg-slate-900 hover:bg-slate-850 border rounded-xl overflow-hidden shadow-lg transition-transform hover:scale-101 cursor-pointer flex flex-col justify-between h-full ${
                     isCurrentlyPlaying ? 'ring-2 ring-orange-500 border-transparent bg-slate-850' : 'border-slate-850'
                   }`}
                 >
                   <div>
-                    {/* Premium Musical Note Card Header */}
-                    <div className="relative aspect-[21/9] sm:aspect-video w-full bg-[#07090e] border-b border-slate-850 flex flex-col items-center justify-center p-3 sm:p-6 text-center overflow-hidden">
+                    {/* Premium Musical Note Card Header - Shrunk size as user requested */}
+                    <div className="relative h-20 sm:h-24 w-full bg-[#07090e] border-b border-slate-850 flex flex-col items-center justify-center p-2 text-center overflow-hidden">
                       {/* Ambient glows inside mock card header */}
                       <div className="absolute -right-6 -top-6 w-24 h-24 bg-orange-500/10 rounded-full blur-xl pointer-events-none"></div>
                       <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-yellow-400/10 rounded-full blur-xl pointer-events-none"></div>
@@ -1126,7 +1151,7 @@ export default function Dashboard({
                       {/* Interactive Link Status Toggler */}
                       <button
                         onClick={(e) => handleToggleMusicStatus(track, e)}
-                        className={`absolute top-2 sm:top-3 right-2 sm:right-3 px-2 py-0.5 border text-[9px] font-mono rounded uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1 z-20 ${
+                        className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 border text-[8px] font-mono rounded uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1 z-20 ${
                           (track.status || 'active') === 'active'
                             ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900'
                             : 'bg-rose-950/90 border-rose-500/40 text-rose-400 hover:bg-rose-900'
@@ -1135,23 +1160,23 @@ export default function Dashboard({
                       >
                         { (track.status || 'active') === 'active' ? (
                           <>
-                            <Link2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                            <span>Link Ativo</span>
+                            <Link2 className="w-2 h-2 text-emerald-400 shrink-0" />
+                            <span>Ativo</span>
                           </>
                         ) : (
                           <>
-                            <Link2Off className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                            <span>Link Inativo</span>
+                            <Link2Off className="w-2 h-2 text-rose-400 shrink-0" />
+                            <span>Inativo</span>
                           </>
                         ) }
                       </button>
                       
-                      <div className={`w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr ${isCurrentlyPlaying ? 'from-orange-600 to-yellow-500 text-slate-950 shadow-md shadow-orange-500/20' : 'from-slate-950 to-slate-900 border border-slate-800 text-orange-400'} flex items-center justify-center shadow-lg relative z-10 transition-transform`}>
-                        <Music className="w-3.5 h-3.5 sm:w-5 sm:h-5 animate-bounce" />
+                      <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr ${isCurrentlyPlaying ? 'from-orange-600 to-yellow-500 text-slate-950 shadow-md shadow-orange-500/20' : 'from-slate-950 to-slate-900 border border-slate-800 text-orange-400'} flex items-center justify-center shadow-lg relative z-10 transition-transform`}>
+                        <Music className="w-3 h-3 sm:w-4 sm:h-4 animate-bounce" />
                       </div>
                       
                       {/* Neon wave simulation bar graph */}
-                      <div className="flex items-end gap-1 mt-2 sm:mt-4 z-10 h-4 sm:h-7">
+                      <div className="flex items-end gap-[3px] mt-1 sm:mt-2 z-10 h-3 sm:h-4">
                         <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-1.5'}`}></span>
                         <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-3'}`}></span>
                         <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-3' : 'bg-orange-400/30 h-4.5'}`}></span>
@@ -1165,12 +1190,12 @@ export default function Dashboard({
                       </span>
                     </div>
 
-                    {/* Metadata body */}
-                    <div className="p-3.5 sm:p-5 space-y-1 sm:space-y-2">
-                      <h4 className="font-heading font-black text-sm sm:text-base tracking-tight text-white uppercase truncate">
+                    {/* Metadata body - Shrunk as requested */}
+                    <div className="p-3 sm:p-4 space-y-1">
+                      <h4 className="font-heading font-black text-xs sm:text-sm tracking-tight text-white uppercase truncate">
                         {track.title}
                       </h4>
-                      <p className="text-[11px] sm:text-xs text-slate-400 font-semibold truncate leading-tight">
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-semibold truncate leading-tight">
                         Intérprete: {track.singer || profile.name}
                       </p>
                       {track.composer && (
@@ -1179,38 +1204,59 @@ export default function Dashboard({
                         </p>
                       )}
                       {track.partners && (
-                        <p className="text-[9px] sm:text-[10px] font-mono text-slate-400/80 hover:text-white uppercase truncate" title={track.partners}>
+                        <p className="text-[9px] font-mono text-slate-400/80 hover:text-white uppercase truncate" title={track.partners}>
                           Parceiros: {track.partners}
                         </p>
                       )}
                       {track.description && (
-                        <p className="text-slate-400 text-[11px] sm:text-xs italic line-clamp-1 sm:line-clamp-2 pt-1 border-t border-slate-850/60 leading-relaxed">
+                        <p className="text-slate-400 text-[10px] sm:text-xs italic line-clamp-1 pt-1 border-t border-slate-850/60 leading-relaxed">
                           {track.description}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Foot action panel */}
-                  <div className="px-3.5 py-2.5 sm:px-5 sm:py-4 bg-slate-955 border-t border-slate-850/50 flex items-center justify-between">
+                  {/* Foot action panel - Shrunk padding and added up/down order controls */}
+                  <div className="px-3 py-2 sm:px-4 sm:py-2.5 bg-slate-955 border-t border-slate-850/50 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] sm:text-[11px] font-mono text-slate-400 font-bold flex items-center gap-0.5 sm:gap-1">
-                        <TrendingUp className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-yellow-400" /> {track.playsCount} <span className="text-[9px] font-sans text-slate-500 font-normal hidden sm:inline">plays</span>
+                      <span className="text-[10px] font-mono text-slate-400 font-bold flex items-center gap-0.5">
+                        <TrendingUp className="w-3 h-3 text-yellow-400" /> {track.playsCount}
                       </span>
                       {track.lyrics && (
-                        <span className="px-1.5 py-0.5 bg-orange-955/80 border border-orange-550/25 text-orange-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider">
+                        <span className="px-1 py-0.5 bg-orange-955/80 border border-orange-550/25 text-orange-400 rounded text-[8px] font-mono font-bold uppercase tracking-wider">
                           Letra
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
+                      {/* Order position buttons */}
+                      <button 
+                        onClick={(e) => handleMoveTrack(track.trackId, 'up', e)}
+                        disabled={trackIdx === 0}
+                        className="p-1 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-500 hover:bg-slate-850 rounded cursor-pointer flex items-center justify-center transition"
+                        title="Mover para cima"
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </button>
+
+                      <button 
+                        onClick={(e) => handleMoveTrack(track.trackId, 'down', e)}
+                        disabled={trackIdx === tracks.length - 1}
+                        className="p-1 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-500 hover:bg-slate-850 rounded cursor-pointer flex items-center justify-center transition"
+                        title="Mover para baixo"
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </button>
+
+                      <div className="h-4 w-[1px] bg-slate-800/80 mx-0.5"></div>
+
                       <button 
                         onClick={(e) => handleStartEdit(track, e)}
                         className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer flex items-center justify-center"
                         title="Editar detalhes"
                       >
-                        <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <Pencil className="w-3 h-3" />
                       </button>
 
                       <button 
@@ -1218,7 +1264,7 @@ export default function Dashboard({
                         className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-red-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer flex items-center justify-center"
                         title="Excluir música"
                       >
-                        <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
