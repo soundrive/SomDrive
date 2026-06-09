@@ -13,13 +13,16 @@ import {
   Mail, 
   Check, 
   ChevronRight, 
+  ChevronDown,
   DollarSign, 
   ArrowLeft,
   Coins,
   ShieldCheck,
   Star,
   Music as MusicIcon,
-  Copy
+  Copy,
+  Home,
+  MoreVertical
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics } from '../types';
 import { dbService } from '../lib/db';
@@ -54,6 +57,7 @@ export default function ArtistPublic({
   const [instaShareAlert, setInstaShareAlert] = useState(false);
   const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'composicoes' | 'sobre'>('composicoes');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Dynamic Browser Tab Meta Title
   useEffect(() => {
@@ -231,29 +235,29 @@ export default function ArtistPublic({
           </div>
 
           {/* Nav Items stack with exact vertical visual indicators */}
-          <nav className="space-y-1.5">
+          <nav className="space-y-2">
             <button 
               onClick={() => onNavigate('landing')}
-              className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900/40 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-left"
+              className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900/50 border border-transparent hover:border-zinc-800/40 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-left"
             >
-              <ArrowLeft className="w-4 h-4 text-zinc-500" />
+              <Home className="w-4 h-4 text-zinc-500 hover:text-white" />
               Início
             </button>
 
             <button 
-              className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-[#d4af37] bg-zinc-900/50 transition-all text-xs font-mono font-bold uppercase tracking-wider relative cursor-default text-left"
+              className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-[#d4af37] bg-gradient-to-r from-[#d4af37]/10 via-[#d4af37]/3 to-transparent border border-[#d4af37]/20 shadow-[0_0_15px_rgba(212,175,55,0.06)] transition-all text-xs font-mono font-bold uppercase tracking-wider relative cursor-default text-left"
             >
-              <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-[#d4af37] rounded-r"></span>
+              <span className="absolute left-0 top-3 bottom-3 w-[2px] bg-[#d4af37] rounded-r"></span>
               <Disc className="w-4 h-4 text-amber-500 animate-spin-slow" />
               Catálogo
             </button>
 
             <button 
-              onClick={() => onNavigate('landing')}
-              className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900/40 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-left"
+              onClick={handleSpeakWithArtist}
+              className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900/50 border border-transparent hover:border-zinc-800/40 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer text-left"
             >
-              <Star className="w-4 h-4 text-zinc-500" />
-              Compositores
+              <Mail className="w-4 h-4 text-zinc-500" />
+              Contato
             </button>
           </nav>
         </div>
@@ -274,17 +278,97 @@ export default function ArtistPublic({
 
         {/* STICKY TOP NAVIGATION GLASS BAR */}
         <div className="w-full border-b border-zinc-900/40 pb-4 mb-6 flex items-center justify-between relative z-30 pt-1">
+          
+          {/* MOBILE NAVIGATION LAYOUT - EXACTLY REPLICATING THE ATTACHED SCREENSHOT */}
+          <div className="flex md:hidden items-center justify-between w-full relative z-25">
+            {/* Left Brand: SOUNDRIVE with down chevron dropdown arrow */}
+            <div 
+              onClick={() => onNavigate('landing')}
+              className="flex items-center gap-1.5 cursor-pointer text-[#d4af37] active:scale-95 transition-all select-none"
+            >
+              <div className="w-5 h-5 rounded-full border border-amber-500/40 flex items-center justify-center bg-amber-500/10">
+                <span className="text-[#d4af37] text-[10px] font-black leading-none">S</span>
+              </div>
+              <span className="font-heading font-black tracking-[0.16em] text-sm text-white uppercase pb-0.5">
+                SOUNDRIVE
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+            </div>
+
+            {/* Right: PERFIL ••• Button with custom drop content */}
+            <div className="relative">
+              <button 
+                id="pub-mobile-profile-menu-trigger"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="px-4 py-2 border border-zinc-800 bg-[#0a0d16]/80 rounded-xl text-zinc-100 text-[10px] font-mono font-black tracking-widest uppercase flex items-center gap-2 cursor-pointer active:scale-95 hover:border-zinc-700 transition-all select-none shadow-md"
+              >
+                <span>PERFIL</span>
+                <span className="text-[#d4af37] font-extrabold text-[12px] tracking-tight leading-none">•••</span>
+              </button>
+
+              {mobileMenuOpen && artist && (
+                <>
+                  {/* Invisible screen backdrop to handle clicks outside */}
+                  <div 
+                    className="fixed inset-0 z-40 bg-black/10 backdrop-blur-none" 
+                    onClick={() => setMobileMenuOpen(false)}
+                  />
+                  
+                  {/* Glowing, floating dropdown container with matching gold accents */}
+                  <div className="absolute right-0 mt-3 w-52 bg-[#0c0f18]/95 border border-zinc-800 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] py-2.5 z-50 text-left backdrop-blur-xl animate-fade-in divide-y divide-zinc-900/50">
+                    {/* Contato (Message/Mail call with Whatsapp indicator) */}
+                    <button
+                      onClick={() => {
+                        handleSpeakWithArtist();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full px-4.5 py-3 hover:bg-zinc-905 text-zinc-300 hover:text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-3 transition-all text-left cursor-pointer"
+                    >
+                      <Mail className="w-4 h-4 text-[#d4af37] shrink-0" />
+                      <span>Contato</span>
+                    </button>
+
+                    {/* Instagram Handle */}
+                    <button
+                      onClick={() => {
+                        handleInstagramShare();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full px-4.5 py-3 hover:bg-zinc-905 text-zinc-300 hover:text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-3 transition-all text-left cursor-pointer"
+                    >
+                      <Instagram className="w-4 h-4 text-[#d4af37] shrink-0" />
+                      <span>Instagram</span>
+                    </button>
+
+                    {/* Copiar Link do Perfil */}
+                    <button
+                      onClick={() => {
+                        handleCopyLinkDissemination();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full px-4.5 py-3 hover:bg-zinc-905 text-zinc-300 hover:text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-3 transition-all text-left cursor-pointer"
+                    >
+                      <Copy className="w-4 h-4 text-[#d4af37] shrink-0" />
+                      <span>Copiar Link do Perfil</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* DESKTOP/TABLET NAVIGATION LAYOUT: Keeps original pristine layout */}
           <button 
             id="pub-back-btn"
             onClick={() => onNavigate('landing')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-805 rounded-xl hover:text-white text-zinc-400 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer md:hidden"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-805 rounded-xl hover:text-white text-zinc-400 transition-all text-xs font-mono font-bold uppercase tracking-wider cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-zinc-500" /> Início
           </button>
 
-          <span className="text-[9px] min-[360px]:text-[10px] font-mono tracking-widest text-[#d4af37] font-bold uppercase flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-550/10 border border-amber-550/20 rounded-full select-none ml-auto md:ml-0">
+          <span className="hidden md:inline-flex text-[10px] font-mono tracking-widest text-[#d4af37] font-bold uppercase flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-550/10 border border-amber-550/20 rounded-full select-none ml-auto">
             <Star className="w-3.5 h-3.5 text-[#d4af37] fill-[#d4af37]/10 animate-pulse" />
-            Catálogo Verificado
+            {artist.customBadgeText || "Catálogo Verificado"}
           </span>
 
           {/* Desktop Right Bell and Avatar Icons */}
@@ -303,148 +387,218 @@ export default function ArtistPublic({
 
         {/* HERO HEADER COVER BLOCK (Grid structured exactly as shown in reference) */}
         <div id="artist-profile-header-card" className="w-full mb-8 relative z-10 select-none">
-          <div className="bg-gradient-to-tr from-zinc-950/60 via-[#07090e]/80 to-zinc-950/20 border border-zinc-900 rounded-3xl p-6 md:p-8 grid grid-cols-1 md:grid-cols-12 gap-6 items-center shadow-2xl relative overflow-hidden">
+          <div className="bg-[#0a0d16]/82 border border-zinc-800/80 rounded-3xl pt-11 pb-5 px-5 md:p-8 flex flex-row items-center gap-4 md:gap-8 justify-start shadow-[0_12px_30px_rgba(0,0,0,0.65)] relative overflow-hidden">
             
-            {/* Ambient gold glow backplate */}
-            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-550/20 via-[#d4af37]/35 to-transparent"></div>
+            {/* Ambient gold glow highlight lines */}
+            <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-amber-500/20 via-[#d4af37]/45 to-transparent"></div>
             <div className="absolute -left-12 -top-12 w-48 h-48 bg-[#d4af37]/5 rounded-full blur-2xl pointer-events-none"></div>
 
-            {/* Col 1: Disk record styled Sphere / Avatar container */}
-            <div className="col-span-1 md:col-span-4 flex justify-center items-center">
-              <div className="relative w-44 h-44 sm:w-[195px] sm:h-[195px] rounded-full border-2 border-zinc-800 bg-[#050609] shadow-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                {/* Concentric record circles for visual depth */}
-                <div className="absolute inset-2 sm:inset-3 rounded-full border border-zinc-900/40"></div>
-                <div className="absolute inset-6 sm:inset-8 rounded-full border border-zinc-900/20 font-medium"></div>
-                <div className="absolute inset-11 sm:inset-14 rounded-full border border-zinc-900/10"></div>
-                
-                {/* Embedded Glowing sound rings */}
-                <div className="absolute inset-18 rounded-full border border-amber-500/10 animate-pulse"></div>
+            {/* Verified Badge Header detail row - positioned absolutely like the screenshot */}
+            <div className="absolute top-4 left-4.5 flex items-center gap-1 text-[8px] sm:text-[9.5px] font-mono text-amber-400 font-extrabold tracking-widest uppercase select-none">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#d4af37] fill-[#d4af37]/5 shrink-0" />
+              <span>{artist.customBadgeText || "ARTISTA VERIFICADO"}</span>
+            </div>
 
-                {/* Main Avatar/Disc centered circle */}
+            {/* Custom SVG Golden Fluid Wave Pattern in background - EXACTLY mirroring screenshot premium detail */}
+            <svg className="absolute right-0 bottom-0 top-0 h-full w-full md:w-[65%] opacity-25 md:opacity-40 pointer-events-none z-0" viewBox="0 0 600 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M 150,150 C 250,180 320,60 450,110 C 510,130 550,80 600,60 L 600,200 L 150,200 Z" fill="url(#gold-glow)"></path>
+              <path d="M 0,160 C 130,90 240,190 360,115 C 450,60 520,130 600,100" stroke="url(#gold-gradient)" strokeWidth="2" strokeOpacity="0.45"></path>
+              <path d="M 0,100 C 120,140 220,70 320,135 C 420,190 510,95 600,130" stroke="url(#gold-gradient-2)" strokeWidth="1.2" strokeOpacity="0.3"></path>
+              <path d="M 0,130 C 180,75 220,150 400,95 C 480,70 520,145 600,80" stroke="url(#gold-gradient)" strokeWidth="1" strokeDasharray="3 4" strokeOpacity="0.4"></path>
+              <defs>
+                <linearGradient id="gold-glow" x1="300" y1="0" x2="300" y2="200" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#d4af37" stopOpacity="0"/>
+                  <stop offset="100%" stopColor="#d4af37" stopOpacity="0.06"/>
+                </linearGradient>
+                <linearGradient id="gold-gradient" x1="0" y1="100" x2="600" y2="100" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#d4af37" stopOpacity="0.05"/>
+                  <stop offset="50%" stopColor="#d4af37" stopOpacity="0.55"/>
+                  <stop offset="100%" stopColor="#ea580c" stopOpacity="0.05"/>
+                </linearGradient>
+                <linearGradient id="gold-gradient-2" x1="0" y1="100" x2="600" y2="100" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#ea580c" stopOpacity="0.03"/>
+                  <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.35"/>
+                  <stop offset="100%" stopColor="#d4af37" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+            </svg>
+
+            {/* Left Col: Artist brand identity/avatar - matches the clean square look inside screenshot */}
+            <div className="relative z-10 flex-shrink-0 text-left">
+              <div className="relative w-20 h-20 min-[380px]:w-24 min-[380px]:h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-2xl border border-zinc-800/80 bg-[#050609] shadow-[0_8px_20px_rgba(0,0,0,0.5)] flex items-center justify-center overflow-hidden">
                 {artist.avatarUrl && !artist.avatarUrl.includes("unsplash.com") ? (
                   <img 
                     id="artist-pub-avatar"
                     src={artist.avatarUrl} 
                     alt={artist.name}
-                    className="relative w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-full border border-zinc-850 p-1 bg-[#090b10] shadow-2xl z-10 hover:scale-103 transition duration-500"
+                    className="w-full h-full object-cover rounded-2xl hover:scale-105 transition-transform duration-500"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border border-zinc-800 bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 flex flex-col items-center justify-center text-[#d4af37] shadow-xl z-10 select-none">
-                    <div className="absolute inset-1 rounded-full border border-zinc-855"></div>
-                    
-                    {/* Centered Golden sound waveform animation */}
-                    <div className="flex items-end gap-[3.5px] h-7 justify-center relative translate-y-0.5 select-none">
-                      <span className="w-0.75 bg-[#d4af37] h-3.5 rounded-full animate-bar-1"></span>
-                      <span className="w-0.75 bg-[#d4af37] h-5- rounded-full animate-bar-2"></span>
-                      <span className="w-0.75 bg-gradient-to-t from-[#d4af37] to-amber-400 h-6.5 rounded-full animate-bar-3"></span>
-                      <span className="w-0.75 bg-[#d4af37] h-4.5 rounded-full animate-bar-2"></span>
-                      <span className="w-0.75 bg-[#d4af37] h-2 rounded-full animate-bar-1"></span>
+                  <div className="w-full h-full bg-gradient-to-b from-[#1c1206] via-[#090b10] to-[#090b10] flex flex-col items-center justify-center p-4">
+                    <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mb-1">
+                      <Disc className="w-6 h-6 sm:w-8 sm:h-8 text-[#d4af37] animate-spin-slow" />
+                    </div>
+                    {/* Centered Golden tiny sound waveform */}
+                    <div className="flex items-end gap-[2px] h-4 justify-center select-none mt-2">
+                      <span className="w-0.75 bg-[#d4af37] h-2.5 rounded-full animate-bar-1"></span>
+                      <span className="w-0.75 bg-[#d4af37] h-3.5 rounded-full animate-bar-2"></span>
+                      <span className="w-0.75 bg-gradient-to-t from-[#d4af37] to-amber-400 h-4 rounded-full animate-bar-3"></span>
+                      <span className="w-0.75 bg-[#d4af37] h-3 rounded-full animate-bar-2"></span>
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Col 2: Core artist metadata & CTA deck */}
-            <div className="col-span-1 md:col-span-5 flex flex-col items-center md:items-start text-center md:text-left gap-3.5 w-full">
+            {/* Middle Col: Text Details and Capsule Action Buttons (Spotify Core layout) */}
+            <div className="relative z-10 flex-grow flex flex-col items-start text-left gap-2 sm:gap-3 w-full min-w-0">
               
-              {/* Verified tagline */}
-              <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-mono text-amber-400 font-bold uppercase select-none">
-                <svg className="w-3.5 h-3.5 text-[#d4af37] fill-[#d4af37]/2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M2.166 4.9c0 .736.31 1.45.856 1.94l.024.022c.983.89 1.83 1.636 2.544 2.373a11.164 11.164 0 011.832 2.457c.547.962.91 1.908 1.155 2.801a.75.75 0 001.458 0c.245-.893.608-1.839 1.155-2.8a11.164 11.164 0 011.832-2.457c.715-.737 1.56-1.483 2.544-2.373a.5.5 0 00.024-.022c.547-.49.856-1.204.856-1.94V3a1 1 0 00-1-1H3.166a1 1 0 00-1 1v1.9z" clipRule="evenodd" />
-                </svg>
-                <span>Catálogo Verificado</span>
+              {/* Artist name displays with subtle luxury text shadow */}
+              <div className="space-y-1 text-left w-full min-w-0">
+                <h1 id="artist-pub-name" className="text-lg min-[380px]:text-xl sm:text-3xl md:text-4.5xl font-heading font-black tracking-tight uppercase leading-none text-white flex items-center gap-1.5 flex-wrap justify-start truncate">
+                  {artist.name}
+                  <span className="inline-flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 sm:w-6.5 sm:h-6.5 text-[#d4af37] fill-[#d4af37]" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </span>
+                </h1>
               </div>
 
-              {/* Title with verified gold badge */}
-              <h1 id="artist-pub-name" className="text-2.5xl sm:text-4xl lg:text-4.5xl font-heading font-black tracking-tight uppercase leading-none text-white flex items-center gap-1.5 flex-wrap justify-center md:justify-start">
-                {artist.name}
-                <span className="text-amber-500 inline-flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 sm:w-6.5 sm:h-6.5 text-[#d4af37] fill-[#d4af37]" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </span>
-              </h1>
+              {/* Exact stacked label layout matching screenshot - Desktop only */}
+              <div className="hidden md:flex flex-col gap-1.5 select-none text-left w-full">
+                {/* Item 1: Gênero */}
+                <div className="flex items-center gap-2 text-left">
+                  <MusicIcon className="w-3.5 h-3.5 text-zinc-550 shrink-0" />
+                  <div className="flex items-center gap-1.5 leading-none text-left font-mono">
+                    <span className="text-[8.5px] tracking-wider text-zinc-500 uppercase font-bold">GÊNERO</span>
+                    <span className="text-zinc-[750] text-[9.5px]">/</span>
+                    <span className="text-[10.5px] font-bold text-zinc-300 uppercase tracking-wide">
+                      {artist.genre || 'Sertanejo'}
+                    </span>
+                  </div>
+                </div>
 
-              {/* Badges line info location */}
-              <div className="flex items-center gap-1.5 flex-wrap justify-center md:justify-start select-none">
-                <span className="px-2.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono uppercase tracking-wider rounded font-medium">
-                  {artist.genre || 'Compositor'}
-                </span>
+                {/* Item 2: Localização */}
                 {artist.city && (
-                  <div className="flex items-center gap-1 px-2.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 text-[10px] font-mono uppercase tracking-wider rounded font-medium">
-                    <MapPin className="w-3 h-3 text-zinc-550 shrink-0" /> {artist.city} - {artist.state || 'GO'}
+                  <div className="flex items-center gap-2 text-left">
+                    <MapPin className="w-3.5 h-3.5 text-zinc-550 shrink-0" />
+                    <div className="flex items-center gap-1.5 leading-none text-left font-mono">
+                      <span className="text-[8.5px] tracking-wider text-zinc-500 uppercase font-bold">LOCALIZAÇÃO</span>
+                      <span className="text-zinc-[750] text-[9.5px]">/</span>
+                      <span className="text-[10.5px] font-bold text-zinc-300 uppercase tracking-wide">
+                        {artist.city} - {artist.state || 'GO'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Item 3: Disponível */}
+                <div className="flex items-center gap-2 text-left">
+                  <MusicIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <div className="flex items-center gap-1.5 leading-none text-left font-mono">
+                    <span className="text-[8.5px] tracking-wider text-zinc-500 uppercase font-bold">DISPONÍVEL</span>
+                    <span className="text-zinc-[750] text-[9.5px]">/</span>
+                    <span className="text-[10.5px] font-bold text-emerald-400 uppercase tracking-wide">
+                      {tracks.length} {tracks.length === 1 ? 'música disponível' : 'músicas disponíveis'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile-optimized clean metadata pills */}
+              <div className="flex md:hidden flex-wrap items-center gap-2 select-none text-left w-full mt-1.5">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900/85 border border-zinc-800/80 rounded-lg text-[9px] font-mono font-bold text-zinc-300 uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  {artist.genre || 'Sertanejo'}
+                </div>
+                
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/15 rounded-lg text-[9px] font-mono font-extrabold text-emerald-400 uppercase tracking-widest leading-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  {tracks.length} {tracks.length === 1 ? 'MÚSICA' : 'MÚSICAS'}
+                </div>
+
+                {artist.city && (
+                  <div className="flex items-center gap-1 px-2.5 py-1 bg-zinc-900/60 border border-zinc-800/40 text-zinc-400 text-[9px] font-mono font-bold uppercase rounded-lg">
+                    <MapPin className="w-2.5 h-2.5 text-zinc-550 shrink-0" />
+                    <span>{artist.city}</span>
                   </div>
                 )}
               </div>
 
-              {/* Premium Golden gradient WhatsApp Talk capsule */}
-              <button 
-                id="pub-talk-whatsapp-btn"
-                onClick={handleSpeakWithArtist}
-                className="w-full sm:w-auto px-5 py-3.5 mt-1 bg-gradient-to-r from-amber-550 to-amber-450 hover:brightness-105 active:scale-97 text-zinc-950 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer select-none transition-all duration-250 shadow-md shadow-amber-500/15 font-heading font-extrabold"
-              >
-                <MessageSquare className="w-4 h-4 text-zinc-950 shrink-0 stroke-[2.2]" /> Falar com o compositor
-              </button>
+              {/* Action pill buttons - Desktop only to keep mobile layout completely clean and liso, with all actions collapsed inside 'PERFIL •••' */}
+              <div className="hidden md:block w-full mt-1.5 select-none z-20 relative">
+                
+                {/* Desktop layout: Side-by-side premium action buttons */}
+                <div className="flex flex-wrap items-center gap-2 w-full justify-start z-10">
+                  {/* Contato (Speak with artist) */}
+                  <button 
+                    id="pub-talk-whatsapp-btn"
+                    onClick={handleSpeakWithArtist}
+                    className="px-4.5 py-2.5 bg-zinc-900/40 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-97 select-none"
+                  >
+                    <Mail className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <span>{artist.customContactLabel || "Contato"}</span>
+                  </button>
 
-              {/* Actions row deck */}
-              <div className="flex items-center gap-1.5 flex-wrap w-full mt-1 justify-center md:justify-start select-none">
-                {/* Compartilhar */}
-                <button 
-                  id="pub-whatsapp-share-btn"
-                  onClick={handleShareWhatsApp}
-                  className="px-3.5 py-2 bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800 hover:border-zinc-700 hover:text-white text-zinc-300 rounded-lg text-[10px] font-mono tracking-wider uppercase font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98 select-none"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span>Compartilhar</span>
-                </button>
+                  {/* Ouvir (Play first track dynamically) */}
+                  {tracks.length > 0 && (
+                    <button 
+                      onClick={() => onSelectTrack(tracks[0], tracks)}
+                      className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-sans text-xs font-bold uppercase text-zinc-950 rounded-xl cursor-pointer hover:scale-103 transition-all active:scale-97 flex items-center gap-1.5 shadow-md shadow-emerald-500/10"
+                    >
+                      <Play className="w-4 h-4 fill-zinc-950 stroke-[3]" />
+                      <span>Ouvir</span>
+                    </button>
+                  )}
 
-                {/* Divulgação */}
-                <button 
-                  id="pub-copy-dissemination-btn"
-                  onClick={handleCopyLinkDissemination}
-                  className="px-3.5 py-2 bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800 hover:border-zinc-700 hover:text-white text-zinc-300 rounded-lg text-[10px] font-mono tracking-wider uppercase font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98 select-none"
-                >
-                  <Copy className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  {copiedLinkAlert ? <span className="text-amber-455 font-bold">Copiado!</span> : <span>Divulgação</span>}
-                </button>
+                  {/* Copiar Link do Perfil */}
+                  <button 
+                    id="pub-whatsapp-share-btn"
+                    onClick={handleCopyLinkDissemination}
+                    className="px-4.5 py-2.5 bg-zinc-900/40 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-700 text-[#d4af37] hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-97 select-none"
+                    title="Copiar link do perfil do compositor"
+                  >
+                    <Copy className="w-4 h-4 text-[#d4af37] shrink-0" />
+                    <span>Link do Perfil</span>
+                  </button>
 
-                {/* Link */}
-                <button 
-                  id="pub-insta-link-btn"
-                  onClick={handleInstagramShare}
-                  className="px-3.5 py-2 bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-800 hover:border-zinc-700 hover:text-white text-zinc-305 rounded-lg text-[10px] font-mono tracking-wider uppercase font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-98 select-none"
-                >
-                  <Instagram className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span>Link</span>
-                </button>
+                  {/* Instagram (Link) */}
+                  <button 
+                    id="pub-insta-link-btn"
+                    onClick={handleInstagramShare}
+                    className="px-4.5 py-2.5 bg-zinc-900/40 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-700 text-zinc-205 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-97 select-none"
+                  >
+                    <Instagram className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <span>Instagram</span>
+                  </button>
+                </div>
+
               </div>
 
             </div>
 
-            {/* Col 3: Stat high gloss card pane */}
-            <div className="col-span-1 md:col-span-3 flex flex-col justify-center">
-              <div className="bg-[#050609]/75 border border-zinc-900 text-left p-4.5 rounded-2xl flex flex-col justify-between gap-5 shadow-xl min-h-[148px]">
+            {/* Right Col: High end luxury micro stats block */}
+            <div className="hidden md:flex relative z-10 w-full md:w-64 flex-col justify-center text-left">
+              <div className="bg-[#050609]/65 border border-zinc-800/80 backdrop-blur-sm text-left p-4.5 rounded-2xl flex flex-col justify-between gap-4.5 shadow-lg select-none">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-zinc-950 border border-zinc-850 rounded-xl flex items-center justify-center text-[#d4af37]">
-                    <svg className="w-5 h-5 text-[#d4af37]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                  <div className="w-9 h-9 bg-zinc-950 border border-zinc-850 rounded-xl flex items-center justify-center text-[#d4af37]">
+                    <svg className="w-4.5 h-4.5 text-[#d4af37]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5a2 2 0 10-2 2h2zm0 0h4m-4 0H8m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <div className="space-y-0.5 leading-none">
-                    <span className="text-[9px] uppercase font-mono tracking-wider text-zinc-500 block">Músicas disponíveis</span>
-                    <span className="text-2.5xl font-heading font-black text-[#d4af37] tracking-tight block mt-0.5">{tracks.length}</span>
+                    <span className="text-[8.5px] uppercase font-mono tracking-wider text-zinc-500 block">{artist.customRightBadgeTitle || "Autor Verificado"}</span>
+                    <span className="text-lg font-heading font-black text-amber-400 tracking-tight block mt-0.5">{artist.customRightBadgeStatus || "Seguro"}</span>
                   </div>
                 </div>
                 
-                <div className="border-t border-zinc-900/60 pt-3 flex items-start gap-2 select-none">
-                  <svg className="w-3.5 h-3.5 text-[#d4af37] mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <div className="space-y-0.5 leading-tight animate-pulse">
-                    <p className="text-[9px] uppercase font-mono tracking-widest text-[#d4af37] font-bold">Catálogo verificado</p>
-                    <p className="text-[9px] text-zinc-500 font-sans leading-normal">Músicas 100% originais e prontas para gravação.</p>
+                <div className="border-t border-zinc-900/60 pt-3.5 flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#d4af37] shrink-0 mt-0.5" />
+                  <div className="space-y-0.5 leading-tight">
+                    <p className="text-[9.5px] uppercase font-mono tracking-widest text-[#d4af37] font-bold">Direitos Reservados</p>
+                    <p className="text-[10px] text-zinc-500 font-sans leading-normal">{artist.customRightBadgeDescription || "Obras registradas e 100% protegidas legalmente."}</p>
                   </div>
                 </div>
               </div>
@@ -454,7 +608,7 @@ export default function ArtistPublic({
         </div>
 
         {/* NAVIGATION TABS (Composições vs Sobre o compositor) */}
-        <div className="w-full mb-6 relative z-10 select-none">
+        <div className="hidden md:block w-full mb-6 relative z-10 select-none">
           <div className="flex items-center gap-6 border-b border-zinc-900/60 pb-[1px] text-left">
             <button 
               onClick={() => setActiveTab('composicoes')}
@@ -508,20 +662,30 @@ export default function ArtistPublic({
             <div className="space-y-5 animate-fade-in flex flex-col w-full text-left">
               
               {/* Confidenciality alert header bar */}
-              <div className="py-3 px-4 bg-zinc-900/10 border border-zinc-900 rounded-xl flex items-center justify-center gap-2.5 text-zinc-400 text-xs text-center select-none">
+              <div className="hidden md:flex py-3 px-4 bg-zinc-900/10 border border-zinc-900 rounded-xl items-center justify-center gap-2.5 text-zinc-400 text-xs text-center select-none">
                 <svg className="w-4.5 h-4.5 text-[#d4af37] shrink-0 fill-[#d4af37]/5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.224 4.074 9.5 9.166 10.701a1 1 0 00.334-1.932C7.07 14.773 4 11.238 4 7c0-.528.03-1.049.09-1.56A13.914 13.914 0 0011 3.104a13.914 13.914 0 006.91 2.336c.06.51.09 1.032.09 1.56 0 4.238-3.07 7.773-7.5 8.769a1 1 0 10.334 1.932C15.926 16.5 20 12.224 20 7c0-.681-.056-1.351-.166-2A11.954 11.954 0 0110 1.944z" clipRule="evenodd"/>
                 </svg>
-                <span className="font-mono text-[10px] tracking-wider uppercase font-bold text-zinc-400">Repositório musical privado — acesso exclusivo de contratantes</span>
+                <span className="font-mono text-[10px] tracking-wider uppercase font-bold text-zinc-400">{artist.customNoticeText || "Repositório musical privado — acesso exclusivo de contratantes"}</span>
+              </div>
+
+              {/* Mobile-optimized Header matching the screenshot */}
+              <div className="md:hidden flex items-center gap-2.5 pb-2 border-b border-zinc-900/40 mb-1 select-none text-left">
+                <svg className="w-4.5 h-4.5 text-[#d4af37] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <h3 className="font-heading font-black text-[13px] tracking-widest uppercase text-[#d4af37] pt-0.5">
+                  MÚSICAS
+                </h3>
               </div>
               
               {/* Table List Layout Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-900/60 pb-3 select-none">
+              <div className="hidden md:flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-900/60 pb-3 select-none">
                 <div className="text-left">
                   <h3 className="font-heading font-black text-xl tracking-wide uppercase text-zinc-150">
-                    Composições disponíveis
+                    {artist.customSongsListTitle || "Composições disponíveis"}
                   </h3>
-                  <p className="text-zinc-500 text-[10px] sm:text-xs">Para ouvir, clique no botão play ou selecione a música diretamente.</p>
+                  <p className="text-zinc-500 text-[10px] sm:text-xs">{artist.customSongsListSubtitle || "Para ouvir, clique no botão play ou selecione a música diretamente."}</p>
                 </div>
 
                 {tracks.length > 0 && (
@@ -546,22 +710,28 @@ export default function ArtistPublic({
                 </div>
               )}
 
+              {copiedLinkAlert && (
+                <div className="p-2.5 bg-amber-500/10 border border-[#d4af37]/30 text-[#d4af37] text-[10.5px] font-mono rounded-xl text-center font-bold animate-pulse mb-3">
+                  🔗 Link do perfil copiado com sucesso! Pronto para colar e enviar.
+                </div>
+              )}
+
               {tracks.length === 0 ? (
-                <div className="text-center py-16 bg-[#050609]/40 border border-dashed border-zinc-900 rounded-3xl text-zinc-500 text-xs font-mono select-none">
+                <div className="text-center py-16 bg-[#050609]/40 border border-[#d4af37]/15 rounded-3xl text-zinc-500 text-xs font-mono select-none">
                   Nenhuma guia ou composição foi disponibilizada pelo artista ainda.
                 </div>
               ) : (
                 /* List table structure of tracks precisely matching Image 1 styling */
-                <div id="pub-tracks-list" className="border border-zinc-900 rounded-2xl bg-[#050609]/20 overflow-hidden text-left flex flex-col">
+                <div id="pub-tracks-list" className="border border-zinc-800/60 rounded-3xl bg-[#090b11]/50 backdrop-blur-md overflow-hidden text-left flex flex-col shadow-[0_10px_25px_rgba(0,0,0,0.45)]">
                   
                   {/* Table Column headers (Desktop only) */}
-                  <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-4 bg-[#050609]/80 border-b border-zinc-905 text-[9px] font-mono uppercase tracking-widest text-zinc-500 font-black select-none font-bold">
+                  <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-4.5 bg-[#0e111a]/80 border-b border-zinc-800/80 text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-extrabold select-none">
                     <div className="col-span-1">#</div>
                     <div className="col-span-6">MÚSICA</div>
                     <div className="col-span-3">GÊNERO</div>
                     <div className="col-span-2 text-right">DURAÇÃO</div>
                   </div>
-
+ 
                   {/* Rows iteration */}
                   {tracks.map((track, idx) => {
                     const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
@@ -574,18 +744,117 @@ export default function ArtistPublic({
                     const durationText = mockDurations[idx % mockDurations.length];
 
                     return (
-                      <div key={track.trackId} className="flex flex-col w-full">
+                      <div key={track.trackId} className="flex flex-col w-full border-b last:border-b-0 border-zinc-800/40">
+                        
+                        {/* MOBILE LIST ITEM ROW - EXACT MATCH FOR THE USER SCREENSHOT */}
                         <div 
-                          onClick={() => onSelectTrack(track, tracks)}
-                          className={`grid grid-cols-12 gap-2 sm:gap-4 px-4 py-3 sm:px-6 sm:py-4 items-center justify-between border-b last:border-b-0 border-zinc-900/40 cursor-pointer hover:bg-zinc-900/30 transition-all select-none ${
-                            isCurrentlyPlaying ? 'bg-amber-500/5' : ''
+                          onClick={() => {
+                            if (isCurrentlyPlaying) {
+                              onPlayPause();
+                            } else {
+                              onSelectTrack(track, tracks);
+                            }
+                          }}
+                          className={`flex sm:hidden items-center justify-between gap-3 p-3.5 cursor-pointer transition-all select-none border-l-[3px] ${
+                            isCurrentlyPlaying 
+                              ? 'bg-[#0c0f19]/80 border-l-[#d4af37]' 
+                              : 'border-l-transparent'
                           }`}
                         >
-                          {/* Col L1: Numerical index indicator OR custom Play Sphere */}
-                          <div className="col-span-2 sm:col-span-1 flex items-center gap-3.5 select-none">
-                            <span className="text-zinc-500 font-mono text-xs sm:text-sm hidden sm:inline select-none">
-                              {(idx + 1).toString().padStart(2, '0')}
-                            </span>
+                          {/* Left block with Play Circle, space, track number, title metadata */}
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            {/* Play Circle button formatted exact to image */}
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isCurrentlyPlaying) {
+                                  onPlayPause();
+                                } else {
+                                  onSelectTrack(track, tracks);
+                                }
+                              }}
+                              className={`w-11 h-11 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 border-2 ${
+                                isCurrentlyPlaying 
+                                  ? 'bg-[#0a0d16] border-emerald-500 text-emerald-400' 
+                                  : 'bg-transparent border-zinc-850 text-zinc-355 hover:scale-103'
+                              }`}
+                            >
+                              {isActiveAndPlaying ? (
+                                <Pause className="w-4 h-4 text-emerald-400 fill-emerald-400" />
+                              ) : (
+                                <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                              )}
+                            </button>
+
+                            {/* Numerical index next to circle, except for item 1 */}
+                            {idx > 0 && (
+                              <span className="font-mono text-zinc-500 text-xs font-bold w-4 text-center shrink-0">
+                                {idx + 1}
+                              </span>
+                            )}
+
+                            {/* Name Metadata */}
+                            <div className="min-w-0 text-left">
+                              <h4 className={`font-heading font-black text-sm tracking-tight uppercase truncate ${
+                                isCurrentlyPlaying ? 'text-[#d4af37]' : 'text-zinc-100'
+                              }`}>
+                                {track.title}
+                              </h4>
+                            </div>
+                          </div>
+
+                          {/* Right block with Micro green equalizer (if playing) and MoreVertical */}
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            {isActiveAndPlaying && (
+                              <div className="flex items-end gap-[1.5px] h-3 text-emerald-450 select-none mr-1.5 animate-pulse">
+                                <span className="w-[1.5px] bg-[#10b981] h-1.5 rounded-full animate-bar-1"></span>
+                                <span className="w-[1.5px] bg-[#10b981] h-3.5 rounded-full animate-bar-2"></span>
+                                <span className="w-[1.5px] bg-[#10b981] h-2.5 rounded-full animate-bar-3"></span>
+                              </div>
+                            )}
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleContactForTrack(track);
+                              }}
+                              className="p-1 text-zinc-550 hover:text-white transition-colors"
+                            >
+                              <MoreVertical className="w-4 h-4 shrink-0" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* DESKTOP LIST ITEM ROW - KEEPS ORIGINAL HIGH FIDELITY TABLE */}
+                        <div 
+                          onClick={() => {
+                            if (isCurrentlyPlaying) {
+                              onPlayPause();
+                            } else {
+                              onSelectTrack(track, tracks);
+                            }
+                          }}
+                          className={`hidden sm:grid grid-cols-12 gap-1 sm:gap-4 px-4 py-4 sm:px-6 sm:py-5 items-center justify-between cursor-pointer transition-all select-none border-l-[3px] ${
+                            isCurrentlyPlaying 
+                              ? 'bg-gradient-to-r from-[#d4af37]/8 via-[#d4af37]/2 to-transparent border-l-[#d4af37] shadow-[0_4px_15px_rgba(212,175,55,0.03)]' 
+                              : 'border-l-transparent hover:border-l-zinc-700/60 hover:bg-[#0c0f18]/30'
+                          }`}
+                        >
+                          {/* Col L1: Numerical index indicator OR custom Play/Wave Sphere */}
+                          <div className="col-span-2 sm:col-span-1 flex items-center gap-2 sm:gap-3.5 select-none">
+                            {isActiveAndPlaying ? (
+                              <div className="hidden sm:flex items-end gap-[2px] h-3.5 w-4 shrink-0 select-none mr-2">
+                                <span className="w-[2px] bg-[#d4af37] h-2.5 rounded-full animate-bar-1"></span>
+                                <span className="w-[2px] bg-[#d4af37] h-3.5 rounded-full animate-bar-2"></span>
+                                <span className="w-[2px] bg-[#d4af37] h-2.5 rounded-full animate-bar-3"></span>
+                                <span className="w-[2px] bg-[#d4af37] h-1.5 rounded-full animate-bar-4"></span>
+                              </div>
+                            ) : (
+                              <span className={`font-mono text-xs sm:text-sm hidden sm:inline select-none ${
+                                isCurrentlyPlaying ? 'text-[#d4af37] font-extrabold' : 'text-zinc-500 font-medium'
+                              }`}>
+                                {(idx + 1).toString().padStart(2, '0')}
+                              </span>
+                            )}
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -597,8 +866,8 @@ export default function ArtistPublic({
                               }}
                               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                                 isCurrentlyPlaying 
-                                  ? 'bg-amber-500 text-zinc-950 font-black shadow-md' 
-                                  : 'bg-zinc-900 border border-zinc-800 text-amber-500 hover:bg-zinc-800 hover:scale-105'
+                                  ? 'bg-[#d4af37] text-zinc-950 font-black shadow-[0_0_12px_rgba(212,175,55,0.3)] hover:scale-105' 
+                                  : 'bg-zinc-900 border border-zinc-850 text-amber-500 hover:scale-105'
                               }`}
                             >
                               {isActiveAndPlaying ? (
@@ -610,28 +879,35 @@ export default function ArtistPublic({
                           </div>
 
                           {/* Col L2: Name, Guia info metadata and plays/lyrics links */}
-                          <div className="col-span-7 sm:col-span-6 pr-2">
-                            <div className="space-y-0.5 leading-tight">
-                              <h4 className={`text-xs sm:text-sm font-bold tracking-tight uppercase truncate ${
-                                isCurrentlyPlaying ? 'text-[#d4af37]' : 'text-zinc-100 font-bold'
+                          <div className="col-span-8 sm:col-span-6 pr-2">
+                            <div className="space-y-1.5 leading-tight">
+                              <h4 className={`text-sm sm:text-base font-bold tracking-tight uppercase truncate ${
+                                isCurrentlyPlaying ? 'text-[#d4af37]' : 'text-zinc-100'
                               }`}>
                                 {track.title}
                               </h4>
-                              <p className="text-[10px] sm:text-xs text-zinc-550 truncate lowercase font-sans leading-none">
-                                guia: <strong className="text-zinc-400 font-semibold uppercase font-mono text-[9px]">{track.singer || artist.name}</strong> 
-                                {track.composer && <> • autor: <strong className="text-zinc-400 font-semibold uppercase font-mono text-[9px]">{track.composer}</strong></>}
+                              <p className="text-[10px] sm:text-xs text-zinc-500 truncate lowercase font-sans leading-none flex items-center gap-1.5 flex-wrap">
+                                <span>guia: <strong className="text-zinc-400 font-semibold uppercase font-mono text-[9.5px]">{track.singer || artist.name}</strong></span>
+                                {track.composer && (
+                                  <>
+                                    <span className="text-zinc-700">•</span>
+                                    <span>autor: <strong className="text-zinc-400 font-semibold uppercase font-mono text-[9.5px]">{track.composer}</strong></span>
+                                  </>
+                                )}
                               </p>
                               
                               {/* Lyrics drawer trigger badge */}
-                              <div className="flex items-center gap-2 pt-0.5 select-none">
+                              <div className="flex items-center gap-2 pt-1 select-none">
                                 {track.lyrics && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setExpandedLyricsTrackId(lyricsOpen ? null : track.trackId);
                                     }}
-                                    className={`text-[9.5px] font-mono tracking-widest uppercase font-black px-1.5 py-0.25 rounded cursor-pointer select-none transition-all ${
-                                      lyricsOpen ? 'bg-amber-550 text-zinc-950 font-extrabold shadow' : 'bg-amber-550/10 border border-amber-550/20 text-amber-400'
+                                    className={`text-[9.5px] font-mono tracking-widest uppercase font-black px-2 py-0.5 rounded-md cursor-pointer select-none transition-all ${
+                                      lyricsOpen 
+                                        ? 'bg-[#d4af37] text-zinc-950 font-extrabold shadow' 
+                                        : 'bg-[#d4af37]/8 border border-[#d4af37]/20 text-amber-400 hover:bg-[#d4af37]/20'
                                     }`}
                                   >
                                     Ver Letra
@@ -646,14 +922,14 @@ export default function ArtistPublic({
 
                           {/* Col L3: Genre tag (Desktop only) */}
                           <div className="col-span-3 hidden sm:block select-none">
-                            <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-850 text-zinc-[450] text-[10px] font-mono rounded font-semibold uppercase tracking-wider select-none">
+                            <span className="px-2.5 py-1 bg-[#d4af37]/8 border border-[#d4af37]/15 text-[#d4af37] text-[9.5px] font-mono rounded-full font-bold uppercase tracking-wider select-none">
                               {track.genre || artist.genre}
                             </span>
                           </div>
 
                           {/* Col L4: Duration & dynamic talk popup */}
-                          <div className="col-span-3 sm:col-span-2 text-right flex items-center justify-end gap-4 font-mono select-none">
-                            <span className="text-zinc-[#450] text-xs hidden sm:inline font-bold">
+                          <div className="col-span-2 sm:col-span-2 text-right flex items-center justify-end gap-2 sm:gap-4 font-mono select-none">
+                            <span className={`text-xs hidden sm:inline font-bold ${isCurrentlyPlaying ? 'text-[#d4af37]' : 'text-zinc-400'}`}>
                               {durationText}
                             </span>
                             
@@ -664,21 +940,21 @@ export default function ArtistPublic({
                                 e.stopPropagation();
                                 handleContactForTrack(track);
                               }}
-                              className="p-1.5 text-zinc-550 hover:bg-zinc-900 border border-transparent hover:border-zinc-850 rounded-lg group transition cursor-pointer select-none"
+                              className="p-1.5 text-zinc-550 hover:bg-zinc-900 border border-transparent hover:border-zinc-800 rounded-lg group transition cursor-pointer select-none"
                               title="Falar sobre esta composição"
                             >
                               <MessageSquare className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 stroke-[2.2]" />
                             </button>
                           </div>
                         </div>
-
+ 
                         {/* Inline Expandable lyrics space panel */}
                         {track.lyrics && lyricsOpen && (
                           <div 
                             onClick={(e) => e.stopPropagation()}
-                            className="p-4.5 bg-zinc-950 border-b border-t border-zinc-900 max-h-56 overflow-y-auto text-xs text-zinc-3 w-full leading-relaxed font-sans whitespace-pre-line text-left animate-fade-in relative shadow-inner select-text"
+                            className="p-5 bg-[#06080e]/65 border-b border-t border-zinc-800/40 max-h-56 overflow-y-auto text-xs text-zinc-3 w-full leading-relaxed font-sans whitespace-pre-line text-left animate-fade-in relative shadow-inner select-text"
                           >
-                            <div className="flex items-center justify-between border-b border-zinc-900 pb-2.5 mb-2.5 select-none text-left">
+                            <div className="flex items-center justify-between border-b border-zinc-800/40 pb-2.5 mb-2.5 select-none text-left">
                               <span className="text-[9px] font-mono tracking-widest text-[#d4af37] font-black uppercase">Letra Completa</span>
                               <button 
                                 onClick={() => setExpandedLyricsTrackId(null)}
@@ -700,20 +976,6 @@ export default function ArtistPublic({
 
         </section>
 
-        {/* Dynamic Partner Ad Banner for Free users at the very end */}
-        {currentPlan === 'free' && (
-          <div id="free-plan-ads-banner" className="max-w-md mx-auto px-4 mt-12 bg-zinc-900/10 border border-zinc-900/60 rounded-xl p-3.5 text-center opacity-70 hover:opacity-100 transition-opacity select-none relative z-10 w-full mb-4">
-            <div className="flex flex-col items-center gap-1.5 text-zinc-400 text-xs text-center">
-              <span className="px-1.5 py-0.5 bg-zinc-950 text-zinc-550 text-[8px] font-mono rounded font-semibold uppercase tracking-wider select-none border border-zinc-850/60">
-                Parceiro Soundrive
-              </span>
-              <p className="font-sans text-[10px] text-zinc-55 leading-relaxed">
-                Equipamentos de áudio profissionais e Guitarras Tagima na Strings — Cupom <strong>SOUND30</strong>.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Brand visual layout page footer */}
         <footer className="mt-16 border-t border-zinc-900/40 pt-4 text-center text-zinc-500 text-[10px] font-mono uppercase tracking-wider relative z-10 w-full select-none">
           <p>Soundrive © {new Date().getFullYear()} — Plataforma de Catálogos Verificados para Compositores</p>
@@ -721,6 +983,13 @@ export default function ArtistPublic({
         </footer>
 
       </main>
+
+      {copiedLinkAlert && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#d4af37] border border-amber-300 text-zinc-950 px-6 py-3 px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl shadow-[0_15px_30px_rgba(212,175,55,0.3)] animate-fade-in font-heading font-black text-xs uppercase tracking-widest flex items-center gap-2.5 select-none">
+          <span className="text-[14px]">🔗</span>
+          <span>LINK DO PERFIL COPIADO!</span>
+        </div>
+      )}
 
     </div>
   );

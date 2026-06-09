@@ -4,6 +4,9 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
+import createSubscriptionHandler from "./api/mercadopago/create-subscription";
+import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
 
 dotenv.config();
 
@@ -319,6 +322,42 @@ async function startServer() {
           status: s3HttpStatus
         }
       });
+    }
+  });
+
+  // API Route for Mercado Pago webhook integrations
+  app.post("/api/mercadopago-webhook", async (req, res) => {
+    try {
+      await mercadopagoWebhookHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in local mercadopago-webhook wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  // API Route for Mercado Pago subscription creation
+  app.post("/api/mercadopago/create-subscription", async (req, res) => {
+    try {
+      await createSubscriptionHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in local create-subscription wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  // API Route for Mercado Pago live status check and sync
+  app.post("/api/mercadopago/verify-subscription", async (req, res) => {
+    try {
+      await verifySubscriptionHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in local verify-subscription wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
     }
   });
 

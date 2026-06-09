@@ -90,6 +90,114 @@ export default function Dashboard({
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
 
+  // Composer Profile Customization States
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profName, setProfName] = useState('');
+  const [profEmail, setProfEmail] = useState('');
+  const [profWhatsapp, setProfWhatsapp] = useState('');
+  const [profInstagram, setProfInstagram] = useState('');
+  const [profBio, setProfBio] = useState('');
+  const [profGenre, setProfGenre] = useState('');
+  const [profCity, setProfCity] = useState('');
+  const [profState, setProfState] = useState('');
+  const [profAvatarUrl, setProfAvatarUrl] = useState('');
+  const [profAvatarFile, setProfAvatarFile] = useState<File | null>(null);
+  const [profError, setProfError] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Custom public page text states
+  const [profCustomBadgeText, setProfCustomBadgeText] = useState('');
+  const [profCustomContactLabel, setProfCustomContactLabel] = useState('');
+  const [profCustomShareLabel, setProfCustomShareLabel] = useState('');
+  const [profCustomRightBadgeTitle, setProfCustomRightBadgeTitle] = useState('');
+  const [profCustomRightBadgeStatus, setProfCustomRightBadgeStatus] = useState('');
+  const [profCustomRightBadgeDescription, setProfCustomRightBadgeDescription] = useState('');
+  const [profCustomNoticeText, setProfCustomNoticeText] = useState('');
+  const [profCustomSongsListTitle, setProfCustomSongsListTitle] = useState('');
+  const [profCustomSongsListSubtitle, setProfCustomSongsListSubtitle] = useState('');
+
+  const handleOpenProfileModal = () => {
+    setProfName(profile.name || '');
+    setProfEmail(profile.email || '');
+    setProfWhatsapp(profile.whatsapp || profile.phone || '');
+    setProfInstagram(profile.instagram || '');
+    setProfBio(profile.bio || '');
+    setProfGenre(profile.genre || profile.mainGenre || '');
+    setProfCity(profile.city || '');
+    setProfState(profile.state || '');
+    setProfAvatarUrl(profile.avatarUrl || '');
+    setProfAvatarFile(null);
+    setProfError('');
+
+    // Custom texts
+    setProfCustomBadgeText(profile.customBadgeText || '');
+    setProfCustomContactLabel(profile.customContactLabel || '');
+    setProfCustomShareLabel(profile.customShareLabel || '');
+    setProfCustomRightBadgeTitle(profile.customRightBadgeTitle || '');
+    setProfCustomRightBadgeStatus(profile.customRightBadgeStatus || '');
+    setProfCustomRightBadgeDescription(profile.customRightBadgeDescription || '');
+    setProfCustomNoticeText(profile.customNoticeText || '');
+    setProfCustomSongsListTitle(profile.customSongsListTitle || '');
+    setProfCustomSongsListSubtitle(profile.customSongsListSubtitle || '');
+
+    setShowProfileModal(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profName.trim()) {
+      setProfError('O nome artístico é de preenchimento obrigatório.');
+      return;
+    }
+    if (!profEmail.trim()) {
+      setProfError('O e-mail é de preenchimento obrigatório.');
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+      setProfError('');
+
+      let avatarUrl = profAvatarUrl;
+      if (profAvatarFile) {
+        // Upload the avatar as 'cover' since it is an image
+        avatarUrl = await dbService.uploadFile(profile.userId, profAvatarFile, 'cover');
+      }
+
+      const updatedProfile = dbService.updateArtistProfile(profile.userId, {
+        name: profName.trim(),
+        email: profEmail.trim(),
+        whatsapp: profWhatsapp.trim(),
+        phone: profWhatsapp.trim(),
+        instagram: profInstagram.trim(),
+        bio: profBio.trim(),
+        genre: profGenre.trim(),
+        city: profCity.trim(),
+        state: profState.trim().toUpperCase().slice(0, 2),
+        avatarUrl: avatarUrl,
+        
+        customBadgeText: profCustomBadgeText.trim(),
+        customContactLabel: profCustomContactLabel.trim(),
+        customShareLabel: profCustomShareLabel.trim(),
+        customRightBadgeTitle: profCustomRightBadgeTitle.trim(),
+        customRightBadgeStatus: profCustomRightBadgeStatus.trim(),
+        customRightBadgeDescription: profCustomRightBadgeDescription.trim(),
+        customNoticeText: profCustomNoticeText.trim(),
+        customSongsListTitle: profCustomSongsListTitle.trim(),
+        customSongsListSubtitle: profCustomSongsListSubtitle.trim()
+      });
+
+      setProfile(updatedProfile);
+      setShowProfileModal(false);
+      refreshData();
+    } catch (err: any) {
+      console.error("Error saving profile:", err);
+      setProfError(err.message || 'Erro ao salvar alterações no seu perfil.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   // Load tracks & analytics
   const refreshData = () => {
     const artistData = dbService.getArtist(currentUser.userId) || currentUser;
@@ -707,6 +815,15 @@ export default function Dashboard({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <button 
+              id="edit-profile-btn"
+              onClick={handleOpenProfileModal}
+              className="px-4.5 py-3 bg-gradient-to-r from-orange-600/10 to-yellow-500/10 hover:from-orange-600/20 hover:to-yellow-500/20 border border-orange-500/30 hover:border-orange-500/50 text-[#d4af37] hover:text-white rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition hover:scale-102"
+              title="Personalizar seu perfil de compositor"
+            >
+              <User className="w-4 h-4 text-orange-400" /> Personalizar Perfil
+            </button>
+
             <button 
               id="view-catalog-btn"
               onClick={() => onNavigate('public', { id: profile.userId })}
@@ -1493,6 +1610,366 @@ export default function Dashboard({
           onClose={() => setShowPlans(false)} 
           onRefreshProfile={refreshData}
         />
+      )}
+
+      {/* OVERLAY: EDIT PROFILE / PERSONALIZAR PERFIL MODAL */}
+      {showProfileModal && (
+        <div id="edit-profile-modal-overlay" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
+            
+            {isSavingProfile && (
+              <div className="absolute inset-0 z-30 bg-slate-950/95 rounded-3xl backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 rounded-full border-4 border-orange-500/20 animate-pulse"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-t-orange-500 animate-spin"></div>
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-heading font-black tracking-wide text-white uppercase">Sincronizando Perfil</h4>
+                  <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                    Armazenando seus dados artísticos, endereço de contato e biografia no banco corporativo Soundrive...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+              <div className="space-y-1">
+                <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                  <User className="w-5 h-5 text-orange-400" /> Personalizar Meu Perfil
+                </h3>
+                <p className="text-xs text-slate-400">Configure sua identidade musical, links de redes e contato para os contratantes.</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowProfileModal(false)}
+                className="text-slate-400 hover:text-white transition cursor-pointer text-xs font-bold uppercase btn-close-modal"
+              >
+                Fechar
+              </button>
+            </div>
+
+            {profError && (
+              <div id="profile-form-error-msg" className="p-3 bg-red-955 border border-red-500/40 text-red-200 text-xs font-mono rounded-xl text-center">
+                {profError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="space-y-6">
+              
+              {/* Profile Avatar / Photo Section */}
+              <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl space-y-3">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block">1. Foto do Perfil ou Logomarca</label>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* Avatar preview */}
+                  <div className="w-20 h-20 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 relative group">
+                    {profAvatarFile ? (
+                      <img 
+                        src={URL.createObjectURL(profAvatarFile)} 
+                        alt="Avatar Preview" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : profAvatarUrl ? (
+                      <img 
+                        src={profAvatarUrl} 
+                        alt="Avatar" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <Disc className="w-8 h-8 text-[#d4af37] animate-spin-slow" />
+                    )}
+                  </div>
+                  
+                  {/* Upload controls */}
+                  <div className="space-y-2 flex-1 w-full">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label 
+                        htmlFor="avatar-file-upload"
+                        className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-850 rounded-xl text-xs font-mono font-bold text-slate-205 cursor-pointer flex items-center gap-2 transition"
+                      >
+                        <UploadCloud className="w-4 h-4 text-orange-400" />
+                        Escolher Foto
+                      </label>
+                      <input 
+                        id="avatar-file-upload"
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => setProfAvatarFile(e.target.files?.[0] || null)}
+                        className="hidden" 
+                      />
+                      
+                      {profAvatarFile && (
+                        <span className="text-[11px] font-mono font-bold text-emerald-400 shrink-0 truncate max-w-[180px]">
+                          ✓ {profAvatarFile.name}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-mono text-slate-500 block">Ou cole um Link URL direto para sua foto:</span>
+                      <input 
+                        type="url" 
+                        placeholder="https://exemplo.com/suafoto.jpg"
+                        value={profAvatarUrl}
+                        onChange={(e) => setProfAvatarUrl(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-850 rounded-lg text-xs placeholder-slate-600 focus:border-orange-500 outline-none text-white font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid: Name & Email */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome Artístico / Compositor *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Mateus Costa"
+                    value={profName}
+                    onChange={(e) => setProfName(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">E-mail Comercial (Editável) *</label>
+                  <input 
+                    type="email" 
+                    placeholder="Ex: contato@compositor.com.br"
+                    value={profEmail}
+                    onChange={(e) => setProfEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Grid: WhatsApp & Instagram */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">WhatsApp para Contato / Negociação</label>
+                  <input 
+                    type="tel" 
+                    placeholder="Ex: 5562999999999"
+                    value={profWhatsapp}
+                    onChange={(e) => setProfWhatsapp(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-mono"
+                  />
+                  <span className="text-[9px] text-slate-500 font-mono italic block">Com DDD e código do país (somente números. ex: 5562900000000)</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Usuário do Instagram (Opcional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: @mateuscoficial"
+                    value={profInstagram}
+                    onChange={(e) => setProfInstagram(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Grid: Genre & City / State */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1 md:col-span-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Gênero Principal</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Sertanejo Universitário"
+                    value={profGenre}
+                    onChange={(e) => setProfGenre(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1 md:col-span-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Cidade</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Goiânia"
+                    value={profCity}
+                    onChange={(e) => setProfCity(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1 md:col-span-1">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estado (UF)</label>
+                  <input 
+                    type="text" 
+                    maxLength={2}
+                    placeholder="Ex: GO"
+                    value={profState}
+                    onChange={(e) => setProfState(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-mono uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Description bio / Histórico */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Sobre o Compositor e Suas Músicas (Biografia)</label>
+                <textarea 
+                  placeholder="Ex: Escrevo composições focadas em música sertaneja romântica e arrocha há mais de 8 anos. Meu catálogo possui guias completas com voz refinada e ótima estrutura de refrão prontos para gravação por duplas experientes ou novos talentos."
+                  value={profBio}
+                  onChange={(e) => setProfBio(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition leading-relaxed resize-none"
+                ></textarea>
+                <p className="text-[9.5px] text-slate-500 font-mono">Esse texto é exibido publicamente na aba "Sobre o compositor" para os visitantes.</p>
+              </div>
+
+              {/* Custom Catalog Texts Section */}
+              <div className="border border-slate-800/80 bg-slate-900/30 p-4.5 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-850/60 pb-2.5">
+                  <div className="w-6.5 h-6.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <h4 className="text-[11px] min-[360px]:text-[11.5px] font-mono tracking-wider font-extrabold text-white uppercase leading-none">Personalizar Rótulos e Textos</h4>
+                    <p className="text-[9.5px] text-slate-500 mt-0.5">Altere os termos e títulos exibidos na sua página pública de compositor.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                  {/* Badge Text */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Texto do Selo Superior</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Catálogo Verificado"
+                      value={profCustomBadgeText}
+                      onChange={(e) => setProfCustomBadgeText(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Notice text bar */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Faixa de Aviso Secundário</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Repositório musical privado..."
+                      value={profCustomNoticeText}
+                      onChange={(e) => setProfCustomNoticeText(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Contact button label */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Botão de Contato</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Contato"
+                      value={profCustomContactLabel}
+                      onChange={(e) => setProfCustomContactLabel(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Share button label */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Botão Compartilhar</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Compartilhar"
+                      value={profCustomShareLabel}
+                      onChange={(e) => setProfCustomShareLabel(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Right side badge title */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Cartão Lateral - Título</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Autor Verificado"
+                      value={profCustomRightBadgeTitle}
+                      onChange={(e) => setProfCustomRightBadgeTitle(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Right side badge status */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Cartão Lateral - Status</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Seguro"
+                      value={profCustomRightBadgeStatus}
+                      onChange={(e) => setProfCustomRightBadgeStatus(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Right side badge description */}
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Cartão Lateral - Descrição das Obras</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Obras registradas e 100% protegidas legalmente."
+                      value={profCustomRightBadgeDescription}
+                      onChange={(e) => setProfCustomRightBadgeDescription(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Songs list title */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Título da Tabela de Músicas</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Composições disponíveis"
+                      value={profCustomSongsListTitle}
+                      onChange={(e) => setProfCustomSongsListTitle(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+
+                  {/* Songs list subtitle */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] min-[360px]:text-[9.5px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Instrução da Tabela de Músicas</label>
+                    <input 
+                      type="text" 
+                      placeholder="Padrão: Para ouvir, clique no botão play..."
+                      value={profCustomSongsListSubtitle}
+                      onChange={(e) => setProfCustomSongsListSubtitle(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800/80 rounded-xl text-xs focus:border-emerald-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
+                <button 
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="px-4.5 py-3 bg-slate-950 text-slate-400 hover:text-white text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  id="submit-profile-customizations"
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-yellow-500 hover:from-emerald-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-emerald-500/10 cursor-pointer select-none transition hover:scale-102"
+                >
+                  Confirmar e Salvar Perfil
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
       )}
 
     </div>

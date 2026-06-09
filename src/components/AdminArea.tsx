@@ -28,6 +28,8 @@ import {
 import { Artist } from '../types';
 import { dbService } from '../lib/db';
 import { motion } from 'motion/react';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface AdminAreaProps {
   currentUser: Artist;
@@ -40,8 +42,23 @@ export default function AdminArea({
   onLogout,
   onNavigate
 }: AdminAreaProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago'>('dashboard');
   const [users, setUsers] = useState<Artist[]>([]);
+  
+  // Mercado Pago automatic subscriptions list states
+  const [mpSubscriptions, setMpSubscriptions] = useState<any[]>([]);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [subscriptionSearch, setSubscriptionSearch] = useState('');
+  const [selectedSub, setSelectedSub] = useState<any | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  // Edit Subscription form states
+  const [editSubEmail, setEditSubEmail] = useState('');
+  const [editSubPlan, setEditSubPlan] = useState<'free' | 'pro' | 'premium'>('pro');
+  const [editSubCycle, setEditSubCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [editSubStatus, setEditSubStatus] = useState('authorized');
+  const [editSubUserId, setEditSubUserId] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -116,10 +133,131 @@ export default function AdminArea({
     }
   };
 
+  const loadSubscriptions = async () => {
+    setLoadingSubscriptions(true);
+    try {
+      const snap = await getDocs(collection(db, 'mp_subscriptions'));
+      const list: any[] = [];
+      snap.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => {
+        const timeA = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : new Date(a.updatedAt || a.paidAt || 0).getTime();
+        const timeB = b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : new Date(b.updatedAt || b.paidAt || 0).getTime();
+        return timeB - timeA;
+      });
+      setMpSubscriptions(list);
+    } catch (err) {
+      console.error("Error loading subscriptions:", err);
+      handleFirestoreError(err, OperationType.GET, 'mp_subscriptions');
+    } finally {
+      setLoadingSubscriptions(false);
+    }
+  };
+
+  const handleVerifySubscription = async (id: string) => {
+    setVerifyingId(id);
+    try {
+      const response = await fetch('/api/mercadopago/verify-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao verificar status.");
+      }
+      triggerNotification(data.message || "Status sincronizado atualizado com sucesso!");
+      loadSubscriptions();
+    } catch (err: any) {
+      console.error("[Verify Action Error]:", err);
+      triggerNotification("Erro ao reconsultar Mercado Pago: " + (err.message || String(err)), true);
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
+  const handleSaveSubEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editSubUserId) {
+      triggerNotification("O ID do usuário (UID) é obrigatório.", true);
+      return;
+    }
+
+    try {
+      const limit = editSubPlan === 'premium' ? 50 : (editSubPlan === 'pro' ? 15 : 5);
+      const isNowActive = editSubStatus === 'authorized' || editSubStatus === 'approved' || editSubStatus === 'active';
+      const actualPlan = isNowActive ? editSubPlan : 'free';
+      const actualLimit = isNowActive ? limit : 5;
+      const paymentStatus = isNowActive ? 'active' : 'inactive';
+      
+      const activatedAt = new Date();
+      const expiresAt = new Date();
+      if (editSubCycle === 'yearly') {
+        expiresAt.setFullYear(activatedAt.getFullYear() + 1);
+      } else {
+        expiresAt.setDate(activatedAt.getDate() + 31);
+      }
+
+      const activatedStr = activatedAt.toISOString();
+      const expiresStr = expiresAt.toISOString();
+
+      const userPayload = {
+        plan: actualPlan,
+        billingCycle: editSubCycle === 'yearly' ? 'annual' : 'monthly',
+        musicLimit: actualLimit,
+        subscriptionStatus: isNowActive ? 'ativo' : 'cancelado',
+        paymentStatus: paymentStatus,
+        accessType: isNowActive ? 'subscriber' : 'free',
+        mercadoPagoSubscriptionId: selectedSub.subscriptionId || selectedSub.id,
+        mercadoPagoPaymentId: selectedSub.paymentId || selectedSub.id,
+        planActivatedAt: isNowActive ? activatedStr : null,
+        planExpiresAt: isNowActive ? expiresStr : null,
+        subscriptionStartedAt: isNowActive ? activatedStr : null,
+        subscriptionEndsAt: isNowActive ? expiresStr : null,
+        updatedAt: activatedStr
+      };
+
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', editSubUserId), userPayload, { merge: true });
+      await setDoc(doc(db, 'artists', editSubUserId), userPayload, { merge: true });
+
+      await setDoc(doc(db, 'mp_subscriptions', selectedSub.id), {
+        id: selectedSub.id,
+        userId: editSubUserId,
+        email: editSubEmail,
+        plan: actualPlan,
+        billingCycle: editSubCycle === 'yearly' ? 'annual' : 'monthly',
+        status: editSubStatus,
+        paymentId: selectedSub.paymentId || "",
+        subscriptionId: selectedSub.subscriptionId || "",
+        musicLimit: actualLimit,
+        paidAt: activatedStr,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      triggerNotification("Assinatura e plano do usuário sincronizados com sucesso!");
+      setSelectedSub(null);
+      loadSubscriptions();
+    } catch (err: any) {
+      console.error("Error saving subscription manual edit:", err);
+      triggerNotification("Erro ao atualizar dados: " + (err.message || String(err)), true);
+      handleFirestoreError(err, OperationType.WRITE, `mp_subscriptions/${selectedSub?.id}`);
+    }
+  };
+
   useEffect(() => {
     loadData();
     loadPaymentSettings();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'mercadopago') {
+      loadSubscriptions();
+    }
+  }, [activeTab]);
 
   const handleSavePaymentSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -399,6 +537,15 @@ export default function AdminArea({
               <div className="flex items-center space-x-3">
                 <CreditCard className="h-4 w-4" />
                 <span>Configurações de Pagamento</span>
+              </div>
+            </button>
+            <button
+              onClick={() => { setActiveTab('mercadopago'); setSelectedUser(null); }}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium transition ${activeTab === 'mercadopago' ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/5 text-orange-500 border-l-4 border-orange-500' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+            >
+              <div className="flex items-center space-x-3">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Assinaturas Mercado Pago</span>
               </div>
             </button>
             <button
@@ -1146,11 +1293,11 @@ export default function AdminArea({
               </div>
 
               {/* Information / Instruction Alert Box */}
-              <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-start space-x-3">
-                <Info className="h-5 w-5 text-orange-550 shrink-0 mt-0.5" />
-                <div className="text-xs text-orange-200 leading-relaxed">
-                  <span className="font-bold block text-white mb-0.5">Observação de Processamento:</span>
-                  Após o pagamento no Mercado Pago, confirme manualmente o plano do usuário na área de <strong>Gerenciar Usuários</strong> deste painel admin. O Soundrive não ativa os acessos de forma automatizada por enquanto.
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div className="text-xs text-emerald-255 leading-relaxed">
+                  <span className="font-bold block text-white mb-0.5">Integração Automática Ativa:</span>
+                  O Soundrive agora conta com liberação instantânea e automática de assinaturas via webhooks do Mercado Pago! Configure seus links de pagamento abaixo e o sistema atualizará os planos de forma 100% automatizada. Use a aba <strong>Assinaturas Mercado Pago</strong> na barra lateral para acompanhar o histórico e efetuar ações manuais se necessário.
                 </div>
               </div>
 
@@ -1365,6 +1512,266 @@ export default function AdminArea({
                 </button>
               </div>
 
+            </div>
+          )}
+
+          {/* TAB: MERCADO PAGO SUBSCRIPTIONS VIEW */}
+          {activeTab === 'mercadopago' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6 animate-fade-in text-white">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center">
+                    <ShieldCheck className="h-5 w-5 text-orange-500 mr-2" />
+                    Assinaturas Mercado Pago
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Lista de transações e assinaturas automatizadas processadas via Webhook do Mercado Pago.
+                  </p>
+                </div>
+                <button
+                  onClick={loadSubscriptions}
+                  disabled={loadingSubscriptions}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl font-bold transition flex items-center text-xs shrink-0 self-start sm:self-center"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 text-orange-500 mr-2 ${loadingSubscriptions ? 'animate-spin' : ''}`} />
+                  Recarregar
+                </button>
+              </div>
+
+              {/* SEARCH FILTERS */}
+              <div className="flex items-center bg-slate-950 px-4 py-3 rounded-2xl border border-slate-850">
+                <Search className="h-4 w-4 text-slate-500 mr-2 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Buscar por e-mail, plano ou status..."
+                  value={subscriptionSearch}
+                  onChange={(e) => setSubscriptionSearch(e.target.value)}
+                  className="w-full bg-transparent border-none text-slate-200 text-xs focus:ring-0 outline-none placeholder:text-slate-500"
+                />
+                {subscriptionSearch && (
+                  <button onClick={() => setSubscriptionSearch('')} className="text-xs text-slate-500 hover:text-white px-1">
+                    Limpar
+                  </button>
+                )}
+              </div>
+
+              {loadingSubscriptions ? (
+                <div className="py-16 text-center text-slate-500 text-sm flex flex-col items-center justify-center space-y-2">
+                  <RefreshCw className="h-6 w-6 text-orange-500 animate-spin" />
+                  <span>Carregando dados das assinaturas...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-850">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950/60 border-b border-slate-850 text-slate-400 text-[10px] font-bold tracking-wider uppercase">
+                        <th className="p-4">E-mail do Usuário</th>
+                        <th className="p-4">Plano</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4">Data do Pagamento</th>
+                        <th className="p-4">ID Assinatura / Pagamento</th>
+                        <th className="p-4 text-right">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850/60 text-xs">
+                      {mpSubscriptions.filter(sub => {
+                        const mSearch = subscriptionSearch.toLowerCase().trim();
+                        if (!mSearch) return true;
+                        return (sub.email || '').toLowerCase().includes(mSearch) ||
+                               (sub.plan || '').toLowerCase().includes(mSearch) ||
+                               (sub.status || '').toLowerCase().includes(mSearch);
+                      }).length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-500 text-xs">
+                            Nenhuma assinatura ou pagamento verificado via webhook.
+                          </td>
+                        </tr>
+                      ) : (
+                        mpSubscriptions.filter(sub => {
+                          const mSearch = subscriptionSearch.toLowerCase().trim();
+                          if (!mSearch) return true;
+                          return (sub.email || '').toLowerCase().includes(mSearch) ||
+                                 (sub.plan || '').toLowerCase().includes(mSearch) ||
+                                 (sub.status || '').toLowerCase().includes(mSearch);
+                        }).map((sub) => {
+                          const isNowActive = sub.status === 'authorized' || sub.status === 'approved' || sub.status === 'active';
+                          const planLabel = sub.plan === 'premium' ? 'Premium' : (sub.plan === 'pro' ? 'Pro' : 'Grátis');
+                          const cycleLabel = sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'Anual' : 'Mensal';
+                          const paidDate = sub.paidAt ? new Date(sub.paidAt).toLocaleDateString('pt-BR') : '-';
+
+                          return (
+                            <tr key={sub.id} className="hover:bg-slate-950/20 transition-colors">
+                              <td className="p-4 font-medium text-slate-100 flex flex-col">
+                                <span>{sub.email}</span>
+                                <span className="text-[10px] text-slate-500 font-mono select-all">UID: {sub.userId || 'Não Associado'}</span>
+                              </td>
+                              <td className="p-4">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] border tracking-wide uppercase ${sub.plan === 'premium' ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                                  {planLabel} ({cycleLabel})
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[9px] border tracking-wider uppercase ${isNowActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                                  ● {sub.status}
+                                </span>
+                              </td>
+                              <td className="p-4 text-slate-300">
+                                {paidDate}
+                              </td>
+                              <td className="p-4 font-mono text-[10px] text-slate-400">
+                                <div className="space-y-0.5">
+                                  {sub.subscriptionId && <p><span className="text-slate-650">Sub ID:</span> {sub.subscriptionId}</p>}
+                                  {sub.paymentId && <p><span className="text-slate-650">Pay ID:</span> {sub.paymentId}</p>}
+                                  {!sub.subscriptionId && !sub.paymentId && <p><span className="text-slate-650">Tx ID:</span> {sub.id}</p>}
+                                </div>
+                              </td>
+                              <td className="p-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleVerifySubscription(sub.id)}
+                                    disabled={verifyingId !== null}
+                                    className="px-3 py-1.5 bg-orange-600/10 hover:bg-orange-600 border border-orange-500/15 hover:border-orange-500 text-orange-400 hover:text-slate-950 font-bold rounded-lg transition text-[11px] disabled:opacity-50 flex items-center gap-1 cursor-pointer select-none"
+                                  >
+                                    <RefreshCw className={`h-3 w-3 ${verifyingId === sub.id ? 'animate-spin' : ''}`} />
+                                    {verifyingId === sub.id ? 'Sincronizando...' : 'Verificar agora'}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedSub(sub);
+                                      setEditSubEmail(sub.email || '');
+                                      setEditSubPlan(sub.plan || 'pro');
+                                      setEditSubCycle(sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'yearly' : 'monthly');
+                                      setEditSubStatus(sub.status || 'authorized');
+                                      setEditSubUserId(sub.userId === 'unknown' ? '' : (sub.userId || ''));
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-755 hover:text-white text-[11px] font-bold text-slate-200 rounded-lg transition font-sans cursor-pointer select-none"
+                                  >
+                                    Editar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* MANUAL ACTION INFORMATION MODAL */}
+              {selectedSub && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-6 text-slate-200 text-left font-sans"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div>
+                        <h4 className="font-bold text-base text-white">Sincronização Manual</h4>
+                        <p className="text-[10px] text-slate-400 font-mono">ID MP: {selectedSub.id}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedSub(null)}
+                        className="text-slate-400 hover:text-white font-mono text-lg"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveSubEdit} className="space-y-4">
+                      {/* USER EMAIL */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-300 font-semibold">E-mail do Assinante</label>
+                        <input
+                          type="email"
+                          required
+                          value={editSubEmail}
+                          onChange={(e) => setEditSubEmail(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-955 border border-slate-850 hover:border-slate-750 focus:border-orange-500 outline-none rounded-xl text-xs text-white"
+                        />
+                      </div>
+
+                      {/* USER ID (UID) */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-300 font-semibold flex items-center justify-between">
+                          <span>User ID (Firebase UID)</span>
+                          <span className="text-[9px] text-orange-500 font-normal">Necessário para liberar plano</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Digite o UID do usuário"
+                          value={editSubUserId}
+                          onChange={(e) => setEditSubUserId(e.target.value.trim())}
+                          className="w-full px-3 py-2 bg-slate-955 border border-slate-850 hover:border-slate-750 focus:border-orange-500 outline-none rounded-xl text-xs text-white font-mono"
+                        />
+                        <p className="text-[10px] text-slate-500">Dica: Procure o UID na aba <strong>Gerenciar Usuários</strong>.</p>
+                      </div>
+
+                      {/* PLAN KEY */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-300 font-semibold">Plano</label>
+                          <select
+                            value={editSubPlan}
+                            onChange={(e: any) => setEditSubPlan(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-955 border border-slate-850 hover:border-slate-750 focus:border-orange-500 outline-none rounded-xl text-xs text-white"
+                          >
+                            <option value="pro">Pro (15 músicas)</option>
+                            <option value="premium">Premium (50 músicas)</option>
+                            <option value="free">Free (5 músicas)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-300 font-semibold">Faturamento</label>
+                          <select
+                            value={editSubCycle}
+                            onChange={(e: any) => setEditSubCycle(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-955 border border-slate-850 hover:border-slate-750 focus:border-orange-500 outline-none rounded-xl text-xs text-white"
+                          >
+                            <option value="monthly">Mensal</option>
+                            <option value="yearly">Anual</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* STATUS */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-300 font-semibold">Status do Mercado Pago</label>
+                        <select
+                          value={editSubStatus}
+                          onChange={(e) => setEditSubStatus(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-955 border border-slate-850 hover:border-slate-750 focus:border-orange-500 outline-none rounded-xl text-xs text-white"
+                        >
+                          <option value="authorized">authorized (Ativa e Autorizada)</option>
+                          <option value="approved">approved (Aprovado)</option>
+                          <option value="pending">pending (Pendente)</option>
+                          <option value="cancelled">cancelled (Cancelada/Inativa)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex gap-3 justify-end pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSub(null)}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl transition"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-slate-950 text-xs font-extrabold rounded-xl transition uppercase tracking-wider"
+                        >
+                          Sincronizar Plano
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </div>
+              )}
             </div>
           )}
 

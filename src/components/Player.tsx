@@ -12,9 +12,206 @@ import {
   Info,
   AlignLeft,
   BookOpen,
-  Music as MusicIcon
+  Music as MusicIcon,
+  Heart,
+  Shuffle,
+  Repeat,
+  FileText,
+  Bluetooth,
+  Zap,
+  Wifi
 } from 'lucide-react';
 import { Music } from '../types';
+
+// Premium Soundrive custom curly-ribbon wireframe brand logo (S) with emerald gradient
+const SLogoIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="slogo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#22c55e" /> {/* Emerald / Mint Green */}
+        <stop offset="50%" stopColor="#84cc16" /> {/* Lime / Bright Green */}
+        <stop offset="100%" stopColor="#eab308" /> {/* Gold / Amber Yellow */}
+      </linearGradient>
+    </defs>
+    <path 
+      d="M72 32C72 21 62 15 50 15C34 15 26 25 26 37C26 53 50 51 50 65C50 73 42 79 32 79C22 79 18 71 18 65" 
+      stroke="url(#slogo-gradient)" 
+      strokeWidth="7" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+    />
+    <path 
+      d="M28 68C28 79 38 85 50 85C66 85 74 75 74 63C74 47 50 49 50 35C50 27 58 21 68 21C78 21 82 29 82 35" 
+      stroke="url(#slogo-gradient)" 
+      strokeWidth="7" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      opacity="0.85"
+    />
+  </svg>
+);
+
+// Minimalist Sports Car outline in green-to-gold gradient
+const CarSilhouetteIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 100 35" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="car-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#22c55e" /> {/* Green/Emerald */}
+        <stop offset="50%" stopColor="#84cc16" /> {/* Lime/Light Green */}
+        <stop offset="100%" stopColor="#eab308" /> {/* Gold/Amber */}
+      </linearGradient>
+    </defs>
+    <path 
+      d="M12 26C12 26 16 26 19 26C22 21 28 10 40 8.5C47 7.5 52 11 62 19C64 20.5 72 21.5 76 23C84 23.5 88 26 90 26C90 26 86 29 78 29M22 26C22 26 26 25 28 25C32 25 34 27 34 28.5M68 26C68 26 72 25 74 25C78 25 80 27 80 28.5" 
+      stroke="url(#car-gradient)" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+    />
+  </svg>
+);
+
+// High-fidelity integrated dynamic center with equalizer waves & golden gauge
+const SoundriveCarVisualizer = ({ isPlaying, isDataSaver = false, className = "w-full h-full" }: { isPlaying: boolean, isDataSaver?: boolean, className?: string }) => {
+  const raysCount = 48;
+  const rays = Array.from({ length: raysCount });
+
+  // Determine the count of dots in each radial direction based on the angle
+  // This calculates the horizontal lens/eye shape with vertical flares and diagonal dips
+  const getRayDotsCount = (angle: number) => {
+    const hWeight = Math.pow(Math.cos(angle), 12); // sharp horizontal peak
+    const vWeight = Math.pow(Math.sin(angle), 12); // sharp vertical peak
+    const baseWeight = Math.pow(Math.abs(Math.cos(2 * angle)), 1.5) * 1.8; // general starburst pattern
+    
+    const factor = baseWeight + hWeight * 5.5 + vWeight * 3;
+    return Math.max(2, Math.round(2 + factor));
+  };
+
+  return (
+    <div className={`relative ${className} flex items-center justify-center select-none`}>
+      {/* Scope-local CSS style to support high-performance hardware accelerated svg bar scale animations */}
+      {!isDataSaver && (
+        <style>{`
+          @keyframes glow-dot-pulse {
+            0% {
+              transform: scale(0.9);
+              opacity: 0.65;
+            }
+            50% {
+              transform: scale(1.15);
+              opacity: 1;
+            }
+            100% {
+              transform: scale(0.9);
+              opacity: 0.65;
+            }
+          }
+          .visualizer-glow-dot {
+            transform-origin: center;
+          }
+        `}</style>
+      )}
+
+      {/* Deep black cosmic background container with subtle gold atmospheric glow */}
+      <div className="absolute inset-0 rounded-full bg-black flex items-center justify-center overflow-hidden border border-zinc-900/40 shadow-2xl shadow-yellow-950/20">
+        {/* Soft background radial ambient light */}
+        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,138,0,0.04)_0%,transparent_70%)] ${isPlaying && !isDataSaver ? 'animate-pulse' : ''}`} />
+      </div>
+      
+      {/* Interactive Dot Grid SVG */}
+      <div className="relative z-10 w-[95%] h-[95%] flex items-center justify-center">
+        <svg className="w-full h-full" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            {/* High-fidelity glowing radial and linear color spectrums */}
+            <radialGradient id="ring-glow-grad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#fffbdf" />
+              <stop offset="30%" stopColor="#ffb000" />
+              <stop offset="70%" stopColor="#ff5500" />
+              <stop offset="100%" stopColor="#bb1100" />
+            </radialGradient>
+            
+            <linearGradient id="solid-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#ffe57f" />
+              <stop offset="50%" stopColor="#ffb300" />
+              <stop offset="100%" stopColor="#ff6f00" />
+            </linearGradient>
+
+            <filter id="beauty-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.2" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          {/* Symmetrical glowing orange dots forming the eye/galaxy layout */}
+          <g filter="url(#beauty-glow)">
+            {rays.map((_, i) => {
+              const angle = (i * 2 * Math.PI) / raysCount;
+              const dotsCount = getRayDotsCount(angle);
+              
+              // Map individual dots along this ray
+              return Array.from({ length: dotsCount }).map((_, j) => {
+                // Calculate position from center (80, 80)
+                // First dot (core ring) begins at r=28, outwards to max r=70
+                const distance = 28 + j * 4.6;
+                const roundedDistance = Number(distance.toFixed(2));
+                const x = (80 + Math.cos(angle) * roundedDistance).toFixed(2);
+                const y = (80 + Math.sin(angle) * roundedDistance).toFixed(2);
+                
+                // Color mapping: brightest on the inner rings, turning deeper orange on the pointers
+                const fillRatio = j / Math.max(1, dotsCount - 1);
+                // Custom dot colors mapping from cream/yellow to deep orange-red
+                let dotColor = "#ffb000"; // Default vibrant orange-gold
+                if (j === 0) dotColor = "#ffea79"; // Cream yellow core ring
+                else if (j === 1) dotColor = "#ffa000"; // Rich orange-gold
+                else if (fillRatio > 0.7) dotColor = "#e64a19"; // Ruby deep orange edge
+                else if (fillRatio > 0.4) dotColor = "#ff5722"; // Bright vermilion
+
+                // Radius scaling down as it propagates outwards
+                const maxRadius = j === 0 ? 1.9 : Math.max(0.48, 1.6 - j * 0.14);
+                const roundedRadius = Number(maxRadius.toFixed(2));
+
+                // Ripple animation styling
+                const delay = (j * 0.08 + i * 0.005).toFixed(2);
+                const duration = isPlaying ? "1.1s" : "0s";
+                const animStyle = isPlaying && !isDataSaver ? {
+                  animation: `glow-dot-pulse ${duration} ease-in-out infinite`,
+                  animationDelay: `${delay}s`,
+                } : undefined;
+
+                return (
+                  <circle
+                    key={`${i}-${j}`}
+                    cx={x}
+                    cy={y}
+                    r={roundedRadius}
+                    fill={dotColor}
+                    className="visualizer-glow-dot"
+                    style={{
+                      ...animStyle,
+                      transformOrigin: `${x}px ${y}px`
+                    }}
+                  />
+                );
+              });
+            })}
+          </g>
+
+          {/* Center decorative gold icon - elegant spinning gold core */}
+          <circle cx="80" cy="80" r="21" fill="black" stroke="url(#solid-gold-grad)" strokeWidth="0.5" className="opacity-45" />
+          <circle cx="80" cy="80" r="16" fill="black" />
+          
+          {/* Inner core emblem: micro golden sound waves inside the central area */}
+          <g className={isPlaying && !isDataSaver ? 'animate-pulse' : ''} style={{ transformOrigin: '80px 80px' }}>
+            <path d="M 74 80 L 74 80 M 77 76 L 77 84 M 80 72 L 80 88 M 83 75 L 83 85 M 86 80 L 86 80" stroke="url(#solid-gold-grad)" strokeWidth="1.2" strokeLinecap="round" className="opacity-80" />
+          </g>
+        </svg>
+      </div>
+
+      {/* Symmetrical glowing luxury outer ring */}
+      <div className={`absolute inset-0 rounded-full border-2 border-orange-500/10 opacity-60 -z-10 ${isPlaying && !isDataSaver ? 'animate-pulse' : ''}`} />
+    </div>
+  );
+};
 
 interface PlayerProps {
   currentTrack: Music | null;
@@ -25,6 +222,7 @@ interface PlayerProps {
   trackList: Music[];
   isCarMode: boolean;
   setCarMode: (active: boolean) => void;
+  onNavigate?: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
 }
 
 export default function Player({
@@ -35,7 +233,8 @@ export default function Player({
   onPrev,
   trackList,
   isCarMode,
-  setCarMode
+  setCarMode,
+  onNavigate
 }: PlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -44,6 +243,53 @@ export default function Player({
   const [showFicha, setShowFicha] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [carLyricsActive, setCarLyricsActive] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [isRepeat, setIsRepeat] = useState(false);
+  
+  // Data saver (3G/4G/5G) mode to restrict graphic re-renders and audio preloading
+  const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('soundrive_datasaver_v2');
+        if (stored !== null) return stored === 'true';
+        
+        // Auto cellular connection, 3G/4G/5G, and browser data saver detection
+        if (typeof navigator !== 'undefined' && 'connection' in navigator) {
+          const conn = (navigator as any).connection;
+          
+          // If the user turned on the Data Saver setting on their phone/browser
+          if (conn?.saveData) {
+            return true;
+          }
+          
+          // If connection type is cellular (3G, 4G, 5G, or generic mobile data)
+          if (conn?.type === 'cellular') {
+            return true;
+          }
+
+          // If the connection quality is classified as typical cellular bands
+          const effective = conn?.effectiveType || '';
+          if (['cellular', 'slow-2g', '2g', '3g', '4g'].includes(effective)) {
+            return true;
+          }
+        }
+
+        // Fallback: If it's a mobile device (touch primary and screen size), default to active saver on cellular to protect user data
+        if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
+          // If we are on a smartphone, assume they might be using mobile data and gently auto-optimize to preloading metadata only
+          return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('soundrive_datasaver_v2', isDataSaver.toString());
+    } catch (e) {}
+  }, [isDataSaver]);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -60,6 +306,7 @@ export default function Player({
     // Check if source changed
     if (audio.src !== currentTrack.audioUrl) {
       audio.src = currentTrack.audioUrl;
+      audio.preload = isDataSaver ? "metadata" : "auto";
       audio.load();
     }
 
@@ -123,32 +370,44 @@ export default function Player({
   // 1. IMMERSIVE CAR MODE (FULL SCREEN VIEW)
   if (isCarMode) {
     return (
-      <div id="car-player-fullscreen" onContextMenu={(e) => e.preventDefault()} className="fixed inset-0 bg-[#090b10] text-[#f8fafc] z-50 flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-y-auto sm:overflow-hidden select-none">
+      <div id="car-player-fullscreen" onContextMenu={(e) => e.preventDefault()} className="fixed inset-0 bg-[#04060a] text-[#f8fafc] z-50 flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-hidden select-none">
         
-        {/* Specular Ambient Glow effects */}
-        <div className="absolute right-[-10%] top-[10%] w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-amber-500/5 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none"></div>
-        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] sm:w-[450px] sm:h-[450px] bg-orange-600/5 rounded-full blur-[90px] sm:blur-[130px] pointer-events-none"></div>
+        {/* Specular Ambient Glow effects in Mint-Emerald and Gold-Amber */}
+        <div className="absolute right-[-10%] top-[10%] w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-emerald-500/5 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none"></div>
+        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] sm:w-[450px] sm:h-[450px] bg-yellow-500/5 rounded-full blur-[90px] sm:blur-[130px] pointer-events-none"></div>
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff01_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none"></div>
 
-        {/* Dynamic Header Row */}
-        <div className="flex items-center justify-between border-b border-zinc-900 pb-3 z-10 w-full shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping shrink-0"></div>
-            <span className="text-xs sm:text-sm font-mono tracking-widest text-zinc-400 font-bold uppercase flex items-center gap-2">
-              <Car className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" /> Transmissão Bluetooth
+        {/* Dynamic Header Row - Replicated precisely from Image 3 */}
+        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-3 z-10 w-full shrink-0 relative">
+          
+          {/* Left Block: TRANSMISSÃO BLUETOOTH */}
+          <div className="flex items-center gap-2 select-none">
+            <Bluetooth className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 stroke-[2] animate-pulse" />
+            <span className="text-[10px] sm:text-xs font-mono tracking-[0.2em] text-emerald-450 font-extrabold uppercase">
+              TRANSMISSÃO BLUETOOTH
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Center Block: SOUNDRIVE Sports Car Logo Brand (Image 3) */}
+          <div className="hidden sm:flex items-center justify-center gap-2 absolute left-1/2 -translate-x-1/2 select-none">
+            <CarSilhouetteIcon className="w-9 h-4" />
+            <span className="font-heading font-black tracking-[0.25em] text-sm text-zinc-100 uppercase pb-0.5">
+              SOUNDRIVE
+            </span>
+          </div>
+
+          {/* Right Block: LETRAS / CELULAR action pills */}
+          <div className="flex items-center gap-2.5 select-none">
             <button 
               onClick={() => setCarLyricsActive(!carLyricsActive)}
-              className={`flex items-center gap-1 px-3.5 py-1.5 transition rounded-xl text-[10px] sm:text-xs font-heading font-black uppercase tracking-wider cursor-pointer border select-none ${
+              className={`flex items-center gap-1.5 px-4.5 py-1.5 transition rounded-full border text-[9px] sm:text-xs font-mono font-bold uppercase tracking-wider cursor-pointer select-none ${
                 carLyricsActive 
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' 
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                  ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.25)]' 
+                  : 'bg-transparent border-zinc-700 text-zinc-300 hover:border-emerald-500/50 hover:text-white'
               }`}
             >
-              <AlignLeft className="w-3.5 h-3.5" /> Letras
+              <AlignLeft className="w-3.5 h-3.5" /> 
+              <span>Letras</span>
             </button>
 
             <button 
@@ -157,58 +416,100 @@ export default function Player({
                 setCarMode(false);
                 setCarLyricsActive(false);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-805 rounded-xl transition cursor-pointer text-[10px] sm:text-xs font-heading font-black uppercase tracking-wide text-zinc-300"
+              className="flex items-center gap-1.5 px-4.5 py-1.5 bg-transparent border border-zinc-700 hover:border-emerald-500/50 rounded-full transition cursor-pointer text-[9px] sm:text-xs font-mono font-bold uppercase tracking-wider text-zinc-300 hover:text-white"
             >
-              <Smartphone className="w-3.5 h-3.5 text-amber-500" /> Celular
+              <Smartphone className="w-3.5 h-3.5 text-[#84cc16]" /> 
+              <span>Celular</span>
             </button>
           </div>
         </div>
 
-        {/* Adaptive Dynamic Splitting Canvas with scroll safety for smaller devices */}
-        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-8 lg:gap-14 my-4 max-w-6xl mx-auto w-full z-10 overflow-y-visible lg:overflow-hidden min-h-0">
+        {/* Adaptive Dynamic Splitting Canvas - Guaranteed never to cut off! */}
+        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-8 lg:gap-14 my-4 max-w-6xl mx-auto w-full z-10 overflow-y-auto lg:overflow-hidden min-h-0">
           
-          {/* Cover Art / Golden Vinyl Spinning graphic */}
-          <div className={`flex flex-col items-center justify-center gap-3 sm:gap-6 transition-all duration-505 ${carLyricsActive ? 'lg:w-[45%] lg:items-start text-center lg:text-left' : 'w-full'}`}>
-            <div className="relative flex-shrink-0">
-              {/* Premium Realistic Concentric Glossy Vinyl Disc with optimized viewport-based diameters */}
-              <div 
-                id="car-track-cover-notes"
-                className={`rounded-full bg-gradient-to-b from-[#14161f] to-[#04060a] border-[8px] sm:border-[12px] border-zinc-900 shadow-2xl flex flex-col items-center justify-center transition-all duration-[6000ms] ease-in-out relative ${
-                  carLyricsActive 
-                    ? 'w-28 h-28 min-[380px]:w-36 min-[380px]:h-36 sm:w-52 sm:h-52 md:w-60 md:h-60' 
-                    : 'w-36 h-36 min-[380px]:w-44 min-[380px]:h-44 sm:w-64 sm:h-64 md:w-76 md:h-76'
-                } ${isPlaying ? 'animate-spin-slow scale-102 shadow-amber-550/15' : ''}`}
-              >
-                {/* Mirror finish glossy grooves */}
-                <div className="absolute inset-2 sm:inset-3 rounded-full border border-zinc-850/15"></div>
-                <div className="absolute inset-5 sm:inset-7 rounded-full border border-zinc-850/30"></div>
-                <div className="absolute inset-8 sm:inset-11 rounded-full border border-zinc-850/20"></div>
-                <div className="absolute inset-12 sm:inset-16 rounded-full border border-zinc-850/15"></div>
-                <div className="absolute inset-16 sm:inset-22 rounded-full border border-zinc-850/10"></div>
-                <div className="absolute inset-20 sm:inset-28 rounded-full border border-zinc-850/5"></div>
-                
-                {/* Golden Center Sticker with concentric lines and spindle opening */}
-                <div className="w-[32%] h-[32%] rounded-full bg-gradient-to-tr from-amber-500 via-amber-600 to-orange-500 border border-zinc-950 flex items-center justify-center text-zinc-950 shadow-inner relative select-none">
-                  <div className="absolute inset-1 rounded-full border border-zinc-950/20"></div>
-                  <MusicIcon className="w-4 h-4 sm:w-6 sm:h-6 text-zinc-950 stroke-[2.5] animate-pulse" />
-                  <div className="absolute w-2.5 h-2.5 rounded-full bg-[#090b10] border border-zinc-950/40"></div>
+          {/* Cover Art containing equalizer waves left & right */}
+          <div className={`flex flex-col items-center justify-center gap-3 sm:gap-5 transition-all duration-505 ${carLyricsActive ? 'lg:w-[45%] lg:items-start text-center lg:text-left' : 'w-full'}`}>
+            
+            <div className={`flex items-center justify-center w-full transition-all duration-300 ${carLyricsActive ? 'gap-0 lg:justify-start' : 'gap-6 md:gap-12'}`}>
+              
+              {/* Left Equalizer Wave - Only shown when lyrics drawer is hidden */}
+              {!carLyricsActive && (
+                <div className="hidden lg:flex items-end gap-[3.5px] h-12 select-none text-emerald-500 opacity-60">
+                  {[...Array(18)].map((_, i) => {
+                    const progress = (i + 1) / 18;
+                    const h = 4 + progress * 28; // height between 4px and 32px
+                    return (
+                      <span 
+                        key={i} 
+                        style={{ 
+                          height: `${h}px`,
+                          animation: isPlaying && !isDataSaver ? `bar-${(i % 4) + 1} 0.8s ease-in-out infinite alternate` : 'none'
+                        }}
+                        className="w-[2.5px] bg-gradient-to-t from-emerald-500 to-yellow-500 rounded-full transition-all duration-300 opacity-40 hover:opacity-100"
+                      />
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Central premium disc structure (Image 3 but with high-fidelity visualization) */}
+              <div className="relative flex-shrink-0">
+                <div 
+                  id="car-track-cover-notes"
+                  className={`transition-all duration-505 shrink-0 ${
+                    carLyricsActive 
+                      ? 'w-24 h-24 min-[380px]:w-32 min-[380px]:h-32 sm:w-40 sm:h-40 lg:w-44 lg:h-44' 
+                      : 'w-36 h-36 min-[380px]:w-44 min-[380px]:h-44 sm:w-60 sm:h-60 md:w-64 md:h-64'
+                  }`}
+                >
+                  <SoundriveCarVisualizer isPlaying={isPlaying} isDataSaver={isDataSaver} />
                 </div>
               </div>
-              {isPlaying && (
-                <div className="absolute -inset-2.5 rounded-full bg-gradient-to-tr from-amber-500 to-orange-600 opacity-15 blur-lg -z-10 animate-pulse"></div>
+
+              {/* Right Equalizer Wave - Only shown when lyrics drawer is hidden */}
+              {!carLyricsActive && (
+                <div className="hidden lg:flex items-end gap-[3.5px] h-12 select-none text-emerald-500 opacity-60">
+                  {[...Array(18)].map((_, i) => {
+                    const progress = (18 - i) / 18; // Opposing symmetry: shorter as we go from left to right
+                    const h = 4 + progress * 28;
+                    return (
+                      <span 
+                        key={i} 
+                        style={{ 
+                          height: `${h}px`,
+                          animation: isPlaying && !isDataSaver ? `bar-${(i % 4) + 1} 1s ease-in-out infinite alternate` : 'none'
+                        }}
+                        className="w-[2.5px] bg-gradient-to-t from-emerald-500 to-yellow-500 rounded-full transition-all duration-300 opacity-40 hover:opacity-100"
+                      />
+                    );
+                  })}
+                </div>
               )}
+
             </div>
             
-            {/* Metadata overlay with improved sizes for mobile without color clipping */}
-            <div className={carLyricsActive ? 'lg:max-w-md w-full' : 'max-w-2xl text-center w-full'}>
-              <h1 id="car-track-title" className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-heading font-black tracking-tight leading-normal uppercase text-white px-4 truncate">
+            {/* Metadata layout with responsive formatting (Left-aligned on active lyrics, Centered on default) */}
+            <div className={`transition-all duration-505 shrink-0 ${carLyricsActive ? 'lg:max-w-md w-full' : 'max-w-2xl text-center w-full'}`}>
+              <h1 id="car-track-title" className={`font-heading font-black tracking-tight leading-tight uppercase text-white px-2 truncate transition-all duration-505 ${
+                carLyricsActive 
+                  ? 'text-lg sm:text-2xl lg:text-3xl lg:text-left' 
+                  : 'text-xl sm:text-3xl md:text-3xl lg:text-4xl text-center'
+              }`}>
                 {currentTrack.title}
               </h1>
-              <p id="car-track-artist" className="text-amber-400 text-base sm:text-lg md:text-xl mt-0.5 font-extrabold tracking-wide">
-                {currentTrack.singer || "Artista Independente"}
+              
+              <p id="car-track-artist" className={`text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-lime-400 to-yellow-400 mt-1 font-black tracking-wide transition-all duration-505 uppercase font-mono ${
+                carLyricsActive 
+                  ? 'text-xs sm:text-base lg:text-left' 
+                  : 'text-sm sm:text-lg md:text-xl text-center'
+              }`}>
+                {currentTrack.singer || "STARNEJO"}
               </p>
+              
               {currentTrack.composer && (
-                <p className="text-zinc-505 text-[10px] sm:text-xs mt-1 uppercase font-mono tracking-widest leading-normal font-bold">
+                <p className={`text-zinc-500 text-[10px] sm:text-xs mt-1.5 uppercase font-mono tracking-widest leading-normal font-bold transition-all duration-505 ${
+                  carLyricsActive ? 'lg:text-left' : 'text-center'
+                }`}>
                   Compositor: <span className="text-zinc-300 font-extrabold">{currentTrack.composer}</span>
                 </p>
               )}
@@ -217,42 +518,38 @@ export default function Player({
 
           {/* Expanded scrolling lyrics inside Car Modal */}
           {carLyricsActive && (
-            <div className="flex-1 lg:w-[55%] h-[20vh] sm:h-[30vh] lg:h-[50vh] w-full bg-zinc-950/60 border border-zinc-900/60 p-4 sm:p-6 rounded-3xl overflow-y-auto scrollbar-none flex flex-col justify-between relative select-text transition-all duration-300">
-              <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#090b10] to-transparent pointer-events-none z-10"></div>
-              
-              <div className="space-y-3.5 text-center py-3">
+            <div className="flex-1 lg:w-[50%] h-[250px] lg:h-[400px] w-full bg-[#050609]/60 border border-zinc-805/40 p-6 sm:p-8 rounded-3xl overflow-y-auto scrollbar-none flex flex-col justify-start relative select-text transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.5)]">
+              <div className="space-y-4 text-center py-4 my-auto">
                 {currentTrack.lyrics ? (
                   currentTrack.lyrics.split('\n').map((line, idx) => {
                     const isHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
                     if (isHeader) {
                       return (
-                        <p key={idx} className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-amber-400 font-extrabold pt-2 pb-0.5">
+                        <p key={idx} className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-400 font-extrabold pt-2 pb-0.5">
                           {line}
                         </p>
                       );
                     }
                     return (
-                      <p key={idx} className="text-xs sm:text-base font-bold tracking-tight text-zinc-300 hover:text-white leading-relaxed">
+                      <p key={idx} className="text-sm sm:text-base font-extrabold tracking-tight text-zinc-300 hover:text-white leading-relaxed">
                         {line}
                       </p>
                     );
                   })
                 ) : (
-                  <div className="space-y-2 py-8">
-                    <p className="text-zinc-550 text-xs font-mono uppercase tracking-widest font-black">[ Sem Letra Cadastrada ]</p>
-                    <p className="text-zinc-600 text-[11px] leading-relaxed max-w-xs mx-auto">O compositor não arquivou as estrofes originais no painel.</p>
+                  <div className="space-y-3.5 py-6 flex flex-col items-center justify-center">
+                    <p className="text-emerald-400 text-sm font-mono uppercase tracking-[0.2em] font-black">[ SEM LETRA CADASTRADA ]</p>
+                    <p className="text-zinc-500 text-xs leading-relaxed max-w-xs mx-auto">O compositor não arquivou as estrofes originais no painel.</p>
                   </div>
                 )}
               </div>
-
-              <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-[#090b10] to-transparent pointer-events-none z-10"></div>
             </div>
           )}
 
         </div>
 
         {/* Compact, elegant timeline slider */}
-        <div className="w-full max-w-2xl mx-auto px-4 space-y-1.5 z-10">
+        <div className="w-full max-w-2xl mx-auto px-4 space-y-1.5 z-10 shrink-0">
           <div className="relative flex items-center">
             <input 
               id="car-track-seekbar"
@@ -261,52 +558,58 @@ export default function Player({
               max={duration || 100}
               value={currentTime}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="w-full h-1.5 bg-zinc-900 accent-amber-500 rounded-lg appearance-none cursor-pointer transition-all hover:bg-zinc-850"
+              className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500"
+              style={{
+                background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #111827 ${(currentTime / (duration || 1)) * 100}%, #111827 100%)`
+              }}
             />
           </div>
-          <div className="flex justify-between text-[11px] font-mono text-zinc-550 font-bold select-none px-0.5">
+          <div className="flex justify-between text-[11px] font-mono text-zinc-500 font-bold select-none px-0.5">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
-        {/* Central Dashboard Large Touch Controls */}
-        <div className="w-full max-w-xl mx-auto flex items-center justify-center gap-6 sm:gap-9 py-2 sm:py-3.5 px-4 z-10 select-none">
+        {/* Central Dashboard Controls Replicated Precisely from Image 3 */}
+        <div className="w-full max-w-xl mx-auto flex items-center justify-center gap-8 py-2 md:py-4 px-4 z-10 select-none shrink-0">
+          {/* Skip Back Button: outlined circle in emerald */}
           <button 
             id="car-prev-btn"
             onClick={onPrev}
-            className="p-3 bg-zinc-905 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md shadow-black/30"
+            className="w-14 h-14 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md bg-[#0d0f14]/40"
             title="Música anterior"
           >
-            <SkipBack className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-200" />
+            <SkipBack className="w-5 h-5" />
           </button>
 
+          {/* Play/Pause Button: Large filled solid green circle */}
           <button 
             id="car-play-pause-btn"
             onClick={onPlayPause}
-            className="p-4.5 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-zinc-950 rounded-full hover:brightness-110 shadow-xl shadow-amber-500/10 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
+            className="w-20 h-20 bg-gradient-to-tr from-[#10b981] via-[#84cc16] to-[#eab308] text-slate-950 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-lg shadow-emerald-500/20"
             title={isPlaying ? "Pausar" : "Tocar"}
           >
             {isPlaying ? (
-              <Pause className="w-8 h-8 sm:w-10 sm:h-10 fill-zinc-950 text-zinc-950" />
+              <Pause className="w-7 h-7 fill-slate-950 text-slate-950" />
             ) : (
-              <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-zinc-950 text-zinc-955 ml-1" />
+              <Play className="w-7 h-7 fill-slate-950 text-slate-955 ml-1" />
             )}
           </button>
 
+          {/* Skip Forward Button: outlined circle in emerald */}
           <button 
             id="car-next-btn"
             onClick={onNext}
-            className="p-3 bg-zinc-905 hover:bg-zinc-800 border border-zinc-850 text-zinc-300 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md shadow-black/30"
+            className="w-14 h-14 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md bg-[#0d0f14]/40"
             title="Próxima música"
           >
-            <SkipForward className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-200" />
+            <SkipForward className="w-5 h-5" />
           </button>
         </div>
 
         {/* Bottom guidance banner */}
-        <div className="text-center text-zinc-550 text-[10px] sm:text-xs font-mono py-1 flex items-center justify-center gap-1.5 z-10 select-none">
-          <Info className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Toques ampliados ideais para centrais automotivas ou suporte de para-brisa.
+        <div className="text-center text-zinc-600 text-[10px] sm:text-xs font-mono py-1 flex items-center justify-center gap-1.5 z-10 select-none shrink-0 mb-1">
+          <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Toques ampliados ideais para centrais automotivas ou suporte de para-brisa.
         </div>
       </div>
     );
@@ -318,105 +621,272 @@ export default function Player({
       <div 
         id="bottom-dock-player" 
         onContextMenu={(e) => e.preventDefault()}
-        className="fixed bottom-4 left-4 right-4 md:left-6 md:right-6 md:bottom-6 max-w-5xl mx-auto z-40 rounded-2xl bg-[#0d0f14]/92 border border-zinc-800/80 backdrop-blur-xl transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.65)] select-none"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#050609]/95 border-t border-zinc-800/80 backdrop-blur-2xl transition-all duration-350 shadow-[0_-10px_35px_rgba(0,0,0,0.8)] select-none"
       >
-        {/* Sleek top edge continuous neon seekbar */}
-        <div className="absolute top-0 inset-x-0 h-[3px] bg-zinc-900/60 rounded-t-2xl overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-amber-500 via-amber-450 to-orange-500 transition-all duration-150"
-            style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-          ></div>
-        </div>
-
-        <div className="p-3 px-4 md:px-6 flex items-center justify-between gap-3 sm:gap-4">
+        <div className="max-w-7xl mx-auto p-4 md:py-5 md:px-8 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 min-h-[90px]">
           
-          {/* Left Block: Track Thumbnail & Text Metadata */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 max-w-[55%] md:max-w-[35%] overflow-hidden">
-            <div className="relative flex-shrink-0 group select-none">
-              <div 
-                id="player-mini-cover"
-                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr ${isPlaying ? 'from-zinc-950 to-zinc-900 border border-zinc-800' : 'from-amber-505 to-orange-555'} text-zinc-950 flex items-center justify-center shadow-lg transition-all duration-500 ${
-                  isPlaying ? 'ring-2 ring-amber-500/30' : ''
-                }`}
-              >
-                {isPlaying ? (
-                  <div className="flex items-end gap-0.5 h-3.5 sm:h-4.5">
-                    <span className="w-0.75 bg-amber-500 animate-bar-1 rounded-full"></span>
-                    <span className="w-0.75 bg-amber-400 animate-bar-2 rounded-full"></span>
-                    <span className="w-0.75 bg-orange-400 animate-bar-3 rounded-full"></span>
-                    <span className="w-0.75 bg-amber-500 animate-bar-4 rounded-full"></span>
+          {/* MOBILE ONLY: Ultra-polished structured view matching the User's Screenshot */}
+          <div className="flex md:hidden flex-col w-full gap-3 px-2 py-3">
+            {/* Row 1: Graphic Disc Artwork, Title Metadata, Heart Toggler */}
+            <div className="flex items-center justify-between gap-3 w-full">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div 
+                  onClick={() => setShowFicha(!showFicha)}
+                  className="relative w-12 h-12 rounded-xl bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0 cursor-pointer active:scale-95 transition-all"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+                  <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:6px_8px]"></div>
+                  <div className="relative flex flex-col items-center justify-center p-1 text-emerald-400 text-center z-10">
+                    <div className="flex items-end gap-[1.5px] h-3.5 justify-center">
+                      <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
+                      <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-2' : 'h-2.5'}`}></span>
+                      <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2.5 animate-bar-3' : 'h-2'}`}></span>
+                    </div>
                   </div>
-                ) : (
-                  <MusicIcon className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-950 stroke-[2]" />
-                )}
+                </div>
+
+                <div 
+                  onClick={() => {
+                    if (onNavigate && currentTrack?.artistId) {
+                      onNavigate('public', { id: currentTrack.artistId });
+                    }
+                  }}
+                  className="min-w-0 text-left cursor-pointer group/mobile-meta active:scale-97 transition-all"
+                  title="Clique para voltar ao perfil do compositor"
+                >
+                  <h4 id="player-track-title-mobile" className="font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none group-hover/mobile-meta:text-[#d4af37]">
+                    {currentTrack.title}
+                  </h4>
+                  <p id="player-track-artist-mobile" className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
+                    {currentTrack.singer || "STARNEJO"}
+                    <span className="text-[7.5px] font-sans font-black text-[#d4af37] whitespace-nowrap bg-amber-500/10 border border-amber-500/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
+                      VOLTAR 📁
+                    </span>
+                  </p>
+                </div>
               </div>
+
+              {/* Heart Button */}
               <button 
-                onClick={() => setShowFicha(!showFicha)}
-                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl transition cursor-pointer"
-                title="Informações da canção"
+                onClick={() => setIsFavorited(!isFavorited)}
+                className="transition-all duration-300 hover:scale-110 active:scale-90 cursor-pointer shrink-0 p-1 bg-zinc-900/30 rounded-lg"
+                title={isFavorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
               >
-                <Info className="w-4 h-4 text-amber-550" />
+                <Heart className={`w-4.5 h-4.5 transition-colors ${isFavorited ? 'fill-emerald-450 text-emerald-450 stroke-emerald-500' : 'text-zinc-500 hover:text-white'}`} />
               </button>
             </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <h4 id="player-track-title" className="font-heading font-black text-xs sm:text-sm tracking-tight text-[#f8fafc] truncate uppercase leading-none">
+            {/* Row 2: Elegant Timeline progress bar */}
+            <div className="w-full flex items-center gap-3 font-mono text-[10px] text-zinc-400 font-bold select-none">
+              <span className="w-8 text-left select-none">{formatTime(currentTime)}</span>
+              
+              <input 
+                type="range"
+                min={0}
+                max={duration || 100}
+                value={currentTime}
+                onChange={(e) => handleSeek(Number(e.target.value))}
+                className="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500"
+                style={{
+                  background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
+                }}
+              />
+              
+              <span className="w-8 text-right select-none">{formatTime(duration)}</span>
+            </div>
+
+            {/* Row 3: Professional Compact Controls Grid */}
+            <div className="w-full flex items-center justify-between px-4 py-1.5 select-none">
+              {/* Shuffle */}
+              <button 
+                onClick={() => setIsShuffle(!isShuffle)}
+                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isShuffle ? 'text-emerald-400' : 'text-zinc-500'}`}
+              >
+                <Shuffle className="w-4 h-4" />
+              </button>
+
+              {/* Previous */}
+              <button 
+                onClick={onPrev}
+                className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
+              >
+                <SkipBack className="w-4.5 h-4.5" />
+              </button>
+
+              {/* Large Green Glowing play/pause */}
+              <button 
+                onClick={onPlayPause}
+                className="w-13 h-13 rounded-full bg-[#050608] border border-emerald-500/80 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.35)] cursor-pointer outline-none shrink-0"
+              >
+                {isPlaying ? (
+                  <Pause className="w-4.5 h-4.5 fill-white text-white" />
+                ) : (
+                  <Play className="w-4.5 h-4.5 fill-white text-white ml-0.5" />
+                )}
+              </button>
+
+              {/* Next */}
+              <button 
+                onClick={onNext}
+                className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
+              >
+                <SkipForward className="w-4.5 h-4.5" />
+              </button>
+
+              {/* Repeat */}
+              <button 
+                onClick={() => setIsRepeat(!isRepeat)}
+                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isRepeat ? 'text-emerald-400' : 'text-zinc-500'}`}
+              >
+                <Repeat className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Row 4: Side-by-side luxurious "LETRA" and "CARRO" button pills */}
+            <div className="grid grid-cols-2 gap-2 w-full mt-1">
+              <button 
+                onClick={() => setShowLyrics(true)}
+                className="flex items-center justify-center gap-1 py-2.5 bg-transparent border border-emerald-500/25 hover:border-emerald-500 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+              >
+                <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>LETRA</span>
+              </button>
+
+              <button 
+                onClick={() => setCarMode(true)}
+                className="flex items-center justify-center gap-1 py-2.5 bg-transparent border border-[#d4af37]/25 hover:border-[#d4af37] text-amber-555 hover:text-[#ffe082] rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+              >
+                <Car className="w-4 h-4 text-amber-555 shrink-0" />
+                <span>CARRO</span>
+              </button>
+            </div>
+          </div>
+
+          {/* DESKTOP/TABLET ONLY: Left Block: Perfect Soundrive Album Thumbnail & Text Metadata */}
+          <div className="hidden md:flex items-center gap-4 min-w-0 w-full md:w-auto md:max-w-[30%] select-none shrink-0">
+            <div className="relative w-14 h-14 rounded-lg bg-[#0d0f14] border border-zinc-955 flex items-center justify-center shadow-md overflow-hidden shrink-0 group">
+              {/* Premium abstract emerald to gold gradient background like screenshot */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+              
+              {/* Emerald Sound representation overlay inside block */}
+              <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:8px_8px]"></div>
+              
+              <div className="relative flex flex-col items-center justify-center p-2 text-emerald-400 text-center z-10">
+                <div className="flex items-end gap-[2px] h-4.5 justify-center mb-0.5">
+                  <span className={`w-[2px] bg-gradient-to-t from-[#10b981] to-[#84cc16] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-1' : 'h-1.5'}`}></span>
+                  <span className={`w-[2px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-4 animate-bar-2' : 'h-2.5'}`}></span>
+                  <span className={`w-[2px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-3' : 'h-2'}`}></span>
+                  <span className={`w-[2px] bg-gradient-to-t from-[#10b981] to-[#eab308] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-4' : 'h-1'}`}></span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setShowFicha(!showFicha)}
+                className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-lg transition-opacity duration-305 cursor-pointer z-20"
+                title="Ficha técnica"
+              >
+                <Info className="w-4 h-4 text-emerald-400" />
+              </button>
+            </div>
+
+            <div 
+              onClick={() => {
+                if (onNavigate && currentTrack?.artistId) {
+                  onNavigate('public', { id: currentTrack.artistId });
+                }
+              }}
+              className="min-w-0 flex-1 text-left cursor-pointer group/desktop-meta select-none"
+              title="Clique para voltar ao perfil do compositor"
+            >
+              <div className="flex items-center gap-2.5">
+                <h4 id="player-track-title" className="font-heading font-extrabold text-sm sm:text-base tracking-tight text-zinc-100 uppercase truncate leading-none group-hover/desktop-meta:text-[#d4af37]">
                   {currentTrack.title}
                 </h4>
+                
+                {/* Heart Action button toggler */}
                 <button 
-                  onClick={() => setShowFicha(!showFicha)}
-                  className="text-zinc-500 hover:text-amber-400 transition cursor-pointer shrink-0"
-                  title="Ficha da música"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsFavorited(!isFavorited);
+                  }}
+                  className="transition-all duration-300 hover:scale-110 active:scale-90 cursor-pointer shrink-0 p-1"
+                  title={isFavorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                 >
-                  <Info className="w-3 h-3" />
+                  <Heart className={`w-4 h-4 transition-colors ${isFavorited ? 'fill-emerald-450 text-emerald-450 stroke-emerald-500' : 'text-zinc-500 hover:text-white'}`} />
                 </button>
               </div>
-              <p id="player-track-artist" className="text-[10px] sm:text-xs text-zinc-400 truncate mt-0.5 font-semibold">
-                {currentTrack.singer || "Artista Independente"}
+              
+              <p id="player-track-artist" className="text-[10px] sm:text-xs text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-2">
+                {currentTrack.singer || "STARNEJO"}
+                <span className="text-[8px] font-sans font-bold text-zinc-400 border border-zinc-800 rounded-full px-2 py-0.5 bg-zinc-950 group-hover/desktop-meta:border-[#d4af37]/45 group-hover/desktop-meta:text-[#d4af37] transition-all whitespace-nowrap leading-none">
+                  VER COMPOSITOR 📁
+                </span>
               </p>
             </div>
           </div>
 
-          {/* Center Block: Playback controls on Tablet & Desktop */}
-          <div className="hidden md:flex flex-col items-center flex-1 max-w-[40%] gap-1.5 shrink-0">
-            {/* Player Buttons */}
-            <div className="flex items-center gap-5 select-none text-zinc-400">
+          {/* DESKTOP/TABLET ONLY: Center Block: Complete exact replica playback suite */}
+          <div className="hidden md:flex flex-1 w-full md:max-w-[45%] flex flex-col items-center gap-2.5">
+            {/* Control buttons inside header */}
+            <div className="flex items-center gap-6.5 select-none text-zinc-455">
+              
+              {/* Shuffle button */}
+              <button 
+                onClick={() => setIsShuffle(!isShuffle)}
+                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1 ${isShuffle ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-305'}`}
+                title="Ordem aleatória"
+              >
+                <Shuffle className="w-4 h-4" />
+              </button>
+
+              {/* Prev button */}
               <button 
                 id="prev-btn"
                 onClick={onPrev}
-                className="hover:text-white transition p-1 hover:scale-115 active:scale-90 cursor-pointer outline-none" 
+                className="text-zinc-300 hover:text-white transition-all p-1 hover:scale-115 active:scale-90 cursor-pointer outline-none" 
                 title="Música anterior"
               >
-                <SkipBack className="w-4.5 h-4.5 text-zinc-400" />
+                <SkipBack className="w-4.5 h-4.5" />
               </button>
 
+              {/* Play/Pause Button - BEAUTIFUL custom circle with green gradient outer glow outline */}
               <button 
                 id="play-pause-btn"
                 onClick={onPlayPause}
-                className="p-2.5 bg-gradient-to-r from-amber-500 to-orange-550 text-zinc-950 rounded-full hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/10 transition cursor-pointer flex items-center justify-center outline-none font-bold"
-                title={isPlaying ? "Deter" : "Reproduzir"}
+                className="w-12 h-12 rounded-full bg-[#050608] border border-emerald-500/50 hover:border-yellow-405 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.25)] hover:shadow-[0_0_15px_rgba(234,179,8,0.3)] cursor-pointer outline-none shrink-0"
+                title={isPlaying ? "Pausar" : "Tocar"}
               >
                 {isPlaying ? (
-                  <Pause className="w-4.5 h-4.5 fill-zinc-950 text-zinc-950" />
+                  <Pause className="w-4.5 h-4.5 fill-white text-white" />
                 ) : (
-                  <Play className="w-4.5 h-4.5 fill-zinc-950 text-zinc-950 ml-0.5" />
+                  <Play className="w-4.5 h-4.5 fill-white text-white ml-0.5" />
                 )}
               </button>
 
+              {/* Next button */}
               <button 
                 id="next-btn"
                 onClick={onNext}
-                className="hover:text-white transition p-1 hover:scale-115 active:scale-90 cursor-pointer outline-none" 
+                className="text-zinc-300 hover:text-white transition-all p-1 hover:scale-115 active:scale-90 cursor-pointer outline-none" 
                 title="Próxima música"
               >
-                <SkipForward className="w-4.5 h-4.5 text-zinc-400" />
+                <SkipForward className="w-4.5 h-4.5" />
+              </button>
+
+              {/* Repeat button */}
+              <button 
+                onClick={() => setIsRepeat(!isRepeat)}
+                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1 ${isRepeat ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-303'}`}
+                title="Repetir faixa"
+              >
+                <Repeat className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full flex items-center gap-2.5 text-[10px] font-mono text-zinc-550 font-bold select-none text-zinc-500">
-              <span>{formatTime(currentTime)}</span>
+            {/* Progress seek bar mimicking reference */}
+            <div className="w-full flex items-center gap-3.5 text-[11px] font-mono text-zinc-400 font-bold select-none">
+              <span className="w-8 text-right select-none">{formatTime(currentTime)}</span>
+              
               <input 
                 id="track-seekbar"
                 type="range"
@@ -424,62 +894,54 @@ export default function Player({
                 max={duration || 100}
                 value={currentTime}
                 onChange={(e) => handleSeek(Number(e.target.value))}
-                className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition outline-none"
+                className="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500 hover:accent-emerald-400"
+                style={{
+                  background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
+                }}
               />
-              <span>{formatTime(duration)}</span>
+              
+              <span className="w-8 text-left select-none">{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* Right Block: Controls & Option Toggles */}
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2.5 max-w-[45%] md:max-w-[25%] shrink-0">
+          {/* DESKTOP/TABLET ONLY: Right Block: Double Option Capsules, Volume slider & wave equalizer */}
+          <div className="hidden md:flex items-center justify-end gap-3.5 min-w-0 w-full md:w-auto md:max-w-[32%] shrink-0">
             
-            {/* Play/Pause Button on Mobile Only */}
-            <button 
-              id="mobile-play-pause-btn"
-              onClick={onPlayPause}
-              className="md:hidden p-2.5 bg-gradient-to-tr from-amber-500 to-orange-550 text-zinc-950 rounded-full active:scale-95 transition-all flex items-center justify-center shadow-md cursor-pointer select-none border border-transparent"
-              title={isPlaying ? "Pausar" : "Tocar"}
-            >
-              {isPlaying ? (
-                <Pause className="w-4 h-4 fill-zinc-950 text-zinc-950" />
-              ) : (
-                <Play className="w-4 h-4 fill-zinc-950 text-zinc-950 ml-0.5" />
-              )}
-            </button>
-
-            {/* Lyrics Toggle Button */}
+            {/* Capsule 1: Ver Letras action */}
             <button 
               onClick={() => setShowLyrics(true)}
-              className="flex items-center gap-1 px-2 py-2 sm:px-3 sm:py-2.5 bg-amber-500/10 border border-amber-500/20 hover:border-amber-550/40 text-amber-400 hover:bg-amber-500 hover:text-zinc-950 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-95 font-heading"
-              title="Letra da canção"
+              className="flex items-center gap-2 px-4 py-2 bg-transparent border border-emerald-550/20 hover:border-emerald-500 text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-96"
+              title="Exibir Letra"
             >
-              <AlignLeft className="w-3.5 h-3.5 text-amber-500" />
-              <span className="hidden min-[380px]:inline">Letra</span>
+              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[10px] md:text-xs">Ver letras</span>
             </button>
 
-            {/* Car Mode Launcher button */}
+            {/* Capsule 2: Modo Carro action */}
             <button 
               id="launch-car-mode-btn"
               onClick={() => setCarMode(true)}
-              className="flex items-center gap-1 px-2 py-2 sm:px-3 sm:py-2.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 select-none"
-              title="Para Carro"
+              className="flex items-center gap-2 px-4 py-2 bg-transparent border border-yellow-550/20 hover:border-[#eab308] text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-96 flex-shrink-0"
+              title="Ativar Modo Carro"
             >
-              <Car className="w-3.5 h-3.5 text-amber-500 cursor-pointer" />
-              <span className="hidden min-[380px]:inline text-[10px] sm:text-xs font-bold uppercase tracking-wide text-zinc-300">Carro</span>
+              <Car className="w-3.5 h-3.5 text-yellow-500" />
+              <span className="text-[10px] md:text-xs">Modo carro</span>
             </button>
 
-            {/* Desktop Volume Node */}
-            <div className="hidden lg:flex items-center gap-1.5 select-none text-zinc-500">
+            {/* Volume Control */}
+            <div className="hidden lg:flex items-center gap-2 select-none text-zinc-400">
               <button 
                 onClick={() => setIsMuted(!isMuted)} 
-                className="text-zinc-500 hover:text-white transition p-1 cursor-pointer outline-none"
+                className="text-emerald-400 hover:text-white transition-colors p-1 cursor-pointer outline-none shrink-0"
+                title={isMuted ? "Desativar mudo" : "Mudo"}
               >
                 {isMuted || volume === 0 ? (
-                  <VolumeX className="w-3.5 h-3.5 text-red-500" />
+                  <VolumeX className="w-4 h-4 text-rose-500" />
                 ) : (
-                  <Volume2 className="w-3.5 h-3.5" />
+                  <Volume2 className="w-4 h-4 animate-pulse" />
                 )}
-               </button>
+              </button>
+              
               <input 
                 type="range"
                 min={0}
@@ -490,8 +952,19 @@ export default function Player({
                   setVolume(Number(e.target.value));
                   if (isMuted) setIsMuted(false);
                 }}
-                className="w-12 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-500 outline-none"
+                className="w-16 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all accent-emerald-500 hover:accent-emerald-400"
+                style={{
+                  background: `linear-gradient(to right, #10b981 0%, #10b981 ${(isMuted ? 0 : volume) * 100}%, #27272a ${(isMuted ? 0 : volume) * 100}%, #27272a 100%)`
+                }}
               />
+            </div>
+
+            {/* Micro Equalizer parallel lines animation exact match */}
+            <div className="hidden min-[1100px]:flex items-end gap-[2px] h-3.5 select-none text-emerald-400 shrink-0 opacity-80 hover:opacity-100 transition-all duration-300 bg-zinc-950/20 px-1 py-0.5 rounded ml-1">
+              <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-1' : 'h-1.5'}`}></span>
+              <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-4.5 animate-bar-2' : 'h-3.5'}`}></span>
+              <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-3' : 'h-2'}`}></span>
+              <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-4' : 'h-1.5'}`}></span>
             </div>
 
           </div>

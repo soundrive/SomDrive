@@ -7,13 +7,14 @@ import Dashboard from './components/Dashboard';
 import ArtistPublic from './components/ArtistPublic';
 import Player from './components/Player';
 import AdminArea from './components/AdminArea';
+import PaymentReturnScreen from './components/PaymentReturnScreen';
 import { ShieldAlert } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 
 export default function App() {
   // SPA Routing state sync with address bar
-  const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'dashboard' | 'public' | 'admin'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'dashboard' | 'public' | 'admin' | 'payment_return'>('landing');
   const [routePayload, setRoutePayload] = useState<any>(null);
   
   // Session state
@@ -74,6 +75,9 @@ export default function App() {
         setRoutePayload({ id: artistSlug, autoCar: false });
         return;
       }
+    } else if (path === '/pagamento/retorno') {
+      setCurrentView('payment_return');
+      return;
     } else if (path === '/dashboard') {
       const u = dbService.getCurrentUser();
       if (u) {
@@ -108,7 +112,7 @@ export default function App() {
   }, []);
 
   // Update browser address bar dynamically on routing changes
-  const handleNavigate = (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => {
+  const handleNavigate = (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin' | 'payment_return', payload?: any) => {
     if (view === 'admin') {
       const u = dbService.getCurrentUser();
       const uEmail = u?.email?.toLowerCase().trim() || '';
@@ -132,6 +136,8 @@ export default function App() {
       window.history.pushState({}, '', '/entrar');
     } else if (view === 'admin') {
       window.history.pushState({}, '', '/admin');
+    } else if (view === 'payment_return') {
+      window.history.pushState({}, '', '/pagamento/retorno');
     } else {
       window.history.pushState({}, '', '/');
     }
@@ -158,6 +164,8 @@ export default function App() {
         }
       } else if (path === '/entrar') {
         setCurrentView('auth');
+      } else if (path === '/pagamento/retorno') {
+        setCurrentView('payment_return');
       } else if (path === '/admin') {
         const u = dbService.getCurrentUser();
         const uEmail = u?.email?.toLowerCase().trim() || '';
@@ -311,6 +319,19 @@ export default function App() {
         />
       )}
 
+      {currentView === 'payment_return' && (
+        <PaymentReturnScreen 
+          currentUser={currentUser}
+          onNavigate={handleNavigate}
+          onRefreshProfile={() => {
+            const freshUser = dbService.getCurrentUser();
+            if (freshUser) {
+              setCurrentUser(freshUser);
+            }
+          }}
+        />
+      )}
+
       {/* Restrict warning overlay modal */}
       {routePayload?.errorMsg && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -340,6 +361,7 @@ export default function App() {
         trackList={trackList}
         isCarMode={isCarMode}
         setCarMode={setCarMode}
+        onNavigate={handleNavigate}
       />
 
     </div>

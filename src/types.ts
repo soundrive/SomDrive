@@ -18,6 +18,17 @@ export interface Artist {
   subscriptionStatus?: 'ativo' | 'pendente' | 'cancelado';
   createdAt: string;
 
+  // Custom public catalog texts
+  customBadgeText?: string;
+  customContactLabel?: string;
+  customShareLabel?: string;
+  customRightBadgeTitle?: string;
+  customRightBadgeStatus?: string;
+  customRightBadgeDescription?: string;
+  customNoticeText?: string;
+  customSongsListTitle?: string;
+  customSongsListSubtitle?: string;
+
   // Extended Admin properties
   role?: 'user' | 'admin';
   paymentStatus?: 'inactive' | 'active' | 'pending' | 'cancelled' | 'manual';

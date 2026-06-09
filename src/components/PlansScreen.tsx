@@ -37,6 +37,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
   const [checkoutStep, setCheckoutStep] = useState<'select' | 'payment' | 'processing' | 'success'>('select');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [simulatedStatus, setSimulatedStatus] = useState<'ativo' | 'pendente' | 'cancelado'>('ativo');
+  const [loadingPlan, setLoadingPlan] = useState<'pro' | 'premium' | null>(null);
 
   // Mercado Pago Checkout integration settings loaded from database
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -127,21 +128,46 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     setCheckoutStep('payment');
   };
 
-  const handlePlanCheckout = (planKey: 'pro' | 'premium') => {
-    setSelectedPlan(planKey);
-    const isYearly = billingCycle === 'yearly';
-    let url = '';
-
-    if (planKey === 'pro') {
-      url = isYearly ? paymentSettings?.proAnnualUrl : paymentSettings?.proMonthlyUrl;
-    } else if (planKey === 'premium') {
-      url = isYearly ? paymentSettings?.premiumAnnualUrl : paymentSettings?.premiumMonthlyUrl;
+  const handlePlanCheckout = async (planKey: 'pro' | 'premium') => {
+    if (!currentUser || !currentUser.userId || !currentUser.email) {
+      setCheckoutError("Você precisa estar autenticado com e-mail para assinar um plano. Por favor, faça login ou registre-se.");
+      return;
     }
 
-    if (url && url.trim().startsWith('http')) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      setCheckoutError("Pagamento ainda não configurado. Fale com o suporte.");
+    setSelectedPlan(planKey);
+    setLoadingPlan(planKey);
+    setCheckoutError(null);
+
+    const isYearly = billingCycle === 'yearly';
+    const planCode = `${planKey}_${isYearly ? 'annual' : 'monthly'}`;
+
+    try {
+      const response = await fetch('/api/mercadopago/create-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uid: currentUser.userId,
+          email: currentUser.email,
+          planCode: planCode
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success || !data.checkoutUrl) {
+        throw new Error(data.error || "Não foi possível gerar a assinatura com o Mercado Pago.");
+      }
+
+      // Secure redirection to standard payments checkout
+      window.location.href = data.checkoutUrl;
+
+    } catch (err: any) {
+      console.error("Error creating Mercado Pago preapproval:", err);
+      setCheckoutError(err.message || "Oops! Ocorreu um erro ao processar a requisição de assinatura junto ao Mercado Pago. Se persistir, contate o suporte.");
+    } finally {
+      setLoadingPlan(null);
     }
   };
 
@@ -357,9 +383,10 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               ) : (
                 <button 
                   onClick={() => handlePlanCheckout('pro')}
-                  className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10"
+                  disabled={loadingPlan !== null}
+                  className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10 disabled:opacity-50"
                 >
-                  Quero ser Pro
+                  {loadingPlan === 'pro' ? 'Carregando Mercado Pago...' : 'Quero ser Pro'}
                 </button>
               )}
             </div>
@@ -411,9 +438,10 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               ) : (
                 <button 
                   onClick={() => handlePlanCheckout('premium')}
-                  className="w-full text-center py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
+                  disabled={loadingPlan !== null}
+                  className="w-full text-center py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold disabled:opacity-50"
                 >
-                  Quero ser Premium
+                  {loadingPlan === 'premium' ? 'Carregando Mercado Pago...' : 'Quero ser Premium'}
                 </button>
               )}
             </div>

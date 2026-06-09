@@ -88,5 +88,10 @@ service cloud.firestore {
       allow write: if isAdmin(); // Only admins can configure payment settings
     }
 
+    // --- Mercado Pago Subscriptions Log (Admin Only) ---
+    match /mp_subscriptions/{subId} {
+      allow read, write: if isAdmin();
+    }
+
   }
 }

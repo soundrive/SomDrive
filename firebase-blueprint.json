@@ -109,12 +109,39 @@
         "updatedAt": { "type": "string", "description": "Audit updated timestamp" },
         "updatedBy": { "type": "string", "description": "Email address of the admin who updated the links" }
       }
+    },
+    "MpSubscription": {
+      "title": "MpSubscription",
+      "description": "Mercado Pago Subscription payment record synchronized automatically via webhooks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique purchase or preapproval identifier" },
+        "userId": { "type": "string", "description": "The UID references Firebase auth user" },
+        "email": { "type": "string", "description": "Subscriber payment email" },
+        "plan": { "type": "string", "description": "Subscription tier selected (pro or premium)" },
+        "billingCycle": { "type": "string", "description": "Frequency index (monthly or annual)" },
+        "status": { "type": "string", "description": "The current billing active state from Mercado Pago" },
+        "paymentId": { "type": "string", "description": "The payment transactions primary code" },
+        "subscriptionId": { "type": "string", "description": "The Mercado Pago preapproval billing ID" },
+        "musicLimit": { "type": "integer", "description": "Allocated song slots allowed" },
+        "paidAt": { "type": "string", "description": "ISO format date of transaction charge completion" },
+        "updatedAt": { "type": "string", "description": "Audit change stamp" }
+      },
+      "required": ["id", "userId", "email", "plan", "billingCycle", "status", "musicLimit", "paidAt"]
     }
   },
   "firestore": {
     "/artists/{artistId}": {
       "schema": "Artist",
       "description": "Public and private profile data for registered composers"
+    },
+    "/users/{userId}": {
+      "schema": "Artist",
+      "description": "User administration and configuration document dual synced"
+    },
+    "/mp_subscriptions/{subId}": {
+      "schema": "MpSubscription",
+      "description": "Logs and records of web transactions received from Mercado Pago notifications"
     },
     "/artists/{artistId}/musics/{musicId}": {
       "schema": "Music",

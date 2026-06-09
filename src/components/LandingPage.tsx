@@ -42,17 +42,17 @@ const TEST_ARTISTS = [
     tagline: 'Compositor Sertanejo',
     city: 'Goiânia • GO',
     badgeText: 'Sertanejo',
-    accentColor: 'orange',
-    accentClass: 'from-orange-500 to-yellow-500',
-    accentText: 'text-orange-400',
-    hoverText: 'hover:text-orange-300',
-    dividerColor: 'border-orange-500/20',
-    glowColor: 'from-orange-500/20 via-yellow-500/5 to-transparent',
+    accentColor: 'emerald',
+    accentClass: 'from-emerald-500 to-yellow-500',
+    accentText: 'text-emerald-400',
+    hoverText: 'hover:text-emerald-300',
+    dividerColor: 'border-emerald-500/40',
+    glowColor: 'from-emerald-500/20 via-yellow-500/5 to-transparent',
     avatarChar: 'GS',
     plays: '14.2k plays',
     whatsapp: '(62) 99876-5432',
     instagram: '@gabrielsilva_compo',
-    bannerGradient: 'from-slate-900 to-orange-950/60',
+    bannerGradient: 'from-slate-900 to-emerald-950/60',
     tracks: [
       { id: 't1', title: 'Vento da Alvorada', duration: '03:02', composer: 'Gabriel Silva & Lara S.', plays: '4.8k' },
       { id: 't2', title: 'Coração de Estrada', duration: '03:14', composer: 'Gabriel Silva & Gabriel S.', plays: '3.1k' },
@@ -177,8 +177,8 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
       
       {/* Ambient Grid overlay & Decorative Glows */}
       <div className="absolute inset-0 bg-[radial-gradient(#ffffff03_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none z-0"></div>
-      <div className="absolute right-[-10%] top-[-10%] w-[600px] h-[600px] bg-gradient-to-br from-orange-500/10 via-yellow-500/5 to-transparent rounded-full filter blur-[120px] pointer-events-none z-0 animate-pulse"></div>
-      <div className="absolute left-[-5%] top-[25%] w-[500px] h-[500px] bg-gradient-to-br from-yellow-500/5 via-orange-600/5 to-transparent rounded-full filter blur-[140px] pointer-events-none z-0"></div>
+      <div className="absolute right-[-10%] top-[-10%] w-[600px] h-[600px] bg-gradient-to-br from-emerald-500/10 via-yellow-500/5 to-transparent rounded-full filter blur-[120px] pointer-events-none z-0 animate-pulse"></div>
+      <div className="absolute left-[-5%] top-[25%] w-[500px] h-[500px] bg-gradient-to-br from-yellow-500/5 via-emerald-600/5 to-transparent rounded-full filter blur-[140px] pointer-events-none z-0"></div>
 
       {/* Navigation Top Header */}
       <header className="relative z-10 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md px-6 py-4 md:px-12 flex items-center justify-between">
@@ -186,12 +186,12 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           onClick={() => onNavigate('landing')}
           className="flex items-center gap-2.5 cursor-pointer select-none group"
         >
-          <div className="p-2 bg-gradient-to-tr from-orange-500 to-yellow-500 rounded-xl group-hover:scale-105 transition-transform shadow-lg shadow-orange-500/25 flex items-center justify-center">
+          <div className="p-2 bg-gradient-to-tr from-emerald-500 to-yellow-500 rounded-xl group-hover:scale-105 transition-transform shadow-lg shadow-emerald-500/25 flex items-center justify-center">
             <Smartphone className="w-5 h-5 text-slate-950 stroke-[2.5]" />
           </div>
           <div>
             <h1 className="font-heading font-black text-lg md:text-xl tracking-tight text-white uppercase leading-none">
-              Soun<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-yellow-400">drive</span>
+              Soun<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-yellow-400">drive</span>
             </h1>
             <p className="text-[9px] font-mono tracking-widest text-yellow-400 uppercase font-bold mt-0.5">Catálogo Profissional</p>
           </div>
@@ -216,7 +216,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
               <button 
                 id="header-dash-btn"
                 onClick={() => onNavigate('dashboard')}
-                className="px-4 py-2 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-lg text-xs font-heading font-bold uppercase tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-md shadow-orange-500/10 select-none text-slate-950"
+                className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-yellow-500 rounded-lg text-xs font-heading font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-yellow-400 cursor-pointer shadow-md shadow-emerald-500/10 select-none text-slate-950 transition"
               >
                 Painel do Artista
               </button>
