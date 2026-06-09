@@ -6,6 +6,8 @@ export interface Artist {
   userId: string; // matches uid
   name: string; // matches artistName
   avatarUrl?: string;
+  photoURL?: string;
+  profileImageUrl?: string;
   city?: string;
   state?: string;
   genre?: string;

@@ -160,8 +160,14 @@ export default function Dashboard({
 
       let avatarUrl = profAvatarUrl;
       if (profAvatarFile) {
-        // Upload the avatar as 'cover' since it is an image
-        avatarUrl = await dbService.uploadFile(profile.userId, profAvatarFile, 'cover');
+        try {
+          avatarUrl = await dbService.uploadAvatar(profile.userId, profAvatarFile);
+        } catch (uploadErr: any) {
+          console.error("Erro no processamento do avatar:", uploadErr);
+          setProfError("Não foi possível salvar sua foto. Tente novamente.");
+          setIsSavingProfile(false);
+          return;
+        }
       }
 
       const updatedProfile = dbService.updateArtistProfile(profile.userId, {
@@ -219,7 +225,7 @@ export default function Dashboard({
   const getPlanTracksLimit = (plan: 'free' | 'pro' | 'premium') => {
     if (plan === 'pro') return 15;
     if (plan === 'premium') return 50;
-    return 5;
+    return 3;
   };
   const limitCount = getPlanTracksLimit(profile.plan);
 
@@ -945,18 +951,107 @@ export default function Dashboard({
           <div className="space-y-1">
             <h4 className="font-heading font-black text-lg text-orange-400 uppercase tracking-wide flex items-center gap-1.5 group-hover:text-amber-300 transition">
               <Sparkles className="w-5 h-5 text-orange-400 animate-pulse" /> 
-              {profile.plan === 'free' && 'Você está no Soundrive Free (5 Músicas)'}
+              {profile.plan === 'free' && 'Você está no Soundrive Free (3 Músicas)'}
               {profile.plan === 'pro' && 'Você está no Soundrive Pro (15 Músicas)'}
               {profile.plan === 'premium' && 'Você está no Soundrive Premium (50 Músicas)'}
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-              {profile.plan === 'free' && 'Sua conta gratuita permite até 5 músicas em seu catálogo privado. Faça upgrade para expandir seu limite para até 50 faixas.'}
+              {profile.plan === 'free' && 'Sua conta gratuita permite até 3 músicas em seu catálogo privado. Faça upgrade para expandir seu limite para até 50 faixas.'}
               {profile.plan === 'pro' && 'Seu plano Pro está ativo! Agora você pode cadastrar e compartilhar até 15 músicas em MP3 de alta conversão.'}
               {profile.plan === 'premium' && 'Seu plano Premium está ativo! Aproveite o limite expandido de até 50 músicas cadastradas em seu portfólio.'}
             </p>
           </div>
           <div className="px-4.5 py-2 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 text-[10px] font-mono rounded-full font-black uppercase tracking-wider shrink-0 font-bold hover:scale-102 transition shadow-md">
             Gerenciar Assinatura
+          </div>
+        </div>
+
+        {/* PREMIUM SHARING CARD PREVIEW PANEL */}
+        <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-2xl space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-heading font-black text-lg md:text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" /> Cartão de Compartilhamento Executivo
+              </h3>
+              <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                Apresentação impecável parecida com Spotify, Apple Music e Linktree no WhatsApp, Facebook e Instagram de forma automática.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 bg-emerald-950/50 text-emerald-405 border border-emerald-500/20 text-[10px] font-mono rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 self-start md:self-auto">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativo no Link
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            {/* Visual Card Image Preview */}
+            <div className="lg:col-span-7 flex flex-col items-center justify-center bg-slate-950/50 border border-slate-850/80 p-4 rounded-xl relative group overflow-hidden">
+              <div className="absolute top-2 left-2 px-2 py-0.5 bg-slate-900 border border-slate-800 text-[9px] font-mono font-bold text-slate-450 rounded tracking-wider uppercase">
+                Prévia do Cartão de Divulgação
+              </div>
+              <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
+                <img 
+                  src={`/api/og/artista/${profile.userId}`}
+                  alt="Cartão Soundrive" 
+                  className="w-full h-full object-cover select-none"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="mt-3 flex items-center gap-4 text-[10px] font-mono text-slate-500">
+                <span>Resolução: 1200 x 630 px</span>
+                <span>•</span>
+                <span>Format: SVG Vector Premium</span>
+              </div>
+            </div>
+
+            {/* Information & Description Area */}
+            <div className="lg:col-span-5 flex flex-col justify-between bg-slate-950/20 border border-slate-850/60 p-5 rounded-xl space-y-6">
+              <div className="space-y-4">
+                <p className="text-[10px] font-mono font-bold uppercase text-slate-500 tracking-wider">Como funciona?</p>
+                <div className="space-y-3.5 text-xs text-slate-300 leading-relaxed">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 bg-orange-950/60 text-orange-400 font-mono text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 border border-orange-500/20">1</div>
+                    <p>O algoritmo do WhatsApp, Facebook ou Instagram varre seu link e descobre os metadados de compartilhamento ocultos.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 bg-orange-950/60 text-orange-400 font-mono text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 border border-orange-500/20">2</div>
+                    <p>Ele cria instantaneamente um balão de pré-visualização contendo o vinil interativo, selo verificado e botão de escuta rápida.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 bg-orange-950/60 text-orange-400 font-mono text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 border border-orange-500/20">3</div>
+                    <p>Você gera credibilidade instantânea, sem revelar URLs complexas ou IDs técnicos.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-850/60 space-y-3">
+                <h5 className="text-[10px] font-mono font-bold uppercase text-slate-500 tracking-wider">Opções de Divulgação</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    onClick={handleCopyLink}
+                    className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-lg text-xs font-heading font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition hover:from-orange-500 hover:to-yellow-400 active:scale-95 font-bold"
+                  >
+                    <Copy className="w-4 h-4" /> {copiedAlert ? "Copiado!" : "Copiar Link"}
+                  </button>
+                  <button
+                    onClick={handleShareWhatsApp}
+                    className="px-4 py-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-emerald-400 rounded-lg text-xs font-heading font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition active:scale-95 font-bold"
+                  >
+                    <Share2 className="w-4 h-4 text-emerald-400" /> WhatsApp
+                  </button>
+                </div>
+                <a 
+                  href={`/api/og/artista/${profile.userId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-center text-[10px] font-mono text-orange-400 hover:text-orange-350 hover:underline pt-1 transition"
+                >
+                  Abrir imagem OG em nova guia ↗
+                </a>
+              </div>
+            </div>
           </div>
         </div>
 

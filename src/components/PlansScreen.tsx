@@ -64,11 +64,11 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
       name: 'Soundrive Free',
       description: 'Para começar e testar seu catálogo privado.',
       price: 0,
-      limitTracks: 5,
+      limitTracks: 3,
       limitSize: 20,
       badge: 'Grátis',
       features: [
-        { name: 'Até 5 músicas cadastradas', included: true, highlight: true },
+        { name: '★ Até 3 músicas cadastradas', included: true, highlight: true },
         { name: 'Catálogo privado por link', included: true },
         { name: 'Upload de músicas em MP3', included: true },
         { name: 'Limite de 20 MB por música', included: true },
@@ -172,7 +172,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
   };
 
   const handleDowngradeToFree = () => {
-    if (confirm("Deseja realmente voltar para o Plano Grátis? Seus limites de catálogo de 5 músicas serão aplicados novamente.")) {
+    if (confirm("Deseja realmente voltar para o Plano Grátis? Seus limites de catálogo de 3 músicas serão aplicados novamente.")) {
       const updated = dbService.updateArtistProfile(profile.userId, { 
         plan: 'free',
         subscriptionDate: undefined,

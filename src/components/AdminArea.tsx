@@ -689,7 +689,7 @@ export default function AdminArea({
                     {users.slice(0, 5).map((u, idx) => (
                       <div key={u.userId || `recent-${idx}`} className="py-3 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
-                          <img src={u.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} alt="" className="h-10 w-10 rounded-full object-cover border border-slate-800" />
+                          <img src={u.avatarUrl || u.photoURL || u.profileImageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} alt="" className="h-10 w-10 rounded-full object-cover border border-slate-800" />
                           <div>
                             <h4 className="text-sm font-semibold text-white">{u.name}</h4>
                             <p className="text-xs text-slate-400">{u.email}</p>
@@ -792,7 +792,7 @@ export default function AdminArea({
                               <td className="p-4">
                                 <div className="flex items-center space-x-3.5">
                                   <img 
-                                    src={user.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} 
+                                    src={user.avatarUrl || user.photoURL || user.profileImageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} 
                                     alt="" 
                                     className="h-10 w-10 rounded-full object-cover shrink-0 border border-slate-850"
                                   />
@@ -865,7 +865,7 @@ export default function AdminArea({
               
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div className="flex items-center space-x-3">
-                  <img src={selectedUser.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover border border-slate-800" />
+                  <img src={selectedUser.avatarUrl || selectedUser.photoURL || selectedUser.profileImageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} alt="" className="h-12 w-12 rounded-full object-cover border border-slate-800" />
                   <div>
                     <h3 className="text-lg font-bold text-white">Editando Perfil: {selectedUser.name}</h3>
                     <p className="text-slate-405 text-xs">{selectedUser.email}</p>
@@ -1721,7 +1721,7 @@ export default function AdminArea({
                           >
                             <option value="pro">Pro (15 músicas)</option>
                             <option value="premium">Premium (50 músicas)</option>
-                            <option value="free">Free (5 músicas)</option>
+                            <option value="free">Free (3 músicas)</option>
                           </select>
                         </div>
 

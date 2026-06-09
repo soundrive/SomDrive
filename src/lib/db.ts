@@ -226,6 +226,9 @@ export const dbService = {
       whatsapp: artist.whatsapp || artist.phone || '',
       phone: artist.phone || artist.whatsapp || '',
       instagram: artist.instagram || '',
+      avatarUrl: artist.avatarUrl || artist.photoURL || artist.profileImageUrl || '',
+      photoURL: artist.photoURL || artist.avatarUrl || artist.profileImageUrl || '',
+      profileImageUrl: artist.profileImageUrl || artist.avatarUrl || artist.photoURL || '',
       city: artist.city || '',
       state: artist.state || '',
       role: isMainAdmin ? 'admin' : (artist.role || 'user'),
@@ -1183,6 +1186,166 @@ export const dbService = {
       console.error("Firebase Storage Upload Error:", error);
       throw error;
     }
+  },
+
+  // Cloudflare R2 Upload for Avatars/Profile Photos
+  async uploadAvatar(userId: string, file: File): Promise<string> {
+    const mimeLower = file.type.toLowerCase();
+    const nameLower = file.name.toLowerCase();
+    const isAcceptedMime = mimeLower === "image/jpeg" || mimeLower === "image/jpg" || mimeLower === "image/png" || mimeLower === "image/webp";
+    const isAcceptedExt = nameLower.endsWith(".jpeg") || nameLower.endsWith(".jpg") || nameLower.endsWith(".png") || nameLower.endsWith(".webp");
+    
+    if (!isAcceptedMime && !isAcceptedExt) {
+      const errMsg = "Formato de arquivo inválido. Apenas imagens nos formatos JPEG, PNG e WEBP são permitidas.";
+      console.error("Formato Inválido ao subir avatar:", {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        userId
+      });
+      throw new Error(errMsg);
+    }
+    
+    const maxSizeBytes = 2 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      const errMsg = "A imagem é muito grande. O limite máximo é de 2 MB.";
+      console.error("Tamanho Excedido ao subir avatar:", {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        userId
+      });
+      throw new Error(errMsg);
+    }
+
+    let uploadUrl = "";
+    let publicImageUrl = "";
+
+    // 1. Obter URL presignada do R2
+    try {
+      const response = await fetch("/api/r2-presigned-image-upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fileType: file.type || "image/jpeg",
+          fileSize: file.size,
+          userId,
+          fileName: file.name
+        })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP error ${response.status}`);
+      }
+
+      const resData = await response.json();
+      uploadUrl = resData.uploadUrl;
+      publicImageUrl = resData.publicImageUrl;
+    } catch (err: any) {
+      console.error("erro ao gerar URL R2", {
+        error: err.message || String(err),
+        userId,
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        }
+      });
+      throw new Error("Não foi possível gerar a autorização de upload do R2.");
+    }
+
+    // 2. PUT da imagem para o R2 (usando a URL gerada)
+    let usedProxy = false;
+    try {
+      console.log("Tentando upload direto (PUT) no R2 com pre-signed URL...");
+      const putResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "image/jpeg"
+        },
+        body: file
+      });
+
+      if (!putResponse.ok) {
+        throw new Error(`HTTP status ${putResponse.status}`);
+      }
+      console.log("Upload direto com PUT concluído com sucesso.");
+    } catch (err: any) {
+      console.warn("Upload direto PUT falhou (provável CORS ou restrição de rede). Tentando rota proxy de contingência...", err);
+      try {
+        console.log("Iniciando fallback via proxy de imagem R2...");
+        const proxyResponse = await fetch("/api/r2-proxy-image-upload", {
+          method: "POST",
+          headers: {
+            "x-file-name": encodeURIComponent(file.name),
+            "x-file-type": file.type || "image/jpeg",
+            "x-file-size": String(file.size),
+            "x-user-id": userId
+          },
+          body: file
+        });
+
+        if (!proxyResponse.ok) {
+          const errData = await proxyResponse.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${proxyResponse.status}`);
+        }
+
+        const proxyData = await proxyResponse.json();
+        publicImageUrl = proxyData.publicImageUrl;
+        usedProxy = true;
+        console.log("Upload via proxy de contingência realizado com sucesso:", publicImageUrl);
+      } catch (proxyErr: any) {
+        console.error("erro no PUT da imagem", {
+          error: proxyErr.message || String(proxyErr),
+          userId,
+          file: {
+            name: file.name,
+            type: file.type,
+            size: file.size
+          }
+        });
+        throw new Error("Não foi possível enviar a imagem para o servidor de armazenamento.");
+      }
+    }
+
+    // 3. Salvar no Firestore users/{userId} e artists/{userId}
+    try {
+      const userRef = doc(db, "users", userId);
+      const artistRef = doc(db, "artists", userId);
+
+      const updatePayload = {
+        avatarUrl: publicImageUrl,
+        photoURL: publicImageUrl,
+        profileImageUrl: publicImageUrl,
+        updatedAt: serverTimestamp()
+      };
+
+      await setDoc(userRef, updatePayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `users/${userId}`);
+        throw err;
+      });
+
+      await setDoc(artistRef, updatePayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `artists/${userId}`);
+        throw err;
+      });
+    } catch (err: any) {
+      console.error("erro ao salvar Firestore", {
+        error: err.message || String(err),
+        userId,
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        }
+      });
+      throw new Error("Não foi possível salvar os caminhos da imagem no banco de dados.");
+    }
+
+    return publicImageUrl;
   },
 
   async deleteMusic(artistId: string, trackId: string): Promise<boolean> {

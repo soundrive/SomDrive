@@ -120,7 +120,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
       price: 'Grátis',
       badge: 'Grátis',
       features: [
-        { name: 'Até 5 músicas cadastradas', highlight: true },
+        { name: '★ Até 3 músicas cadastradas', highlight: true },
         { name: 'Catálogo privado por link' },
         { name: 'Upload de músicas em MP3' },
         { name: 'Limite de 20 MB por música' },
