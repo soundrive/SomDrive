@@ -25,7 +25,11 @@ import {
   Link2Off,
   Share2,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Play,
+  Pause,
+  SlidersHorizontal,
+  Check
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics } from '../types';
 import { dbService } from '../lib/db';
@@ -72,6 +76,11 @@ export default function Dashboard({
   // Storage Upload state block
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Custom filters and ordering states requested
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [isOrganizing, setIsOrganizing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New track form states
   const [title, setTitle] = useState('');
@@ -229,9 +238,15 @@ export default function Dashboard({
     // Set updated local state index sequentially
     const orderedIds = newTracks.map(t => t.trackId);
     try {
-      setTracks(newTracks.map((t, idx) => ({ ...t, position: idx })));
+      setTracks(newTracks.map((t, idx) => ({ ...t, position: idx, orderIndex: idx })));
       await dbService.saveMusicOrder(profile.userId, orderedIds);
       refreshData();
+      
+      // Show success toast
+      setToastMessage("Ordem das músicas atualizada.");
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 3000);
     } catch (err) {
       console.error("Erro ao reordenar faixa:", err);
     }
@@ -255,17 +270,40 @@ export default function Dashboard({
   const limitCount = getPlanTracksLimit(profile.plan);
 
   const handleCopyLink = () => {
-    const pageUrl = `${window.location.origin}/artista/${profile.userId}`;
-    const beautifulMessage = `🎧 Olá! Estou compartilhando meu catálogo musical privado no Soundrive.\n\nOuça minhas composições disponíveis aqui:\n${pageUrl}`;
-    navigator.clipboard.writeText(beautifulMessage);
+    const slugifyStr = (text: string) => {
+      return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-');
+    };
+    const slugOrId = profile.name ? slugifyStr(profile.name) : profile.userId;
+    const pageUrl = `https://soundrive.com.br/artista/${slugOrId}`;
+    navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
   };
 
   const handleShareWhatsApp = () => {
-    const pageUrl = `${window.location.origin}/artista/${profile.userId}`;
-    const beautifulMessage = `🎧 Olá! Estou compartilhando meu catálogo musical privado no Soundrive.\n\nOuça minhas composições disponíveis aqui:\n${pageUrl}`;
-    const urlEncoded = encodeURIComponent(beautifulMessage);
+    const slugifyStr = (text: string) => {
+      return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-');
+    };
+    const slugOrId = profile.name ? slugifyStr(profile.name) : profile.userId;
+    const pageUrl = `https://soundrive.com.br/artista/${slugOrId}`;
+    const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
+    const urlEncoded = encodeURIComponent(messageText);
     window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
   };
 
@@ -1018,7 +1056,7 @@ export default function Dashboard({
               </div>
               <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
                 <img 
-                  src={`/api/og/artista/${profile.userId}`}
+                  src={`/api/og-artista?id=${profile.userId}`}
                   alt="Cartão Soundrive" 
                   className="w-full h-full object-cover select-none"
                   referrerPolicy="no-referrer"
@@ -1027,7 +1065,7 @@ export default function Dashboard({
               <div className="mt-3 flex items-center gap-4 text-[10px] font-mono text-slate-500">
                 <span>Resolução: 1200 x 630 px</span>
                 <span>•</span>
-                <span>Format: SVG Vector Premium</span>
+                <span>Formato: Imagem PNG de Alta Definição</span>
               </div>
             </div>
 
@@ -1086,7 +1124,7 @@ export default function Dashboard({
             <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
               <Disc className="w-5 h-5 text-orange-400" /> Meu Acervo Musical
             </h3>
-            <p className="text-slate-400 text-xs mt-0.5 font-medium">Controle suas composições salvas no catálogo. Clique no link do card para ativar/desativar a escuta pública.</p>
+            <p className="text-slate-400 text-xs mt-0.5 font-medium">Organize suas composições e escolha a ordem em que elas aparecem no catálogo público.</p>
           </div>
 
           <button 
@@ -1098,21 +1136,71 @@ export default function Dashboard({
                 setShowAddForm(true);
               }
             }}
-            className="px-5 py-3 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 flex items-center gap-2 shadow-lg shadow-orange-500/20 group cursor-pointer transition duration-250 select-none font-bold"
+            className="px-5 py-3 bg-orange-600 hover:bg-orange-505 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 flex items-center gap-2 shadow-lg shadow-orange-500/20 group cursor-pointer transition duration-250 select-none font-bold"
           >
             <Plus className="w-5 h-5 text-slate-950 stroke-[2.5] group-hover:rotate-180 transition-transform" /> Adicionar Música
           </button>
         </div>
 
-        {/* Music List Grid */}
+        {/* FILTERS & MODE CONTROLLER BAR */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-4 bg-slate-900/60 p-3 rounded-xl border border-slate-850">
+          {/* Simple Filter: Todas / Ativas / Inativas */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scroller-none">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition cursor-pointer select-none ${
+                statusFilter === 'all'
+                  ? 'bg-orange-600 text-slate-950 font-black'
+                  : 'bg-slate-955/80 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-850'
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setStatusFilter('active')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition cursor-pointer select-none ${
+                statusFilter === 'active'
+                  ? 'bg-emerald-600 text-slate-950 font-black'
+                  : 'bg-slate-955/80 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-850'
+              }`}
+            >
+              Ativas
+            </button>
+            <button
+              onClick={() => setStatusFilter('inactive')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition cursor-pointer select-none ${
+                statusFilter === 'inactive'
+                  ? 'bg-rose-600 text-slate-950 font-black'
+                  : 'bg-slate-955/80 text-slate-400 hover:text-white hover:bg-slate-900 border border-slate-850'
+              }`}
+            >
+              Inativas
+            </button>
+          </div>
+
+          {/* Mode Switcher Buttons */}
+          <button
+            onClick={() => setIsOrganizing(!isOrganizing)}
+            className={`px-4 py-2 rounded-xl text-xs font-heading font-black tracking-wider uppercase flex items-center gap-2 cursor-pointer transition select-none ${
+              isOrganizing
+                ? 'bg-[#d4af37] text-slate-950 border border-[#d4af37]/30 shadow-lg shadow-[#d4af37]/10'
+                : 'bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>{isOrganizing ? 'Visualizar Painel' : 'Organizar Ordem'}</span>
+          </button>
+        </div>
+
+        {/* Music List */}
         {tracks.length === 0 ? (
           <div id="empty-songs" className="text-center py-20 bg-slate-900/40 border border-dashed border-slate-850 rounded-3xl space-y-4">
-            <div className="w-16 h-16 bg-slate-950 rounded-full flex items-center justify-center mx-auto text-slate-600 border border-slate-800">
-              <Music className="w-8 h-8" />
+            <div className="w-16 h-16 bg-slate-955 rounded-full flex items-center justify-center mx-auto text-orange-500 border border-slate-800 shadow-xl shadow-orange-550/5">
+              <Music className="w-8 h-8 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-heading font-black text-base uppercase text-slate-300">Seu pen drive está vazio</h4>
-              <p className="text-slate-500 text-xs max-w-sm mx-auto">Comece enviando sua primeira composição. Ela ficará disponível imediatamente para fãs e produtores ouvirem.</p>
+              <h4 className="font-heading font-black text-lg uppercase text-slate-200">Nenhuma música cadastrada ainda.</h4>
+              <p className="text-slate-500 text-xs max-w-sm mx-auto">Adicione sua primeira composição para montar seu catálogo Soundrive.</p>
             </div>
             <button 
               id="empty-add-btn"
@@ -1123,148 +1211,253 @@ export default function Dashboard({
                   setShowAddForm(true);
                 }
               }}
-              className="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs font-semibold uppercase text-orange-400 hover:text-slate-950 hover:bg-orange-500 transition cursor-pointer select-none"
+              className="px-5 py-3 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-bold uppercase text-slate-950 tracking-wider shadow-lg shadow-orange-500/20 transition cursor-pointer select-none"
             >
-              Cadastrar faixa de demonstração
+              Adicionar Música
             </button>
           </div>
         ) : (
-          <div id="songs-list-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {tracks.map((track, trackIdx) => {
-              const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
+          isOrganizing ? (
+          /* ORGANIZE ORDER MODE (SIMPLIFIED RENDERING AS REQUESTED) */
+          <div className="space-y-2 mt-4">
+            <div className="bg-slate-950/40 px-4 py-2 text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 flex items-center justify-between border-b border-slate-900">
+              <span>Posição & Música</span>
+              <span>Ordenar</span>
+            </div>
+            {tracks.filter(t => {
+              const isActive = (t.status || 'active') === 'active';
+              if (statusFilter === 'active') return isActive;
+              if (statusFilter === 'inactive') return !isActive;
+              return true;
+            }).map((track) => {
+              const absoluteIdx = tracks.findIndex(t => t.trackId === track.trackId);
               
               return (
                 <div 
                   key={track.trackId}
+                  className="bg-gradient-to-r from-slate-900 to-[#0e1628] border border-slate-850 rounded-xl p-3 flex items-center justify-between transition hover:border-slate-800/80"
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Position tag */}
+                    <div className="w-8 h-8 rounded-lg bg-orange-950/80 border border-orange-500/30 flex items-center justify-center text-orange-400 font-mono text-sm font-bold">
+                      #{absoluteIdx + 1}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white uppercase tracking-tight">{track.title}</h4>
+                      <p className="text-[10.5px] font-mono text-slate-400 uppercase">{track.genre || profile.genre} • Autor: {track.composer || profile.name}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={(e) => handleMoveTrack(track.trackId, 'up', e)}
+                      disabled={absoluteIdx === 0}
+                      className="p-2 bg-slate-950 border border-slate-800 text-slate-400 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                      title="Mover para cima"
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+
+                    <button 
+                      onClick={(e) => handleMoveTrack(track.trackId, 'down', e)}
+                      disabled={absoluteIdx === tracks.length - 1}
+                      className="p-2 bg-slate-950 border border-slate-800 text-slate-400 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                      title="Mover para baixo"
+                    >
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                    
+                    <span className="hidden sm:inline-block text-[9px] text-emerald-400 font-mono border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase font-bold bg-emerald-950/20">
+                      salvo automaticamente
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* STANDARD PREMIUM LIST OF MUSIC CARDS VIA HORIZONTAL ROWS */
+          <div className="space-y-3 mt-4">
+            {tracks.filter(t => {
+              const isActive = (t.status || 'active') === 'active';
+              if (statusFilter === 'active') return isActive;
+              if (statusFilter === 'inactive') return !isActive;
+              return true;
+            }).map((track) => {
+              const absoluteIdx = tracks.findIndex(t => t.trackId === track.trackId);
+              const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
+              const isPublicActive = (track.status || 'active') === 'active';
+              
+              const handleCopySongLink = (trackVal: Track, e: React.MouseEvent) => {
+                e.stopPropagation();
+                const slugifyStr = (text: string) => {
+                  return text
+                    .toString()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9\s-]/g, '')
+                    .replace(/[\s_]+/g, '-')
+                    .replace(/-+/g, '-');
+                };
+                const slugOrId = profile.name ? slugifyStr(profile.name) : profile.userId;
+                const songUrl = `https://soundrive.com.br/artista/${slugOrId}?play=${trackVal.trackId}`;
+                navigator.clipboard.writeText(songUrl);
+                
+                setToastMessage("Link do catálogo com essa música copiado!");
+                setTimeout(() => {
+                  setToastMessage(null);
+                }, 3000);
+              };
+
+              return (
+                <div 
+                  key={track.trackId}
                   onClick={() => onSelectTrack(track, tracks)}
-                  className={`bg-slate-900 hover:bg-slate-850 border rounded-xl overflow-hidden shadow-lg transition-transform hover:scale-101 cursor-pointer flex flex-col justify-between h-full ${
-                    isCurrentlyPlaying ? 'ring-2 ring-orange-500 border-transparent bg-slate-850' : 'border-slate-850'
+                  className={`bg-gradient-to-r from-[#0a1122] via-[#0d162a] to-[#080d19] hover:from-[#0d1d3a] hover:to-[#0c162b] border rounded-2xl overflow-hidden shadow-2xl transition duration-300 cursor-pointer p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative ${
+                    isCurrentlyPlaying ? 'ring-2 ring-orange-500 border-transparent' : 'border-slate-800/60'
                   }`}
                 >
-                  <div>
-                    {/* Premium Musical Note Card Header - Shrunk size as user requested */}
-                    <div className="relative h-20 sm:h-24 w-full bg-[#07090e] border-b border-slate-850 flex flex-col items-center justify-center p-2 text-center overflow-hidden">
-                      {/* Ambient glows inside mock card header */}
-                      <div className="absolute -right-6 -top-6 w-24 h-24 bg-orange-500/10 rounded-full blur-xl pointer-events-none"></div>
-                      <div className="absolute -left-6 -bottom-6 w-24 h-24 bg-yellow-400/10 rounded-full blur-xl pointer-events-none"></div>
-                      
+                  {/* Left part: Position, Play button & Meta */}
+                  <div className="flex items-center gap-3.5 w-full md:w-auto min-w-0 flex-1">
+                    {/* Position Tag badge - Premium Orange highlight */}
+                    <div className="w-9 h-9 rounded-xl bg-orange-950/60 border border-orange-500/20 flex flex-col items-center justify-center text-orange-400 text-xs font-mono font-bold shrink-0 shadow-lg shadow-orange-500/5">
+                      <span className="text-[8px] text-orange-550 font-sans tracking-tight uppercase leading-none font-black">Pos</span>
+                      <span className="leading-none mt-0.5 select-none font-mono">#{absoluteIdx + 1}</span>
+                    </div>
+
+                    {/* Small & Elegant Play/Pause bubble */}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectTrack(track, tracks);
+                      }}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform hover:scale-105 active:scale-95 ${
+                        isCurrentlyPlaying && isPlaying 
+                          ? 'bg-orange-600 text-slate-950 shadow-md shadow-orange-500/35' 
+                          : 'bg-slate-950 border border-slate-800 text-orange-404 hover:text-white hover:bg-slate-900 bg-opacity-95'
+                      }`}
+                    >
+                      {isCurrentlyPlaying && isPlaying ? (
+                        <Pause className="w-3.5 h-3.5 fill-current text-slate-950 stroke-none" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 fill-current text-orange-400 stroke-none ml-0.5" />
+                      )}
+                    </button>
+
+                    {/* Meta section */}
+                    <div className="min-w-0 pr-2 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight truncate max-w-[150px] sm:max-w-xs">
+                          {track.title}
+                        </h4>
+                        
+                        <span className="px-2 py-0.5 bg-[#080d19]/80 border border-slate-850 text-slate-400 text-[8px] font-mono rounded-md uppercase font-bold tracking-wider">
+                          {track.genre || profile.genre}
+                        </span>
+
+                        {isCurrentlyPlaying && isPlaying && (
+                          <div className="flex items-end gap-[1.5px] h-3 ml-1">
+                            <span className="w-[1.8px] bg-orange-400 animate-bar-1 h-3 rounded-full"></span>
+                            <span className="w-[1.8px] bg-orange-400 animate-bar-2 h-1.5 rounded-full"></span>
+                            <span className="w-[1.8px] bg-orange-400 animate-bar-3 h-2.5 rounded-full"></span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Stacked subtext: Composer & Guia */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-y-0.5 sm:gap-x-3 text-[10.5px] text-slate-405 font-bold uppercase font-sans">
+                        <span>Autor: <span className="font-mono text-[10.5px] text-slate-300">{track.composer || profile.name}</span></span>
+                        {(track.singer || track.performer) && (
+                          <span className="hidden sm:inline text-slate-700 font-bold">•</span>
+                        )}
+                        {(track.singer || track.performer) && (
+                          <span>Intérprete/Guia: <span className="font-mono text-[10.5px] text-orange-400">{track.singer || track.performer}</span></span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right part: plays count, status, moves & administrative actions */}
+                  <div className="flex flex-row md:items-center justify-between md:justify-end gap-3.5 shrink-0 pt-3 md:pt-0 border-t md:border-0 border-slate-850/55 w-full md:w-auto">
+                    {/* Stats & status display label */}
+                    <div className="flex items-center gap-2">
+                      {/* Plays counter */}
+                      <div className="text-[10px] font-mono text-slate-400 font-bold flex items-center gap-1 bg-slate-950 hover:bg-[#060b14] border border-slate-800 px-2 py-1 rounded-lg select-none">
+                        <TrendingUp className="w-3.5 h-3.5 text-yellow-500" />
+                        <span>{track.playsCount || 0} plays</span>
+                      </div>
+
                       {/* Interactive Link Status Toggler */}
                       <button
                         onClick={(e) => handleToggleMusicStatus(track, e)}
-                        className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 border text-[8px] font-mono rounded uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1 z-20 ${
-                          (track.status || 'active') === 'active'
-                            ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-400 hover:bg-emerald-900'
-                            : 'bg-rose-950/90 border-rose-500/40 text-rose-400 hover:bg-rose-900'
+                        className={`px-2.5 py-1 border text-[9px] font-mono rounded-lg uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1.5 ${
+                          isPublicActive
+                            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400 hover:bg-emerald-955'
+                            : 'bg-rose-950/40 border-rose-500/30 text-rose-450 hover:bg-rose-955'
                         }`}
-                        title={ (track.status || 'active') === 'active' ? "Desativar escuta pública (Link Ativo)" : "Ativar escuta pública (Link Inativo)" }
+                        title={isPublicActive ? "Desativar escuta pública (Link Ativo)" : "Ativar escuta pública (Link Inativo)"}
                       >
-                        { (track.status || 'active') === 'active' ? (
+                        {isPublicActive ? (
                           <>
-                            <Link2 className="w-2 h-2 text-emerald-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                             <span>Ativo</span>
                           </>
                         ) : (
                           <>
-                            <Link2Off className="w-2 h-2 text-rose-400 shrink-0" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
                             <span>Inativo</span>
                           </>
-                        ) }
+                        )}
                       </button>
-                      
-                      <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr ${isCurrentlyPlaying ? 'from-orange-600 to-yellow-500 text-slate-950 shadow-md shadow-orange-500/20' : 'from-slate-950 to-slate-900 border border-slate-800 text-orange-400'} flex items-center justify-center shadow-lg relative z-10 transition-transform`}>
-                        <Music className="w-3 h-3 sm:w-4 sm:h-4 animate-bounce" />
-                      </div>
-                      
-                      {/* Neon wave simulation bar graph */}
-                      <div className="flex items-end gap-[3px] mt-1 sm:mt-2 z-10 h-3 sm:h-4">
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-1.5'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-3'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-3' : 'bg-orange-400/30 h-4.5'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-gradient-to-t from-orange-500 to-yellow-400 animate-bar-4' : 'bg-orange-400/30 h-2.5'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-450 animate-bar-2' : 'bg-orange-950/80 hover:bg-orange-500/30 h-3.5'}`}></span>
-                        <span className={`w-1 rounded-full transition-all ${isCurrentlyPlaying && isPlaying ? 'bg-orange-500 animate-bar-1' : 'bg-orange-950/80 hover:bg-orange-500/30 h-1.5'}`}></span>
-                      </div>
-                      
-                      <span className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 px-2 py-0.5 bg-orange-950/80 border border-orange-500/20 text-orange-400 text-[9px] font-mono rounded uppercase font-bold tracking-wider">
-                        {track.genre || profile.genre}
-                      </span>
                     </div>
 
-                    {/* Metadata body - Shrunk as requested */}
-                    <div className="p-3 sm:p-4 space-y-1">
-                      <h4 className="font-heading font-black text-xs sm:text-sm tracking-tight text-white uppercase truncate">
-                        {track.title}
-                      </h4>
-                      <p className="text-[10px] sm:text-xs text-slate-400 font-semibold truncate leading-tight">
-                        Intérprete: {track.singer || profile.name}
-                      </p>
-                      {track.composer && (
-                        <p className="text-[9px] sm:text-[10px] font-mono text-slate-500 uppercase">
-                          Autor: {track.composer}
-                        </p>
-                      )}
-                      {track.partners && (
-                        <p className="text-[9px] font-mono text-slate-400/80 hover:text-white uppercase truncate" title={track.partners}>
-                          Parceiros: {track.partners}
-                        </p>
-                      )}
-                      {track.description && (
-                        <p className="text-slate-400 text-[10px] sm:text-xs italic line-clamp-1 pt-1 border-t border-slate-850/60 leading-relaxed">
-                          {track.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Foot action panel - Shrunk padding and added up/down order controls */}
-                  <div className="px-3 py-2 sm:px-4 sm:py-2.5 bg-slate-955 border-t border-slate-850/50 flex items-center justify-between">
+                    {/* Row of actionable control buttons */}
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-mono text-slate-400 font-bold flex items-center gap-0.5">
-                        <TrendingUp className="w-3 h-3 text-yellow-400" /> {track.playsCount}
-                      </span>
-                      {track.lyrics && (
-                        <span className="px-1 py-0.5 bg-orange-955/80 border border-orange-550/25 text-orange-400 rounded text-[8px] font-mono font-bold uppercase tracking-wider">
-                          Letra
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {/* Order position buttons */}
+                      {/* Order Position Shift controls */}
                       <button 
                         onClick={(e) => handleMoveTrack(track.trackId, 'up', e)}
-                        disabled={trackIdx === 0}
-                        className="p-1 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-500 hover:bg-slate-850 rounded cursor-pointer flex items-center justify-center transition"
-                        title="Mover para cima"
+                        disabled={absoluteIdx === 0}
+                        className="p-1.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                        title="Subir Posição"
                       >
-                        <ArrowUp className="w-3 h-3" />
+                        <ArrowUp className="w-3.5 h-3.5" />
                       </button>
 
                       <button 
                         onClick={(e) => handleMoveTrack(track.trackId, 'down', e)}
-                        disabled={trackIdx === tracks.length - 1}
-                        className="p-1 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-500 hover:bg-slate-850 rounded cursor-pointer flex items-center justify-center transition"
-                        title="Mover para baixo"
+                        disabled={absoluteIdx === tracks.length - 1}
+                        className="p-1.5 bg-slate-955 border border-slate-800 text-slate-400 hover:text-orange-400 disabled:opacity-20 disabled:hover:text-slate-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                        title="Descer Posição"
                       >
-                        <ArrowDown className="w-3 h-3" />
+                        <ArrowDown className="w-3.5 h-3.5" />
                       </button>
 
                       <div className="h-4 w-[1px] bg-slate-800/80 mx-0.5"></div>
 
                       <button 
+                        onClick={(e) => handleCopySongLink(track, e)}
+                        className="p-1.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                        title="Copiar link da música"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button 
                         onClick={(e) => handleStartEdit(track, e)}
-                        className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-orange-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer flex items-center justify-center"
+                        className="p-1.5 bg-slate-955 border border-slate-800 text-slate-400 hover:text-orange-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
                         title="Editar detalhes"
                       >
-                        <Pencil className="w-3 h-3" />
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
 
                       <button 
                         onClick={(e) => handleDeleteMusic(track.trackId, e)}
-                        className="p-1.5 bg-slate-900 border border-slate-850 text-slate-500 hover:text-red-400 hover:bg-slate-850 hover:border-slate-800 rounded transition cursor-pointer flex items-center justify-center"
+                        className="p-1.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-red-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
                         title="Excluir música"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -1272,6 +1465,7 @@ export default function Dashboard({
               );
             })}
           </div>
+          )
         )}
 
       </main>

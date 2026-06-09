@@ -9,6 +9,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
 import createSubscriptionHandler from "./api/mercadopago/create-subscription";
 import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
+import sharp from "sharp";
 
 dotenv.config();
 
@@ -691,202 +692,295 @@ async function startServer() {
 
   // Robust method to fetch public artist profiles using public Firestore REST API
   // This bypasses any server-side service-account PERMISSION_DENIED issues completely!
-  const fetchArtistRest = async (userId: string): Promise<{ name: string; genre: string; city: string }> => {
+  // Also supports friendly sluggified names and ID search
+  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string }> => {
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     let name = "Compositor";
     let genre = "Música Sertaneja";
     let city = "Brasil";
+    let resolvedUserId = idOrSlug;
 
+    const cleanId = (idOrSlug || "").trim();
+    const cleanIdLower = cleanId.toLowerCase();
+
+    const slugifyStr = (text: string) => {
+      return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-');
+    };
+
+    // First try direct document fetch (if it's a solid UID)
     try {
-      // 1. Try fetching from public 'artists' collection (inherently public per firestore.rules)
-      const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${userId}`;
-      const res = await fetch(artistUrl);
-      if (res.ok) {
-        const doc = await res.json();
-        const f = doc.fields || {};
-        name = f.name?.stringValue || f.artistName?.stringValue || name;
-        genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
-        city = f.city?.stringValue || city;
-        console.log(`[Firestore REST] Obtido com sucesso do perfil artistico de: ${name}`);
-        return { name, genre, city };
-      }
-
-      // 2. Try fetching from 'users' collection as fallback
-      const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/users/${userId}`;
-      const userRes = await fetch(userUrl);
-      if (userRes.ok) {
-        const doc = await userRes.json();
-        const f = doc.fields || {};
-        name = f.name?.stringValue || f.artistName?.stringValue || name;
-        genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
-        city = f.city?.stringValue || city;
-        console.log(`[Firestore REST] Obtido com sucesso do perfil de usuário: ${name}`);
-        return { name, genre, city };
+      if (cleanId && !cleanId.includes('-')) {
+        const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${cleanId}`;
+        const res = await fetch(artistUrl);
+        if (res.ok) {
+          const doc = await res.json();
+          const f = doc.fields || {};
+          name = f.name?.stringValue || f.artistName?.stringValue || name;
+          genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
+          city = f.city?.stringValue || city;
+          resolvedUserId = doc.name.split('/').pop() || cleanId;
+          return { userId: resolvedUserId, name, genre, city };
+        }
       }
     } catch (err) {
-      console.warn("Firestore public REST query exception (resolving gracefully):", err);
+      console.warn("Direct direct artist fetch failed, will try collection scan.");
     }
 
-    // 3. Fallback: Try native SDK (if credentials allow, otherwise acts as fallback)
+    // Scan 'artists' collection to match sluggified name
     try {
-      const userDoc = await db.collection("artists").doc(userId).get();
+      const artistsListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists?pageSize=100`;
+      const res = await fetch(artistsListUrl);
+      if (res.ok) {
+        const data = await res.json();
+        const docs = data.documents || [];
+        for (const doc of docs) {
+          const f = doc.fields || {};
+          const docId = doc.name.split('/').pop() || '';
+          const artistName = f.name?.stringValue || f.artistName?.stringValue || '';
+          const artistGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
+          const artistCity = f.city?.stringValue || '';
+          
+          if (docId.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
+            return {
+              userId: docId,
+              name: artistName || name,
+              genre: artistGenre || genre,
+              city: artistCity || city
+            };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("REST artists collection matching failed:", err);
+    }
+
+    // Try scanning 'users' collection too
+    try {
+      const usersListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/users?pageSize=100`;
+      const res = await fetch(usersListUrl);
+      if (res.ok) {
+        const data = await res.json();
+        const docs = data.documents || [];
+        for (const doc of docs) {
+          const f = doc.fields || {};
+          const docId = doc.name.split('/').pop() || '';
+          const userName = f.name?.stringValue || f.artistName?.stringValue || '';
+          const userGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
+          const userCity = f.city?.stringValue || '';
+          
+          if (docId.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
+            return {
+              userId: docId,
+              name: userName || name,
+              genre: userGenre || genre,
+              city: userCity || city
+            };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("REST users collection matching failed:", err);
+    }
+
+    // Try fallback to native SDK if possible
+    try {
+      const userDoc = await db.collection("artists").doc(cleanId).get();
       if (userDoc.exists) {
         const data = userDoc.data();
         name = data?.name || data?.artistName || name;
         genre = data?.genre || data?.mainGenre || genre;
         city = data?.city || city;
+        resolvedUserId = cleanId;
       } else {
-        const uDoc = await db.collection("users").doc(userId).get();
+        const uDoc = await db.collection("users").doc(cleanId).get();
         if (uDoc.exists) {
           const uData = uDoc.data();
           name = uData?.name || name;
           genre = uData?.genre || uData?.mainGenre || genre;
           city = uData?.city || city;
+          resolvedUserId = cleanId;
         }
       }
     } catch (adminErr) {
       console.warn("Firestore Admin fallback exception:", adminErr);
     }
 
-    return { name, genre, city };
+    return { userId: resolvedUserId, name, genre, city };
   };
 
-  // API Route to generate dynamic Open Graph (OG) sharing images as a premium quality SVG
-  app.get("/api/og/artista/:userId", async (req, res) => {
-    try {
-      const userId = req.params.userId;
-      const { name, genre, city } = await fetchArtistRest(userId);
+  // Helper to generate dynamic Open Graph PNG buffers
+  const generateArtistPngBuffer = async (artistId: string): Promise<{ buffer: Buffer; contentType: string }> => {
+    const { name, genre, city } = await fetchArtistRest(artistId);
 
-      // Safe formatting with guaranteed string values
-      const cleanName = escapeXml((name || "Compositor").trim().toUpperCase());
-      const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
-      const cleanCity = escapeXml((city || "Brasil").trim());
+    // Safe formatting with guaranteed string values
+    const cleanName = escapeXml((name || "Compositor").trim().toUpperCase());
+    const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
+    const cleanCity = escapeXml((city || "Brasil").trim());
 
-      let subtitle = "";
-      if (cleanGenre && cleanCity) {
-        subtitle = `${cleanGenre} &#8226; ${cleanCity}`;
-      } else if (cleanGenre) {
-        subtitle = cleanGenre;
-      } else if (cleanCity) {
-        subtitle = cleanCity;
-      } else {
-        subtitle = "Catálogo de Músicas";
-      }
+    let subtitle = "";
+    if (cleanGenre && cleanCity) {
+      subtitle = `${cleanGenre} &#8226; ${cleanCity}`;
+    } else if (cleanGenre) {
+      subtitle = cleanGenre;
+    } else if (cleanCity) {
+      subtitle = cleanCity;
+    } else {
+      subtitle = "Catálogo de Músicas";
+    }
 
-      const initialLetter = escapeXml((name || "S").trim().substring(0, 1).toUpperCase());
+    const initialLetter = escapeXml((name || "S").trim().substring(0, 1).toUpperCase());
 
-      // Beautiful SVG open graph card template (1200x630px) with CDATA block to bypass XML/CORS font-loading issues
-      const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+    // Beautiful, non-AI-looking dark/purple premium card template (1200x630px)
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
     <style type="text/css"><![CDATA[
-      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
       .title-text {
-        font-family: 'Space Grotesk', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-        font-weight: 700;
+        font-family: 'Space Grotesk', -apple-system, sans-serif;
+        font-weight: 850;
         fill: #ffffff;
       }
       .sub-text {
-        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        font-family: -apple-system, sans-serif;
         font-weight: 600;
-        fill: #94a3b8;
-      }
-      .badge-text {
-        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-        font-weight: 700;
-        fill: #ffd700;
-      }
-      .button-text {
-        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-        font-weight: 700;
-        fill: #081224;
+        fill: #a5b4fc;
       }
       .logo-text {
-        font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-        font-weight: 700;
+        font-family: 'Space Grotesk', -apple-system, sans-serif;
+        font-weight: 800;
         fill: #ffffff;
-        letter-spacing: 2px;
+        letter-spacing: 3px;
       }
       .footer-text {
-        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        font-family: -apple-system, sans-serif;
         font-weight: 600;
-        fill: #475569;
-        letter-spacing: 1px;
+        fill: #7c3aed;
+        letter-spacing: 1.5px;
       }
     ]]></style>
-  </defs>
     
     <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#081224" />
-      <stop offset="50%" stop-color="#0b1a30" />
-      <stop offset="100%" stop-color="#050d18" />
+      <stop offset="0%" stop-color="#120424" />
+      <stop offset="60%" stop-color="#070210" />
+      <stop offset="100%" stop-color="#030107" />
     </linearGradient>
     
     <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffe259" />
-      <stop offset="100%" stop-color="#ffa751" />
+      <stop offset="0%" stop-color="#ffd066" />
+      <stop offset="100%" stop-color="#f59e0b" />
     </linearGradient>
-    
+
+    <linearGradient id="button-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#c084fc" />
+    </linearGradient>
+
+    <!-- Sleeve cover gradient -->
+    <linearGradient id="sleeve-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95" />
+      <stop offset="50%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
     <linearGradient id="vinyl-label-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2d3748" />
-      <stop offset="50%" stop-color="#1a202c" />
-      <stop offset="100%" stop-color="#0d1117" />
+      <stop offset="0%" stop-color="#311042" />
+      <stop offset="100%" stop-color="#0f0515" />
     </linearGradient>
     
     <linearGradient id="vinyl-gold-shine" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffe259" stop-opacity="0.4" />
-      <stop offset="30%" stop-color="#ffa751" stop-opacity="0.1" />
-      <stop offset="70%" stop-color="#ffe259" stop-opacity="0.3" />
-      <stop offset="100%" stop-color="#ffa751" stop-opacity="0.5" />
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10" />
+      <stop offset="30%" stop-color="#8b5cf6" stop-opacity="0.05" />
+      <stop offset="70%" stop-color="#ffffff" stop-opacity="0.10" />
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.15" />
+    </linearGradient>
+
+    <linearGradient id="glow-border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.2" />
     </linearGradient>
     
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#000000" flood-opacity="0.75"/>
     </filter>
   </defs>
 
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#bg-gradient)" />
   
-  <!-- Atmospheric gold ambient glows -->
-  <circle cx="200" cy="315" r="400" fill="#ffa751" opacity="0.04" filter="blur(60px)" />
-  <circle cx="950" cy="315" r="450" fill="#ffa751" opacity="0.06" filter="blur(80px)" />
+  <!-- Atmospheric neon / purple ambient glows -->
+  <circle cx="200" cy="150" r="450" fill="#7c3aed" opacity="0.08" filter="blur(70px)" />
+  <circle cx="1000" cy="315" r="500" fill="#a855f7" opacity="0.12" filter="blur(90px)" />
+  <circle cx="600" cy="500" r="300" fill="#ec4899" opacity="0.05" filter="blur(60px)" />
 
-  <!-- Partially visible vintage modern vinyl vinyl on right edge -->
-  <g transform="translate(100, 0)">
-    <!-- Main vinyl base body -->
-    <circle cx="860" cy="315" r="290" fill="#090b11" stroke="#2d3748" stroke-width="2" filter="url(#shadow)" />
+  <!-- Fully customized Vinyl & Sleeve combination on right side -->
+  <!-- 1. Vinyl Body (Tucked behind/peek out) -->
+  <g filter="url(#shadow)">
+    <!-- Vinyl record centered at cx=930, cy=315, radius r=192 -->
+    <circle cx="930" cy="315" r="192" fill="#090610" stroke="#1d122c" stroke-width="2.5" />
     
-    <!-- Fine concentric vinyl grooves -->
-    <circle cx="860" cy="315" r="275" stroke="#1e293b" stroke-width="0.75" fill="none" opacity="0.8" />
-    <circle cx="860" cy="315" r="260" stroke="#1e293b" stroke-width="1.5" fill="none" opacity="0.5" />
-    <circle cx="860" cy="315" r="245" stroke="#2d3748" stroke-width="0.5" fill="none" opacity="0.7" />
-    <circle cx="860" cy="315" r="230" stroke="#1e293b" stroke-width="1" fill="none" opacity="0.6" />
-    <circle cx="860" cy="315" r="215" stroke="#2d3748" stroke-width="0.5" fill="none" opacity="0.7" />
-    <circle cx="860" cy="315" r="200" stroke="#1e293b" stroke-width="1.25" fill="none" opacity="0.4" />
-    <circle cx="860" cy="315" r="185" stroke="#2d3748" stroke-width="0.75" fill="none" opacity="0.8" />
-    <circle cx="860" cy="315" r="170" stroke="#1e293b" stroke-width="1.5" fill="none" opacity="0.5" />
-    <circle cx="860" cy="315" r="155" stroke="#2d3748" stroke-width="0.5" fill="none" opacity="0.6" />
-    <circle cx="860" cy="315" r="140" stroke="#1e293b" stroke-width="1" fill="none" opacity="0.4" />
-    <circle cx="860" cy="315" r="125" stroke="#2d3748" stroke-width="0.8" fill="none" opacity="0.7" />
-    
-    <!-- Golden reflections modeling turntable shine -->
-    <path d="M 860 315 L 1110 440 A 290 290 0 0 0 1150 315 Z" fill="url(#vinyl-gold-shine)" opacity="0.25" />
-    <path d="M 860 315 L 610 190 A 290 290 0 0 0 570 315 Z" fill="url(#vinyl-gold-shine)" opacity="0.25" />
+    <!-- Fine concentric grooves -->
+    <circle cx="930" cy="315" r="182" stroke="#1d1135" stroke-width="0.75" fill="none" opacity="0.75" />
+    <circle cx="930" cy="315" r="172" stroke="#150a28" stroke-width="1.25" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="162" stroke="#25143f" stroke-width="0.5" fill="none" opacity="0.7" />
+    <circle cx="930" cy="315" r="152" stroke="#1d1135" stroke-width="1" fill="none" opacity="0.45" />
+    <circle cx="930" cy="315" r="142" stroke="#1d1135" stroke-width="0.5" fill="none" opacity="0.6" />
+    <circle cx="930" cy="315" r="132" stroke="#150a28" stroke-width="1.25" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="122" stroke="#2e1456" stroke-width="0.8" fill="none" opacity="0.6" />
+    <circle cx="930" cy="315" r="112" stroke="#1d1135" stroke-width="1.5" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="102" stroke="#100524" stroke-width="0.5" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="92" stroke="#100524" stroke-width="0.75" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="82" stroke="#1d1135" stroke-width="1" fill="none" opacity="0.4" />
+
+    <!-- Specular light reflections simulating model shine -->
+    <path d="M 930 315 L 1115 440 A 192 192 0 0 0 1122 315 Z" fill="url(#vinyl-gold-shine)" opacity="0.35" />
+    <path d="M 930 315 L 745 190 A 192 192 0 0 0 738 315 Z" fill="url(#vinyl-gold-shine)" opacity="0.35" />
 
     <!-- Center Label element -->
-    <circle cx="860" cy="315" r="100" fill="url(#vinyl-label-grad)" stroke="url(#gold-gradient)" stroke-width="2.5" />
-    <circle cx="860" cy="315" r="92" stroke="#1e293b" stroke-width="0.5" fill="none" />
-    <circle cx="860" cy="315" r="85" stroke="url(#gold-gradient)" stroke-width="1" fill="none" opacity="0.3" stroke-dasharray="4,4" />
+    <circle cx="930" cy="315" r="66" fill="url(#vinyl-label-grad)" stroke="url(#gold-gradient)" stroke-width="2" />
+    <circle cx="930" cy="315" r="58" stroke="#311e4f" stroke-width="0.8" fill="none" />
+    <circle cx="930" cy="315" r="52" stroke="url(#gold-gradient)" stroke-width="1" fill="none" opacity="0.35" stroke-dasharray="3,3" />
     
-    <!-- Label Inner circle -->
-    <circle cx="860" cy="315" r="45" fill="#081224" stroke="url(#gold-gradient)" stroke-width="1" />
-    
+    <!-- Central mini circle -->
+    <circle cx="930" cy="315" r="28" fill="#04020a" stroke="url(#gold-gradient)" stroke-width="1" />
     <!-- Monogram representing Composer -->
-    <text x="860" y="328" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-weight="700" fill="url(#gold-gradient)" font-size="36" letter-spacing="0.5">${initialLetter}</text>
+    <text x="930" y="324" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="700" fill="url(#gold-gradient)" font-size="24" letter-spacing="0.5">${initialLetter}</text>
     
-    <!-- Spindle core hole -->
-    <circle cx="860" cy="315" r="12" fill="#050a14" stroke="#475569" stroke-width="1.5" />
+    <!-- Center spindle core hole -->
+    <circle cx="930" cy="315" r="8" fill="#020104" stroke="#475569" stroke-width="1.2" />
+  </g>
+
+  <!-- 2. Album Sleeve Cover layered over Vinyl's left side -->
+  <g filter="url(#shadow)">
+    <!-- Sleek album cover sleeve layout -->
+    <rect x="510" y="115" width="340" height="400" rx="16" fill="url(#sleeve-grad)" stroke="url(#glow-border)" stroke-width="1.8" />
+    
+    <!-- Sleek inner design lines for the cover art -->
+    <rect x="532" y="137" width="296" height="356" rx="10" stroke="#c084fc" stroke-width="1" fill="none" opacity="0.15" />
+    <rect x="544" y="149" width="272" height="332" rx="6" stroke="#c084fc" stroke-width="1.2" fill="none" opacity="0.1" stroke-dasharray="8,4" />
+    
+    <!-- Diagonal futuristic sound bars inside cover -->
+    <g transform="translate(620, 240)" opacity="0.2">
+      <line x1="0" y1="60" x2="120" y2="60" stroke="#ffffff" stroke-width="2" />
+      <line x1="10" y1="10" x2="10" y2="110" stroke="#ffffff" stroke-width="1" />
+      <line x1="40" y1="20" x2="40" y2="100" stroke="#ffffff" stroke-width="3" />
+      <line x1="70" y1="30" x2="70" y2="90" stroke="#ffffff" stroke-width="1.5" />
+      <line x1="100" y1="0" x2="100" y2="120" stroke="#ffffff" stroke-width="2" />
+    </g>
+
+    <!-- Super polished monogram watermark in the middle of cover -->
+    <text x="680" y="340" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="120" stroke="url(#gold-gradient)" stroke-width="1.5" fill="none" opacity="0.12">${initialLetter}</text>
+
+    <!-- Tiny text on bottom part of sleeve to make it look highly authentic and detailed -->
+    <text x="680" y="455" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="800" font-size="9" fill="#94a3b8" letter-spacing="3px" opacity="0.5">EXCLUSIVE DIGITAL AUDIO</text>
+    <text x="680" y="468" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="600" font-size="8" fill="#d946ef" letter-spacing="1.5px" opacity="0.6">SOUNDRIVE COLLECTOR SERIES</text>
   </g>
 
   <!-- Soundrive Discreet Brand Logo (Top Left) -->
@@ -899,41 +993,62 @@ async function startServer() {
   </g>
 
   <!-- Core sharing info layout -->
-  <g transform="translate(100, 200)">
-    <!-- Green-teal verified catalog certification capsule -->
+  <g transform="translate(100, 150)">
+    <!-- Verified Catalog + Private Catalog pills -->
     <g transform="translate(0, 0)">
-      <rect width="245" height="34" rx="17" fill="#10b981" fill-opacity="0.12" stroke="#10b981" stroke-width="1" />
-      <!-- Solid tick checkmark -->
-      <path d="M 18 17 L 22 21 L 29 13" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-      <text x="38" y="21" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="800" fill="#10b981" letter-spacing="1">CATÁLOGO VERIFICADO</text>
+      <rect width="180" height="30" rx="15" fill="#8b5cf6" fill-opacity="0.12" stroke="#a78bfa" stroke-width="1" />
+      <circle cx="18" cy="15" r="4.5" fill="#c084fc" />
+      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#c084fc" letter-spacing="1">CATÁLOGO PRIVADO</text>
     </g>
 
+    <g transform="translate(195, 0)">
+      <rect width="125" height="30" rx="15" fill="#10b981" fill-opacity="0.12" stroke="#34d399" stroke-width="1" />
+      <path d="M 12 14 L 15 17 L 21 11" stroke="#34d399" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
+      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#34d399" letter-spacing="1">VERIFICADO</text>
+    </g>
+
+    <!-- Main Title: Ouça meu repertório -->
+    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="44" fill="#ffffff" letter-spacing="-1px">Ouça meu repertório</text>
+
     <!-- Composer Name -->
-    <text x="0" y="95" class="title-text" font-size="52" font-weight="800" filter="url(#shadow)" letter-spacing="-1">${cleanName}</text>
+    <text x="0" y="165" class="title-text" font-size="52" font-weight="800" filter="url(#shadow)" letter-spacing="-1">${cleanName}</text>
 
     <!-- City and Music genre info -->
-    <text x="0" y="145" class="sub-text" font-size="21" fill="#94a3b8">${subtitle}</text>
+    <text x="0" y="215" class="sub-text" font-size="20" fill="#a5b4fc">${subtitle}</text>
 
-    <!-- Interstitial interactive button mock: ▶ Ouvir Repertório -->
-    <g transform="translate(0, 195)" filter="url(#shadow)">
-      <rect width="245" height="52" rx="26" fill="url(#gold-gradient)" />
-      <!-- Dark contrast triangle play indicator -->
-      <polygon points="36,19 36,33 48,26" fill="#081224" />
-      <text x="60" y="31" class="button-text" font-size="14" letter-spacing="0.5">OUVIR REPERTÓRIO</text>
+    <!-- Interstitial interactive button mock: ▶ ACESSE E ESCUTE -->
+    <g transform="translate(0, 270)" filter="url(#shadow)">
+      <rect width="250" height="52" rx="26" fill="url(#button-grad)" />
+      <!-- White contrast triangle play indicator -->
+      <polygon points="36,19 36,33 48,26" fill="#ffffff" />
+      <text x="60" y="31" font-family="-apple-system, sans-serif" font-weight="800" fill="#ffffff" font-size="13" letter-spacing="1">ACESSE E ESCUTE</text>
     </g>
   </g>
 
   <!-- Elegant soundrive.com.br footer section -->
   <g transform="translate(100, 545)">
-    <line x1="0" y1="0" x2="350" y2="0" stroke="#1e293b" stroke-width="1" />
+    <line x1="0" y1="0" x2="350" y2="0" stroke="#2a1459" stroke-width="1.5" />
     <text x="0" y="26" class="footer-text" font-size="13">soundrive.com.br</text>
   </g>
 </svg>`;
 
-      res.setHeader("Content-Type", "image/svg+xml");
-      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
-      return res.status(200).send(svgContent);
+    try {
+      const buffer = await sharp(Buffer.from(svgContent)).png().toBuffer();
+      return { buffer, contentType: "image/png" };
+    } catch (sharpErr) {
+      console.error("Sharp PNG generation failed, falling back to SVG:", sharpErr);
+      return { buffer: Buffer.from(svgContent), contentType: "image/svg+xml" };
+    }
+  };
 
+  // API Route to generate dynamic Open Graph (OG) sharing images as a premium quality rasterized PNG
+  app.get("/api/og/artista/:userId", async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      const { buffer, contentType } = await generateArtistPngBuffer(userId);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+      return res.status(200).send(buffer);
     } catch (err: any) {
       console.error("Erro crítico na rota de imagem OG:", err);
       // Fallback response with basic generic SVG graphic
@@ -941,8 +1056,39 @@ async function startServer() {
         <rect width="1200" height="630" fill="#081224" />
         <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOUNDRIVE</text>
       </svg>`;
-      res.setHeader("Content-Type", "image/svg+xml");
-      return res.status(200).send(errorSvg);
+      try {
+        const fall = await sharp(Buffer.from(errorSvg)).png().toBuffer();
+        res.setHeader("Content-Type", "image/png");
+        return res.status(200).send(fall);
+      } catch (sharpE) {
+        res.setHeader("Content-Type", "image/svg+xml");
+        return res.status(200).send(errorSvg);
+      }
+    }
+  });
+
+  // Public endpoint for sharing card metadata: /api/og-artista?id=ID_DO_ARTISTA
+  app.get("/api/og-artista", async (req, res) => {
+    try {
+      const artistId = String(req.query.id || "default");
+      const { buffer, contentType } = await generateArtistPngBuffer(artistId);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
+      return res.status(200).send(buffer);
+    } catch (err: any) {
+      console.error("Erro crítico na rota /api/og-artista:", err);
+      const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+        <rect width="1200" height="630" fill="#081224" />
+        <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOUNDRIVE</text>
+      </svg>`;
+      try {
+        const fall = await sharp(Buffer.from(errorSvg)).png().toBuffer();
+        res.setHeader("Content-Type", "image/png");
+        return res.status(200).send(fall);
+      } catch (sharpE) {
+        res.setHeader("Content-Type", "image/svg+xml");
+        return res.status(200).send(errorSvg);
+      }
     }
   });
 
@@ -950,7 +1096,7 @@ async function startServer() {
   app.get("/artista/:userId", async (req, res, next) => {
     try {
       const userId = req.params.userId;
-      const { name, genre, city } = await fetchArtistRest(userId);
+      const { userId: resolvedArtistId, name, genre, city } = await fetchArtistRest(userId);
 
       const formattedName = name.trim();
       const formattedGenre = genre.trim();
@@ -967,6 +1113,20 @@ async function startServer() {
         subtitle = "Catálogo Autoral Verificado";
       }
 
+      const slugifyStr = (text: string) => {
+        return text
+          .toString()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/[\s_]+/g, '-')
+          .replace(/-+/g, '-');
+      };
+
+      const cleanSlug = formattedName ? slugifyStr(formattedName) : resolvedArtistId;
+
       const indexPath = process.env.NODE_ENV === "production" 
         ? path.join(process.cwd(), 'dist', 'index.html')
         : path.join(process.cwd(), 'index.html');
@@ -978,23 +1138,23 @@ async function startServer() {
 
         const ogPayload = `
   <!-- Dinamic Custom Soundrive OG Sharing Metadata -->
-  <title>${formattedName} - Catálogo Autoral | Soundrive</title>
-  <meta name="description" content="Acesse o portfólio de ${formattedName} no Soundrive. Ouvir Repertório: ${subtitle}. Catálogo Verificado." />
+  <title>Catálogo musical de ${formattedName} | Soundrive</title>
+  <meta name="description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
   
-  <meta property="og:title" content="${formattedName} - Catálogo Autoral" />
-  <meta property="og:description" content="Ouvir Repertório. ${subtitle}. Catálogo Verificado no Soundrive." />
-  <meta property="og:image" content="https://${req.get('host')}/api/og/artista/${userId}" />
-  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:title" content="Catálogo musical de ${formattedName} | Soundrive" />
+  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <meta property="og:image" content="https://soundrive.com.br/api/og-artista?id=${resolvedArtistId}" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="https://${req.get('host')}/artista/${userId}" />
+  <meta property="og:url" content="https://soundrive.com.br/artista/${cleanSlug}" />
   <meta property="og:type" content="music.playlist" />
   <meta property="og:site_name" content="Soundrive" />
   
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${formattedName} - Catálogo Autoral" />
-  <meta name="twitter:description" content="Ouvir Repertório. ${subtitle}. Catálogo Verificado no Soundrive." />
-  <meta name="twitter:image" content="https://${req.get('host')}/api/og/artista/${userId}" />
+  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | Soundrive" />
+  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <meta name="twitter:image" content="https://soundrive.com.br/api/og-artista?id=${resolvedArtistId}" />
 `;
 
         // Direct injection of the metadata tags within the index head

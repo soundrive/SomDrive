@@ -742,10 +742,17 @@ export const dbService = {
       return t;
     });
     return sorted.sort((a, b) => {
-      const posA = a.position !== undefined ? a.position : 99999;
-      const posB = b.position !== undefined ? b.position : 99999;
+      const getPosVal = (t: Music) => {
+        if (t.orderIndex !== undefined) return t.orderIndex;
+        if (t.position !== undefined) return t.position;
+        return 99999;
+      };
+      const posA = getPosVal(a);
+      const posB = getPosVal(b);
       if (posA !== posB) return posA - posB;
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeA - timeB;
     });
   },
 
@@ -755,23 +762,35 @@ export const dbService = {
 
     const updatedTracks = tracks.map(track => {
       const newPos = orderedTrackIds.indexOf(track.trackId);
+      const idxVal = newPos !== -1 ? newPos : 99999;
       return {
         ...track,
-        position: newPos !== -1 ? newPos : 99999
+        position: idxVal,
+        orderIndex: idxVal
       };
     });
 
-    updatedTracks.sort((a, b) => (a.position ?? 99999) - (b.position ?? 99999));
+    updatedTracks.sort((a, b) => {
+      const valA = a.orderIndex ?? a.position ?? 99999;
+      const valB = b.orderIndex ?? b.position ?? 99999;
+      return valA - valB;
+    });
     musicsMap[artistId] = updatedTracks;
     localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
 
     try {
       for (const track of updatedTracks) {
         const songRef = doc(db, 'songs', track.trackId);
-        await updateDoc(songRef, { position: track.position }).catch(() => {});
+        await updateDoc(songRef, { 
+          position: track.orderIndex, 
+          orderIndex: track.orderIndex 
+        }).catch(() => {});
 
         const legacyRef = doc(db, 'artists', artistId, 'musics', track.trackId);
-        await updateDoc(legacyRef, { position: track.position }).catch(() => {});
+        await updateDoc(legacyRef, { 
+          position: track.orderIndex, 
+          orderIndex: track.orderIndex 
+        }).catch(() => {});
       }
     } catch (e) {
       console.error("Error committing track reorder to Firestore:", e);
@@ -836,6 +855,8 @@ export const dbService = {
     const statusValue = track.status || 'active';
     const storageProviderValue = track.storageProvider || 'cloudflare_r2';
 
+    const initialIndex = tracks.length;
+
     const newTrack: Music = {
       ...track,
       playsCount: playsValue,
@@ -844,6 +865,8 @@ export const dbService = {
       performer: performerValue,
       singer: track.singer || performerValue,
       storageProvider: storageProviderValue,
+      position: track.position !== undefined ? track.position : initialIndex,
+      orderIndex: track.orderIndex !== undefined ? track.orderIndex : initialIndex,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -872,6 +895,8 @@ export const dbService = {
         mimeType: newTrack.mimeType || 'audio/mpeg',
         originalFileName: newTrack.originalFileName || '',
         plays: playsValue,
+        position: newTrack.orderIndex,
+        orderIndex: newTrack.orderIndex,
         createdAt: Timestamp.fromDate(new Date(newTrack.createdAt)),
         updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt))
       };
@@ -1064,6 +1089,8 @@ export const dbService = {
             mimeType: d.mimeType || "audio/mpeg",
             originalFileName: d.originalFileName || "",
             audioFileId: d.audioFileId || "",
+            position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+            orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
             createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
             updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
           };
@@ -1100,6 +1127,8 @@ export const dbService = {
               mimeType: d.mimeType || "audio/mpeg",
               originalFileName: d.originalFileName || "",
               audioFileId: d.audioFileId || "",
+              position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+              orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
               createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
               updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
             };

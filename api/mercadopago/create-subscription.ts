@@ -62,17 +62,7 @@ export default async function handler(req: any, res: any) {
     const externalReference = `${uid}|${chosenPlan}`;
 
     const host = req.headers.host || '';
-    let baseUrl = process.env.APP_BASE_URL || 'https://soundrive.com.br';
-    
-    // Auto fallback for preview or vercel domains
-    if (host.includes('vercel.app') || host.includes('run.app') || host.includes('localhost') || host.includes('3000')) {
-      if (host.includes('vercel.app')) {
-        baseUrl = 'https://soundrive.vercel.app';
-      } else {
-        const protocol = host.includes('localhost') || host.includes('3000') ? 'http' : 'https';
-        baseUrl = `${protocol}://${host}`;
-      }
-    }
+    let baseUrl = 'https://soundrive.com.br';
 
     const backUrl = `${baseUrl}/pagamento/retorno`;
 

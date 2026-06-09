@@ -79,6 +79,7 @@ export interface Music {
   partners?: string;
   audioHash?: string;
   position?: number;
+  orderIndex?: number;
 }
 
 export interface Analytics {
