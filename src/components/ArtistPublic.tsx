@@ -64,10 +64,10 @@ export default function ArtistPublic({
     if (artist) {
       document.title = `Catálogo musical de ${artist.name} | Soundrive`;
     } else {
-      document.title = `Soundrive - Catálogo Musical`;
+      document.title = `Catálogo musical | Soundrive`;
     }
     return () => {
-      document.title = `Soundrive - Catálogo Musical`;
+      document.title = `Catálogo musical | Soundrive`;
     };
   }, [artist]);
 
