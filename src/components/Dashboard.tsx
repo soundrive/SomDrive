@@ -1159,78 +1159,37 @@ export default function Dashboard({
             </div>
             
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 bg-emerald-950/50 text-emerald-405 border border-emerald-500/20 text-[10px] font-mono rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 self-start md:self-auto">
+              <span className="px-2.5 py-1 bg-emerald-950/50 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 self-start md:self-auto">
                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativo no Link
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-            {/* Visual Card Image Preview */}
-            <div className="lg:col-span-7 flex flex-col items-center justify-center bg-slate-950/50 border border-slate-850/80 p-4 rounded-xl relative group overflow-hidden">
-              <div className="absolute top-2 left-2 px-2 py-0.5 bg-slate-900 border border-slate-800 text-[9px] font-mono font-bold text-slate-450 rounded tracking-wider uppercase">
-                Prévia do Cartão de Divulgação
-              </div>
-              <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
-                <img 
-                  src={shareCardPreviewUrl}
-                  alt="Cartão Soundrive" 
-                  className="w-full h-full object-cover select-none"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="mt-3 flex items-center gap-4 text-[10px] font-mono text-slate-500">
-                <span>Resolução recomendada: 1200 x 630 px</span>
-                <span>•</span>
-                <span>Formato: Imagem de Compartilhamento</span>
-              </div>
+          <div className="w-full flex flex-col items-center justify-center bg-slate-950/50 border border-slate-850/80 p-6 rounded-xl relative group overflow-hidden">
+            <div className="absolute top-2 left-2 px-2 py-0.5 bg-slate-900 border border-slate-800 text-[9px] font-mono font-bold text-slate-450 rounded tracking-wider uppercase">
+              Prévia do Cartão de Divulgação
             </div>
-
-            {/* Information & Description Area */}
-            <div className="lg:col-span-5 flex flex-col justify-between bg-slate-950/20 border border-slate-850/60 p-5 rounded-xl space-y-6">
-              <div className="space-y-4">
-                <p className="text-[10px] font-mono font-bold uppercase text-slate-500 tracking-wider">Como funciona?</p>
-                <div className="space-y-3.5 text-xs text-slate-300 leading-relaxed">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 bg-orange-950/60 text-orange-400 font-mono text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 border border-orange-500/20">1</div>
-                    <p>O algoritmo do WhatsApp, Facebook ou Instagram varre seu link e descobre os metadados de compartilhamento ocultos.</p>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 bg-orange-950/60 text-orange-400 font-mono text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 border border-orange-500/20">2</div>
-                    <p>Ele cria instantaneamente um balão de pré-visualização contendo o vinil interativo, selo verificado e botão de escuta rápida.</p>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-5 h-5 bg-orange-950/60 text-orange-400 font-mono text-[10px] font-bold rounded-full flex items-center justify-center shrink-0 border border-orange-500/20">3</div>
-                    <p>Você gera credibilidade instantânea, sem revelar URLs complexas ou IDs técnicos.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-850/60 space-y-3">
-                <h5 className="text-[10px] font-mono font-bold uppercase text-slate-500 tracking-wider">Opções de Divulgação</h5>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <button
-                    onClick={handleCopyLink}
-                    className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-lg text-xs font-heading font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition hover:from-orange-500 hover:to-yellow-400 active:scale-95 font-bold animate-pulse"
-                  >
-                    <Copy className="w-4 h-4" /> {copiedAlert ? "Divulgação Copiada! ✓" : "Copiar divulgação"}
-                  </button>
-                  <button
-                    onClick={handleShareWhatsApp}
-                    className="px-4 py-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-emerald-400 rounded-lg text-xs font-heading font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition active:scale-95 font-bold"
-                  >
-                    <Share2 className="w-4 h-4 text-emerald-400" /> WhatsApp
-                  </button>
-                </div>
-                <a 
-                  href={shareCardPreviewUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block text-center text-[10px] font-mono text-orange-400 hover:text-orange-350 hover:underline pt-1 transition"
-                >
-                  Abrir imagem em nova aba ↗
-                </a>
-              </div>
+            <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
+              <img 
+                src={shareCardPreviewUrl}
+                alt="Cartão Soundrive" 
+                className="w-full h-full object-cover select-none"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div className="mt-4 flex flex-col sm:flex-row items-center gap-4 text-[10px] font-mono text-slate-500">
+              <span>Resolução recomendada: 1200 x 630 px</span>
+              <span className="hidden sm:inline">•</span>
+              <span>Formato: Imagem de Compartilhamento</span>
+              <span className="hidden sm:inline">•</span>
+              <a 
+                href={shareCardPreviewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-orange-400 hover:text-orange-355 hover:underline transition font-bold"
+              >
+                Abrir imagem em nova aba ↗
+              </a>
             </div>
           </div>
         </div>
