@@ -897,7 +897,12 @@ async function startServer() {
         baseImageUrl = shareCard.ogImageUrl;
         let version = "1.0.0";
         if (shareCard.updatedAt) {
-          version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+          const parsedTime = new Date(shareCard.updatedAt).getTime();
+          if (!isNaN(parsedTime)) {
+            version = String(parsedTime);
+          } else {
+            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+          }
         }
         ogImageToUse = baseImageUrl.includes("?") ? `${baseImageUrl}&v=${version}` : `${baseImageUrl}?v=${version}`;
       }
@@ -918,9 +923,9 @@ async function startServer() {
       // Clean static tags fully to prevent duplicates and legacy tag leakage
       htmlContents = htmlContents
         .replace(/<title>.*?<\/title>/gi, "")
-        .replace(/<meta\s+[^>]*name=["']description["'][^>]*\/?>/gi, "")
-        .replace(/<meta\s+[^>]*property=["']og:.*?["'][^>]*\/?>/gi, "")
-        .replace(/<meta\s+[^>]*name=["']twitter:.*?["'][^>]*\/?>/gi, "");
+        .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
 
       const ogPayload = `
   <!-- Dynamic Custom Soundrive OG Sharing Metadata -->

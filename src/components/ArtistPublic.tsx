@@ -64,10 +64,10 @@ export default function ArtistPublic({
     if (artist) {
       document.title = `Catálogo musical de ${artist.name} | Soundrive`;
     } else {
-      document.title = `Catálogo musical | Soundrive`;
+      document.title = `Soundrive - Catálogo Musical`;
     }
     return () => {
-      document.title = `Catálogo musical | Soundrive`;
+      document.title = `Soundrive - Catálogo Musical`;
     };
   }, [artist]);
 
@@ -174,9 +174,9 @@ export default function ArtistPublic({
     // Increment WhatsApp clicks inside Analytics table
     dbService.incrementAnalyticsView(artist.userId, false, false);
     
-    const pageUrl = `${window.location.origin}/artista/${artist.userId}`;
-    const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
-    const text = encodeURIComponent(beautifulMessage);
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${artist.slug || artist.userId}`;
+    const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
+    const text = encodeURIComponent(messageText);
     window.open(`https://wa.me/?text=${text}`, '_blank');
     
     setWhatsappShareAlert(true);
@@ -184,9 +184,8 @@ export default function ArtistPublic({
   };
 
   const handleCopyLinkDissemination = () => {
-    const pageUrl = `${window.location.origin}/artista/${artist.userId}`;
-    const beautifulMessage = `🎧 Olá! Escute meu catálogo musical no Soundrive.\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
-    navigator.clipboard.writeText(beautifulMessage);
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${artist.slug || artist.userId}`;
+    navigator.clipboard.writeText(pageUrl);
     setCopiedLinkAlert(true);
     setTimeout(() => setCopiedLinkAlert(false), 2050);
   };
