@@ -1,4 +1,4 @@
-import { Artist, Music, Analytics, PaymentSettings } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings } from '../types';
 
 // Static Royalty-Free MP3 links that are reliable and beautiful
 export const DEMO_SONGS = [
@@ -1568,6 +1568,33 @@ export const dbService = {
       });
     } catch (e) {
       console.error("Error updating payment settings:", e);
+      throw e;
+    }
+  },
+
+  async getShareCardSettings(): Promise<ShareCardSettings | null> {
+    try {
+      const docRef = doc(db, 'settings', 'shareCard');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as ShareCardSettings;
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching share card settings:", e);
+      return null;
+    }
+  },
+
+  async deleteShareCardSettings(updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'shareCard');
+      await deleteDoc(docRef).catch(err => {
+        handleFirestoreError(err, OperationType.DELETE, 'settings/shareCard');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error deleting share card settings:", e);
       throw e;
     }
   }

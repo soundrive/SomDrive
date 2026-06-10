@@ -25,7 +25,7 @@ import {
   RefreshCw,
   Sparkles
 } from 'lucide-react';
-import { Artist } from '../types';
+import { Artist, ShareCardSettings } from '../types';
 import { dbService } from '../lib/db';
 import { motion } from 'motion/react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -86,6 +86,87 @@ export default function AdminArea({
   // Notification States
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Global share card states
+  const [shareCardSettings, setShareCardSettings] = useState<ShareCardSettings | null>(null);
+  const [isUploadingShareCard, setIsUploadingShareCard] = useState(false);
+  const [shareCardUploadProgress, setShareCardUploadProgress] = useState(0);
+  const [shareCardError, setShareCardError] = useState<string | null>(null);
+  const shareCardFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const loadShareCardSettings = async () => {
+    try {
+      const data = await dbService.getShareCardSettings();
+      setShareCardSettings(data);
+    } catch (e) {
+      console.error("Error loading share card settings:", e);
+    }
+  };
+
+  const handleShareCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setShareCardError("A imagem excede o limite máximo de 10 MB.");
+      return;
+    }
+
+    const acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!acceptedTypes.includes(file.type)) {
+      setShareCardError("Formato de imagem inválido. Use JPEG, PNG ou WEBP.");
+      return;
+    }
+
+    setShareCardError(null);
+    setIsUploadingShareCard(true);
+    setShareCardUploadProgress(10);
+
+    try {
+      setShareCardUploadProgress(35);
+      const response = await fetch("/api/admin/upload-share-card", {
+        method: "POST",
+        headers: {
+          "X-File-Name": encodeURIComponent(file.name),
+          "X-File-Type": file.type,
+          "X-File-Size": file.size.toString(),
+          "X-User-Id": currentUser.userId,
+          "X-User-Email": currentUser.email || "",
+        },
+        body: file,
+      });
+
+      setShareCardUploadProgress(75);
+
+      if (response.ok) {
+        setShareCardUploadProgress(100);
+        triggerNotification("Imagem global do cartão atualizada com sucesso!");
+        await loadShareCardSettings();
+      } else {
+        const errData = await response.json().catch(() => null);
+        const errMsg = errData?.error || `Falha HTTP ${response.status}`;
+        setShareCardError(errMsg);
+      }
+    } catch (err: any) {
+      console.error("Erro ao subir imagem global:", err);
+      setShareCardError(err.message || "Erro de rede.");
+    } finally {
+      setIsUploadingShareCard(false);
+      setTimeout(() => setShareCardUploadProgress(0), 1000);
+    }
+  };
+
+  const handleRemoveShareCard = async () => {
+    if (!window.confirm("Deseja realmente remover a imagem global de compartilhamento?")) return;
+    try {
+      await dbService.deleteShareCardSettings(currentUser.userId);
+      triggerNotification("Imagem do cartão de compartilhamento removida!");
+      setShareCardSettings(null);
+    } catch (e: any) {
+      console.error(e);
+      triggerNotification("Erro ao remover a imagem do cartão.", true);
+    }
+  };
 
   // Integration States
   const [integrationStatus, setIntegrationStatus] = useState<{
@@ -271,6 +352,7 @@ export default function AdminArea({
   useEffect(() => {
     loadData();
     loadPaymentSettings();
+    loadShareCardSettings();
     loadIntegrationStatus();
   }, []);
 
@@ -280,6 +362,7 @@ export default function AdminArea({
     }
     if (activeTab === 'settings') {
       loadIntegrationStatus();
+      loadShareCardSettings();
     }
   }, [activeTab]);
 
@@ -1566,11 +1649,119 @@ export default function AdminArea({
                   <p className="text-[11px] text-slate-400">Clique para forçar uma recarga rápida e sincronização instantânea dos usuários do Firestore.</p>
                 </div>
                 <button
+                  type="button"
                   onClick={loadData}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl font-bold transition flex items-center text-xs shrink-0"
                 >
                   <RefreshCw className="h-3.5 w-3.5 text-orange-500 mr-2" /> Forçar Recarga
                 </button>
+              </div>
+
+              {/* SEÇÃO: CONFIGURAÇÃO GLOBAL DE COMPARTILHAMENTO (ADMIN) */}
+              <div className="mt-8 pt-6 border-t border-slate-800 space-y-4">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center">
+                    <Sparkles className="h-4 w-4 text-orange-550 mr-2 animate-pulse" />
+                    Imagem de Compartilhamento do Site (Global)
+                  </h4>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Esta imagem será usada em todo o site como miniatura de rede social no WhatsApp, Facebook e Instagram ao compartilhar catálogos ou links do Soundrive.
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-850 space-y-4">
+                  {shareCardSettings?.ogImageUrl ? (
+                    <div className="space-y-4 animate-fade-in font-sans">
+                      <p className="text-[11px] font-mono text-slate-455">Prévia da imagem ativa (Proporção 1200x630px):</p>
+                      <div className="max-w-md aspect-[1.91/1] overflow-hidden rounded-xl border border-slate-800 shadow-lg relative bg-slate-900 group">
+                        <img 
+                          src={shareCardSettings.ogImageUrl} 
+                          alt="Imagem Global de Compartilhamento" 
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                          <span className="text-[10px] bg-slate-900/90 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700 font-mono">Dimensões ideais: 1200x630</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => shareCardFileInputRef.current?.click()}
+                          disabled={isUploadingShareCard}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl font-bold transition text-xs flex items-center cursor-pointer"
+                        >
+                          {isUploadingShareCard ? "Enviando..." : "Trocar imagem"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveShareCard}
+                          className="px-3.5 py-2 bg-red-950/40 border border-red-900/30 hover:border-red-500 text-red-400 rounded-xl font-bold transition text-xs flex items-center cursor-pointer"
+                        >
+                          Remover imagem
+                        </button>
+                        <a
+                          href="/api/global-share-card.png"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3.5 py-2 bg-slate-950 border border-slate-850 hover:bg-slate-900 hover:border-slate-800 text-orange-400 rounded-xl font-bold transition text-xs flex items-center cursor-pointer"
+                        >
+                          Ver imagem em nova aba ↗
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center bg-slate-950/30 rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center space-y-3.5 animate-fade-in font-sans">
+                      <div className="p-3 bg-orange-500/5 text-orange-400 rounded-2xl border border-orange-500/10">
+                        <Sparkles className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-white">Nenhuma imagem global configurada</p>
+                        <p className="text-[11px] text-slate-450 max-w-sm mx-auto">Upload de um arquivo recomendado em formato horizontal (1200x630px, PNG, JPG ou WEBP) para aparecer bonita no WhatsApp.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => shareCardFileInputRef.current?.click()}
+                        disabled={isUploadingShareCard}
+                        className="px-4 py-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 font-bold transition rounded-xl text-xs flex items-center uppercase tracking-wider cursor-pointer font-heading"
+                      >
+                        Enviar imagem
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Campo input oculto de seleção */}
+                  <input 
+                    type="file"
+                    ref={shareCardFileInputRef}
+                    onChange={handleShareCardUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+
+                  {/* Feedback de Uploading Progresso */}
+                  {isUploadingShareCard && (
+                    <div className="space-y-1.5 animate-fade-in p-1 font-mono">
+                      <div className="flex justify-between text-[10px] font-bold text-orange-450">
+                        <span>Enviando imagem para Cloudflare R2...</span>
+                        <span>{shareCardUploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
+                        <div className="bg-gradient-to-r from-orange-500 to-yellow-400 h-full transition-all duration-300" style={{ width: `${shareCardUploadProgress}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {shareCardError && (
+                    <div className="p-3 bg-red-950/30 border border-red-900/30 font-mono text-[10px] text-red-400 rounded-xl">
+                      {shareCardError}
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-500 leading-relaxed italic font-sans">
+                    **Aviso:** Use uma imagem horizontal 1200x630 px para aparecer bonita no WhatsApp.
+                  </p>
+                </div>
               </div>
 
             </div>

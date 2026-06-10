@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
 import createSubscriptionHandler from "./api/mercadopago/create-subscription";
 import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
@@ -614,6 +614,220 @@ async function startServer() {
     }
   });
 
+  // API Route for global sharing image card upload (Admin only)
+  app.post("/api/admin/upload-share-card", express.raw({ type: '*/*', limit: '10MB' }), async (req, res) => {
+    const fileName = req.headers["x-file-name"] ? decodeURIComponent(req.headers["x-file-name"] as string) : undefined;
+    const fileType = req.headers["x-file-type"] as string;
+    const fileSizeStr = req.headers["x-file-size"] as string;
+    const userId = req.headers["x-user-id"] as string;
+    const userEmailHeader = req.headers["x-user-email"] as string;
+    const fileSize = fileSizeStr ? parseInt(fileSizeStr, 10) : undefined;
+
+    try {
+      console.log("Global Share Card Upload - Received Admin upload request:", {
+        fileName,
+        fileType,
+        fileSize,
+        userId,
+        userEmailHeader,
+        bodyLength: req.body ? req.body.length : 0
+      });
+
+      if (!fileName || !fileType || fileSize === undefined || !userId) {
+        const errMsg = "Parâmetros obrigatórios ausentes nos headers: x-file-name, x-file-type, x-file-size, x-user-id.";
+        console.error("Global Play Card - Erro de Validação:", errMsg);
+        return res.status(400).json({ error: errMsg });
+      }
+
+      // 1. Validar formato de imagem (JPEG, PNG, WEBP)
+      const mimeLower = fileType.toLowerCase();
+      const nameLower = fileName.toLowerCase();
+      const isAcceptedMime = mimeLower === "image/jpeg" || mimeLower === "image/jpg" || mimeLower === "image/png" || mimeLower === "image/webp";
+      const isAcceptedExt = nameLower.endsWith(".jpeg") || nameLower.endsWith(".jpg") || nameLower.endsWith(".png") || nameLower.endsWith(".webp");
+
+      if (!isAcceptedMime && !isAcceptedExt) {
+        const errMsg = "Formato de arquivo inválido. Apenas imagens nos formatos JPEG, PNG e WEBP são permitidas.";
+        console.error("Global Play Card - Erro Formato:", { fileName, fileType });
+        return res.status(400).json({ error: errMsg });
+      }
+
+      // 2. Validar se o usuário é administrador (Com bypass de e-mail rápido para evitar timeouts)
+      const emailHeaderClean = userEmailHeader ? userEmailHeader.toLowerCase().trim() : "";
+      const isMainAdminByEmail = emailHeaderClean === 'videopremieroficial@gmail.com' || emailHeaderClean === 'sertanejopremier@gmail.com';
+      
+      let isAdmin = isMainAdminByEmail;
+
+      if (!isAdmin) {
+        try {
+          const userDoc = await db.collection("users").doc(userId).get();
+          const artistDoc = await db.collection("artists").doc(userId).get();
+
+          const userData = userDoc.exists ? userDoc.data() : null;
+          const artistData = artistDoc.exists ? artistDoc.data() : null;
+
+          const email = (userData?.email || artistData?.email || "").toLowerCase().trim();
+          const role = userData?.role || artistData?.role || "";
+
+          const isMainAdmin = email === 'videopremieroficial@gmail.com' || email === 'sertanejopremier@gmail.com';
+          isAdmin = isMainAdmin || role === 'admin';
+        } catch (dbErr: any) {
+          console.error("Erro ao verificar admin no Firestore durante upload:", dbErr);
+          // Se o banco falhar, mas o cabeçalho confirmou um admin oficial, autoriza.
+          if (isMainAdminByEmail) {
+            isAdmin = true;
+          }
+        }
+      }
+
+      if (!isAdmin) {
+        return res.status(403).json({ error: "Acesso negado. Ação restrita a administradores." });
+      }
+
+      // 3. Validar variáveis de ambiente R2
+      const rawAccountId = process.env.R2_ACCOUNT_ID;
+      const rawBucketName = process.env.R2_BUCKET_NAME;
+      const rawAccessKeyId = process.env.R2_ACCESS_KEY_ID;
+      const rawSecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+      const rawPublicBaseUrl = process.env.R2_PUBLIC_BASE_URL;
+
+      const missingEnvVars: string[] = [];
+      if (!rawAccountId) missingEnvVars.push("R2_ACCOUNT_ID");
+      if (!rawAccessKeyId) missingEnvVars.push("R2_ACCESS_KEY_ID");
+      if (!rawSecretAccessKey) missingEnvVars.push("R2_SECRET_ACCESS_KEY");
+      if (!rawBucketName) missingEnvVars.push("R2_BUCKET_NAME");
+      if (!rawPublicBaseUrl) missingEnvVars.push("R2_PUBLIC_BASE_URL");
+
+      if (missingEnvVars.length > 0) {
+        const errMsg = `Configuração do Cloudflare R2 incompleta no servidor. Faltam: ${missingEnvVars.join(", ")}`;
+        console.error("Global Play Card - Erro Ambientes:", errMsg);
+        return res.status(500).json({ error: errMsg });
+      }
+
+      const cleanR2Id = (id: string): string => {
+        let val = id.trim();
+        const hexMatch = val.match(/\b([a-fA-F0-9]{32})\b/);
+        if (hexMatch) return hexMatch[1];
+        val = val.replace(/^https?:\/\//i, "");
+        val = val.split("/")[0];
+        val = val.split(".")[0];
+        return val;
+      };
+
+      const R2_ACCOUNT_ID = cleanR2Id(rawAccountId!);
+      const R2_BUCKET_NAME = rawBucketName!.trim();
+      const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
+      const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
+      const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
+
+      // 4. Caminho de salvamento fixo com timestamp
+      const timestamp = Date.now();
+      const safeFileName = fileName.replace(/[^a-zA-Z0-9.]/g, "_");
+      const storagePath = `share/global-share-card-${timestamp}-${safeFileName}`;
+
+      // 5. Inicializar S3Client compatível
+      const endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+      const s3 = new S3Client({
+        region: "auto",
+        endpoint,
+        credentials: {
+          accessKeyId: R2_ACCESS_KEY_ID,
+          secretAccessKey: R2_SECRET_ACCESS_KEY,
+        },
+        forcePathStyle: true,
+      });
+
+      // 6. Obter buffer binário
+      const fileBuffer = req.body;
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+        throw new Error("Arquivo enviado de imagem está vazio.");
+      }
+
+      // 7. Enviar via PutObjectCommand
+      const command = new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: storagePath,
+        Body: fileBuffer,
+        ContentType: fileType || "image/png",
+      });
+
+      await s3.send(command);
+
+      const baseSlash = R2_PUBLIC_BASE_URL.endsWith("/") ? R2_PUBLIC_BASE_URL.slice(0, -1) : R2_PUBLIC_BASE_URL;
+      const publicImageUrl = `${baseSlash}/${storagePath}`;
+
+      // 8. Salvar URL no Firestore em settings/shareCard
+      await db.collection("settings").doc("shareCard").set({
+        ogImageUrl: publicImageUrl,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: userId
+      }, { merge: true });
+
+      console.log("Global Share Card Upload - Concluído com sucesso:", {
+        storagePath,
+        publicImageUrl
+      });
+
+      return res.status(200).json({
+        storagePath,
+        publicImageUrl
+      });
+
+    } catch (e: any) {
+      console.error("Critical error in upload-share-card endpoint:", e);
+      return res.status(500).json({
+        error: `Erro ao fazer upload da imagem global de compartilhamento: ${e.message || String(e)}`
+      });
+    }
+  });
+
+  // Proxy endpoint to load global sharing image across any browser, CORS free and crawler-friendly
+  const serveGlobalShareCard = async (req: any, res: any) => {
+    try {
+      const shareCardDoc = await db.collection("settings").doc("shareCard").get();
+      if (!shareCardDoc.exists) {
+        return res.status(404).json({ error: "Nenhum cartão de compartilhamento configurado." });
+      }
+
+      const data = shareCardDoc.data();
+      if (!data || !data.ogImageUrl) {
+        return res.status(404).json({ error: "URL do cartão de compartilhamento não registrada." });
+      }
+
+      const imageUrl = data.ogImageUrl;
+      console.log("Serving proxy global share card directly from R2 URL:", imageUrl);
+
+      // Fetch dynamic buffer
+      const imageRes = await fetch(imageUrl);
+      if (!imageRes.ok) {
+        throw new Error(`Cloudflare status error: ${imageRes.status}`);
+      }
+
+      const arrayBuffer = await imageRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const contentType = imageRes.headers.get("content-type") || "image/png";
+
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour browser cache
+      return res.send(buffer);
+
+    } catch (err: any) {
+      console.error("Error serving proxy global share card:", err);
+      // Fallback fallback: redirect dynamically to make it load even in case of fetch errors
+      try {
+        const shareCardDoc = await db.collection("settings").doc("shareCard").get();
+        if (shareCardDoc.exists) {
+          const u = shareCardDoc.data()?.ogImageUrl;
+          if (u) return res.redirect(u);
+        }
+      } catch (e) {}
+
+      return res.status(500).json({ error: "Erro ao baixar a imagem: " + err.message });
+    }
+  };
+
+  app.get("/api/global-share-card", serveGlobalShareCard);
+  app.get("/api/global-share-card.png", serveGlobalShareCard);
+
   // API Route for Mercado Pago webhook integrations
   app.post("/api/mercadopago-webhook", async (req, res) => {
     try {
@@ -1136,7 +1350,7 @@ async function startServer() {
   });
 
   // Intercept artist public profile requests to dynamically inject Open Graph sharing headers
-  app.get("/artista/:userId", async (req, res, next) => {
+  app.get(["/artista/:userId", "/catalogo/:userId"], async (req, res, next) => {
     try {
       const userId = req.params.userId;
       const { userId: resolvedArtistId, name, genre, city } = await fetchArtistRest(userId);
@@ -1170,6 +1384,29 @@ async function startServer() {
 
       const cleanSlug = formattedName ? slugifyStr(formattedName) : resolvedArtistId;
 
+      // 1. Fetch global sharing image if configured in settings/shareCard
+      const host = req.get("host") || "www.soundrive.com.br";
+      const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+
+      let ogImageToUse = `${protocol}://${host}/api/og-artista?id=${resolvedArtistId}`;
+      let ogUrlToUse = `${protocol}://${host}/artista/${cleanSlug}`;
+
+      try {
+        const shareCardDoc = await db.collection("settings").doc("shareCard").get();
+        if (shareCardDoc.exists) {
+          const shareCardData = shareCardDoc.data();
+          if (shareCardData && shareCardData.ogImageUrl) {
+            ogImageToUse = `${protocol}://${host}/api/global-share-card.png`;
+          }
+        }
+      } catch (fErr) {
+        console.warn("Could not fetch global share card settings from Firestore:", fErr);
+      }
+
+      if (req.path.startsWith("/catalogo/")) {
+        ogUrlToUse = `${protocol}://${host}/catalogo/${cleanSlug}`;
+      }
+
       const indexPath = process.env.NODE_ENV === "production" 
         ? path.join(process.cwd(), 'dist', 'index.html')
         : path.join(process.cwd(), 'index.html');
@@ -1186,18 +1423,18 @@ async function startServer() {
   
   <meta property="og:title" content="Catálogo musical de ${formattedName} | Soundrive" />
   <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
-  <meta property="og:image" content="https://soundrive.com.br/api/og-artista?id=${resolvedArtistId}" />
+  <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="https://soundrive.com.br/artista/${cleanSlug}" />
-  <meta property="og:type" content="music.playlist" />
+  <meta property="og:url" content="${ogUrlToUse}" />
+  <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Soundrive" />
   
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Catálogo musical de ${formattedName} | Soundrive" />
   <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
-  <meta name="twitter:image" content="https://soundrive.com.br/api/og-artista?id=${resolvedArtistId}" />
+  <meta name="twitter:image" content="${ogImageToUse}" />
 `;
 
         // Direct injection of the metadata tags within the index head

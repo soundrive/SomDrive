@@ -31,7 +31,7 @@ import {
   SlidersHorizontal,
   Check
 } from 'lucide-react';
-import { Artist, Music as Track, Analytics } from '../types';
+import { Artist, Music as Track, Analytics, ShareCardSettings } from '../types';
 import { dbService } from '../lib/db';
 import PlansScreen from './PlansScreen';
 import { motion } from 'motion/react';
@@ -58,6 +58,7 @@ export default function Dashboard({
   const [analytics, setAnalytics] = useState<Analytics>({ artistId: currentUser.userId, viewsCount: 0, whatsappClicks: 0 });
   const [copiedAlert, setCopiedAlert] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [globalShareCard, setGlobalShareCard] = useState<ShareCardSettings | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
   const [showLimitPrompt, setShowLimitPrompt] = useState(false);
@@ -298,6 +299,11 @@ export default function Dashboard({
     setProfile(artistData);
     setTracks(dbService.getArtistMusics(currentUser.userId));
     setAnalytics(dbService.getAnalytics(currentUser.userId));
+    
+    // Fetch global share card configuration
+    dbService.getShareCardSettings().then(settings => {
+      setGlobalShareCard(settings);
+    });
   };
 
   const handleMoveTrack = async (trackId: string, direction: 'up' | 'down', e: React.MouseEvent) => {
@@ -358,8 +364,11 @@ export default function Dashboard({
         .replace(/[\s_]+/g, '-')
         .replace(/-+/g, '-');
     };
-    const slugOrId = profile.name ? slugifyStr(profile.name) : profile.userId;
-    const pageUrl = `https://soundrive.com.br/artista/${slugOrId}`;
+    const nameToUse = (profile.name || profile.artistName || "").trim();
+    const pageUrl = nameToUse 
+      ? `https://www.soundrive.com.br/catalogo/${slugifyStr(nameToUse)}` 
+      : `https://www.soundrive.com.br/artista/${profile.userId}`;
+
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -377,9 +386,12 @@ export default function Dashboard({
         .replace(/[\s_]+/g, '-')
         .replace(/-+/g, '-');
     };
-    const slugOrId = profile.name ? slugifyStr(profile.name) : profile.userId;
-    const pageUrl = `https://soundrive.com.br/artista/${slugOrId}`;
-    const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis para audição:\n${pageUrl}`;
+    const nameToUse = (profile.name || profile.artistName || "").trim();
+    const pageUrl = nameToUse 
+      ? `https://www.soundrive.com.br/catalogo/${slugifyStr(nameToUse)}` 
+      : `https://www.soundrive.com.br/artista/${profile.userId}`;
+
+    const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
   };
@@ -1135,73 +1147,17 @@ export default function Dashboard({
               </div>
               <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
                 <img 
-                  src={`/api/og-artista?id=${profile.userId}`}
+                  src={globalShareCard?.ogImageUrl || `/api/og-artista?id=${profile.userId}`}
                   alt="Cartão Soundrive" 
                   className="w-full h-full object-cover select-none"
                   referrerPolicy="no-referrer"
                 />
               </div>
               <div className="mt-3 flex items-center gap-4 text-[10px] font-mono text-slate-500">
-                <span>Resolução: 1200 x 630 px</span>
+                <span>Resolução recomendada: 1200 x 630 px</span>
                 <span>•</span>
-                <span>Formato: Imagem PNG de Alta Definição</span>
+                <span>Formato: Imagem de Compartilhamento</span>
               </div>
-
-              {/* Custom Cover Upload Control inside Sharing Card */}
-              <div className="mt-4 w-full border-t border-slate-900 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900/60">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-bold text-slate-200">Personalizar Imagem do Cartão</p>
-                  <p className="text-[10px] text-slate-450 font-sans">Substitua a gravura do disco por uma foto sua ou capa de sua escolha.</p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="file"
-                    ref={cardImageInputRef}
-                    accept="image/*"
-                    onChange={handleCardImageUpload}
-                    className="hidden"
-                  />
-                  
-                  {profile.customCardImageUrl && (
-                    <button
-                      onClick={handleRemoveCustomCardImage}
-                      type="button"
-                      disabled={isUploadingCardImage}
-                      className="px-3 py-1.5 bg-rose-950/40 border border-rose-900/40 hover:border-rose-500 text-rose-400 rounded-lg text-[10px] font-mono uppercase font-bold transition disabled:opacity-50 cursor-pointer"
-                    >
-                      Remover Foto
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => cardImageInputRef.current?.click()}
-                    type="button"
-                    disabled={isUploadingCardImage}
-                    className="px-3.5 py-1.5 bg-gradient-to-r from-orange-600/10 to-yellow-500/10 hover:from-orange-600/20 hover:to-yellow-500/20 border border-orange-500/30 hover:border-orange-550 text-orange-400 hover:text-white rounded-lg text-[10px] font-heading font-black uppercase tracking-wider transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer font-bold"
-                  >
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    {isUploadingCardImage ? `Subindo...` : profile.customCardImageUrl ? 'Substituir Foto' : 'Enviar Foto'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Progress and status display feedback */}
-              {cardImageUploadProgress > 0 && (
-                <div className="w-full mt-2.5 space-y-1 animate-fade-in px-1">
-                  <div className="flex justify-between text-[9px] font-mono font-bold text-orange-450">
-                    <span>Enviando nova imagem customizada...</span>
-                    <span>{cardImageUploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-orange-500 to-yellow-400 h-full transition-all duration-200" style={{ width: `${cardImageUploadProgress}%` }}></div>
-                  </div>
-                </div>
-              )}
-
-              {cardImageError && (
-                <p className="w-full text-left mt-2.5 text-[10px] font-mono text-red-400 font-bold px-1">{cardImageError}</p>
-              )}
             </div>
 
             {/* Information & Description Area */}
@@ -1241,12 +1197,12 @@ export default function Dashboard({
                   </button>
                 </div>
                 <a 
-                  href={`/api/og/artista/${profile.userId}`}
+                  href={globalShareCard?.ogImageUrl || `/api/og-artista?id=${profile.userId}`}
                   target="_blank"
                   rel="noreferrer"
                   className="block text-center text-[10px] font-mono text-orange-400 hover:text-orange-350 hover:underline pt-1 transition"
                 >
-                  Abrir imagem OG em nova guia ↗
+                  Abrir imagem em nova aba ↗
                 </a>
               </div>
             </div>
