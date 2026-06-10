@@ -62,6 +62,14 @@ export default function Dashboard({
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
   const [showLimitPrompt, setShowLimitPrompt] = useState(false);
+
+  // Sharing Card Dynamic Cache Busting calculations
+  const shareCardBustVal = globalShareCard?.updatedAt 
+    ? String(new Date(globalShareCard.updatedAt).getTime() || globalShareCard.updatedAt) 
+    : String(Date.now());
+  const shareCardPreviewUrl = globalShareCard?.ogImageUrl 
+    ? `${globalShareCard.ogImageUrl}${globalShareCard.ogImageUrl.includes('?') ? '&' : '?'}v=${shareCardBustVal}`
+    : `/api/global-share-card.png?v=${shareCardBustVal}`;
   
   // Editing state block
   const [showEditForm, setShowEditForm] = useState(false);
@@ -374,7 +382,8 @@ export default function Dashboard({
       setProfile({ ...profile, slug });
     }
 
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
+    const updatedAtTime = profile.updatedAt ? new Date(profile.updatedAt).getTime() : Date.now();
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}?v=${updatedAtTime}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -402,36 +411,15 @@ export default function Dashboard({
       setProfile({ ...profile, slug });
     }
 
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
+    const updatedAtTime = profile.updatedAt ? new Date(profile.updatedAt).getTime() : Date.now();
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}?v=${updatedAtTime}`;
     const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
+    
+    // Increment WhatsApp counter
+    dbService.incrementAnalyticsView(profile.userId, false, true);
+    
     window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
-  };
-
-  const handleUpdateShareLink = async () => {
-    const slugifyStr = (text: string) => {
-      return text
-        .toString()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/[\s_]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    };
-
-    const nameToUse = (profile.name || profile.artistName || "artista").trim();
-    const generatedSlug = slugifyStr(nameToUse);
-    
-    dbService.updateArtistProfile(profile.userId, { slug: generatedSlug });
-    setProfile({ ...profile, slug: generatedSlug });
-    
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${generatedSlug}`;
-    navigator.clipboard.writeText(pageUrl);
-    setCopiedAlert(true);
-    setTimeout(() => setCopiedAlert(false), 2000);
   };
 
   const handleUpgradePlan = () => {
@@ -1004,44 +992,24 @@ export default function Dashboard({
                 <span className="px-2 py-0.5 bg-yellow-950/40 text-yellow-400 uppercase text-[9px] font-mono font-bold tracking-widest rounded border border-yellow-400/25">Premium 🌟</span>
               )}
             </div>
-            <h3 className="text-2xl md:text-3xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-400">
-              Olá, {profile.name}!
-            </h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="text-2xl md:text-3xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-400">
+                Olá, {profile.name}!
+              </h3>
+              <button 
+                onClick={handleOpenProfileModal}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-[10px] font-mono font-bold uppercase tracking-wider text-orange-400 hover:text-orange-300 rounded-lg flex items-center gap-1 cursor-pointer transition active:scale-95"
+                title="Personalizar seu perfil de compositor (Rótulos, Redes Sociais, Bio)"
+              >
+                <User className="w-3 h-3 text-orange-400" /> Personalizar Perfil
+              </button>
+            </div>
             <p className="text-slate-400 text-xs md:text-sm leading-relaxed">
               Aqui você controla seu acervo e acompanha cliques nas suas faixas. Seu link público está ativo e pronto para receber visitas.
             </p>
-            <div className="pt-2 flex flex-col gap-1.5 font-mono text-xs text-slate-400">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-orange-400 font-bold font-sans">Seu link público:</span>
-                <a 
-                  href={`https://www.soundrive.com.br/catalogo/${profile.slug || profile.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "")}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-slate-300 underline hover:text-yellow-400 break-all transition"
-                >
-                  https://www.soundrive.com.br/catalogo/{profile.slug || profile.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "")}
-                </a>
-              </div>
-              <button
-                onClick={handleUpdateShareLink}
-                className="self-start text-[10px] text-orange-400/80 hover:text-orange-400 border border-orange-500/20 hover:border-orange-500/50 bg-orange-950/20 px-2.5 py-1 rounded transition flex items-center gap-1 mt-1 cursor-pointer"
-                title="Garante que o link amigável está configurado corretamente e copia para a área de transferência"
-              >
-                <Sparkles className="w-3 h-3 text-orange-400" /> Atualizar link de compartilhamento
-              </button>
-            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button 
-              id="edit-profile-btn"
-              onClick={handleOpenProfileModal}
-              className="px-4.5 py-3 bg-gradient-to-r from-orange-600/10 to-yellow-500/10 hover:from-orange-600/20 hover:to-yellow-500/20 border border-orange-500/30 hover:border-orange-500/50 text-[#d4af37] hover:text-white rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition hover:scale-102"
-              title="Personalizar seu perfil de compositor"
-            >
-              <User className="w-4 h-4 text-orange-400" /> Personalizar Perfil
-            </button>
-
             <button 
               id="view-catalog-btn"
               onClick={() => onNavigate('public', { id: profile.slug || profile.userId })}
@@ -1205,7 +1173,7 @@ export default function Dashboard({
               </div>
               <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
                 <img 
-                  src={globalShareCard?.ogImageUrl || `/api/og-artista?id=${profile.userId}`}
+                  src={shareCardPreviewUrl}
                   alt="Cartão Soundrive" 
                   className="w-full h-full object-cover select-none"
                   referrerPolicy="no-referrer"
@@ -1243,9 +1211,9 @@ export default function Dashboard({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
                     onClick={handleCopyLink}
-                    className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-lg text-xs font-heading font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition hover:from-orange-500 hover:to-yellow-400 active:scale-95 font-bold"
+                    className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 rounded-lg text-xs font-heading font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition hover:from-orange-500 hover:to-yellow-400 active:scale-95 font-bold animate-pulse"
                   >
-                    <Copy className="w-4 h-4" /> {copiedAlert ? "Copiado!" : "Copiar Link"}
+                    <Copy className="w-4 h-4" /> {copiedAlert ? "Divulgação Copiada! ✓" : "Copiar divulgação"}
                   </button>
                   <button
                     onClick={handleShareWhatsApp}
@@ -1255,7 +1223,7 @@ export default function Dashboard({
                   </button>
                 </div>
                 <a 
-                  href={globalShareCard?.ogImageUrl || `/api/og-artista?id=${profile.userId}`}
+                  href={shareCardPreviewUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="block text-center text-[10px] font-mono text-orange-400 hover:text-orange-350 hover:underline pt-1 transition"
@@ -1450,8 +1418,8 @@ export default function Dashboard({
                     .replace(/[\s_]+/g, '-')
                     .replace(/-+/g, '-');
                 };
-                const slugOrId = profile.name ? slugifyStr(profile.name) : profile.userId;
-                const songUrl = `https://soundrive.com.br/artista/${slugOrId}?play=${trackVal.trackId}`;
+                const slugOrId = profile.slug || (profile.name ? slugifyStr(profile.name) : profile.userId);
+                const songUrl = `https://www.soundrive.com.br/catalogo/${slugOrId}?play=${trackVal.trackId}`;
                 navigator.clipboard.writeText(songUrl);
                 
                 setToastMessage("Link do catálogo com essa música copiado!");

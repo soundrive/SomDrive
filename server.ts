@@ -803,20 +803,42 @@ async function startServer() {
     }
   });
 
+  // REST API helper to fetch the global share card settings, bypassing any missing server-side service-account privileges on the named database
+  const fetchGlobalShareCardRest = async (): Promise<{ ogImageUrl: string; updatedAt: string } | null> => {
+    const projectId = "gen-lang-client-0946896754";
+    const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
+    try {
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/settings/shareCard`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const doc = await res.json();
+        const f = doc.fields || {};
+        const ogImageUrl = f.ogImageUrl?.stringValue;
+        if (ogImageUrl) {
+          const updatedAtStr = f.updatedAt?.timestampValue || doc.updateTime || new Date().toISOString();
+          return {
+            ogImageUrl,
+            updatedAt: updatedAtStr
+          };
+        }
+      } else {
+        console.warn("REST global share card fetch status not OK:", res.status);
+      }
+    } catch (err: any) {
+      console.warn("REST global share card fetch failed:", err.message || err);
+    }
+    return null;
+  };
+
   // Proxy endpoint to load global sharing image across any browser, CORS free and crawler-friendly
   const serveGlobalShareCard = async (req: any, res: any) => {
     try {
-      const shareCardDoc = await db.collection("settings").doc("shareCard").get();
-      if (!shareCardDoc.exists) {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (!shareCard || !shareCard.ogImageUrl) {
         return res.status(404).json({ error: "Nenhum cartão de compartilhamento configurado." });
       }
 
-      const data = shareCardDoc.data();
-      if (!data || !data.ogImageUrl) {
-        return res.status(404).json({ error: "URL do cartão de compartilhamento não registrada." });
-      }
-
-      const imageUrl = data.ogImageUrl;
+      const imageUrl = shareCard.ogImageUrl;
       console.log("Serving proxy global share card directly from R2 URL:", imageUrl);
 
       // Fetch dynamic buffer
@@ -835,12 +857,11 @@ async function startServer() {
 
     } catch (err: any) {
       console.error("Error serving proxy global share card:", err);
-      // Fallback fallback: redirect dynamically to make it load even in case of fetch errors
+      // Fallback: redirect dynamically to make it load even in case of fetch errors
       try {
-        const shareCardDoc = await db.collection("settings").doc("shareCard").get();
-        if (shareCardDoc.exists) {
-          const u = shareCardDoc.data()?.ogImageUrl;
-          if (u) return res.redirect(u);
+        const shareCard = await fetchGlobalShareCardRest();
+        if (shareCard && shareCard.ogImageUrl) {
+          return res.redirect(shareCard.ogImageUrl);
         }
       } catch (e) {}
 
@@ -850,6 +871,57 @@ async function startServer() {
 
   app.get("/api/global-share-card", serveGlobalShareCard);
   app.get("/api/global-share-card.png", serveGlobalShareCard);
+
+  // Debugging route for verifying matching OG properties
+  app.get("/api/debug/og", async (req: any, res: any) => {
+    try {
+      const slug = String(req.query.slug || "ze-quirino").trim();
+      let artistFound = false;
+      let artistName = "";
+      let ogImageUrl = "";
+      let finalOgImageUrl = "";
+      let ogUrl = "";
+
+      try {
+        const artist = await fetchArtistRest(slug);
+        if (artist && artist.userId) {
+          artistFound = true;
+          artistName = artist.name;
+          ogUrl = `https://www.soundrive.com.br/catalogo/${artist.slug}`;
+        }
+      } catch (err) {
+        console.warn("Debug OG fetch failed:", err);
+      }
+
+      // Check global shareCard via REST helper to bypass the auth limitation
+      try {
+        const shareCard = await fetchGlobalShareCardRest();
+        if (shareCard && shareCard.ogImageUrl) {
+          ogImageUrl = shareCard.ogImageUrl;
+          let version = "1.0.0";
+          if (shareCard.updatedAt) {
+            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+          }
+          const host = req.get("host") || "www.soundrive.com.br";
+          const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+          finalOgImageUrl = `${protocol}://${host}/api/global-share-card.png?v=${version}`;
+        }
+      } catch (shareErr) {
+        console.warn("Debug OG shareCard settings fetch failed:", shareErr);
+      }
+
+      return res.status(200).json({
+        slug,
+        artistFound,
+        artistName,
+        ogImageUrl,
+        finalOgImageUrl,
+        ogUrl
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
   // API Route for Mercado Pago webhook integrations
   app.post("/api/mercadopago-webhook", async (req, res) => {
@@ -1441,20 +1513,13 @@ async function startServer() {
       let ogUrlToUse = `https://www.soundrive.com.br/artista/${cleanSlug}`;
 
       try {
-        const shareCardDoc = await db.collection("settings").doc("shareCard").get();
-        if (shareCardDoc.exists) {
-          const shareCardData = shareCardDoc.data();
-          if (shareCardData && shareCardData.ogImageUrl) {
-            let version = "1.0.0";
-            if (shareCardData.updatedAt) {
-              if (typeof shareCardData.updatedAt.toDate === "function") {
-                version = String(shareCardDoc.data()?.updatedAt.toDate().getTime());
-              } else {
-                version = encodeURIComponent(String(shareCardDoc.data()?.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
-              }
-            }
-            ogImageToUse = `${shareCardData.ogImageUrl}?v=${version}`;
+        const shareCard = await fetchGlobalShareCardRest();
+        if (shareCard && shareCard.ogImageUrl) {
+          let version = "1.0.0";
+          if (shareCard.updatedAt) {
+            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
           }
+          ogImageToUse = `${protocol}://${host}/api/global-share-card.png?v=${version}`;
         }
       } catch (fErr) {
         console.warn("Could not fetch global share card settings from Firestore:", fErr);
@@ -1473,12 +1538,12 @@ async function startServer() {
       if (fsMod.existsSync(indexPath)) {
         let htmlContents = fsMod.readFileSync(indexPath, 'utf8');
 
-        // Clean static tags to prevent duplicates and legacy tag leakage
+        // Clean static tags fully to prevent duplicates and legacy tag leakage
         htmlContents = htmlContents
           .replace(/<title>.*?<\/title>/gi, "")
-          .replace(/<meta\s+name="description"[^>]*\/?>/gi, "")
-          .replace(/<meta\s+property="og:[^>]*\/?>/gi, "")
-          .replace(/<meta\s+name="twitter:[^>]*\/?>/gi, "");
+          .replace(/<meta\s+[^>]*name=["']description["'][^>]*\/?>/gi, "")
+          .replace(/<meta\s+[^>]*property=["']og:.*?["'][^>]*\/?>/gi, "")
+          .replace(/<meta\s+[^>]*name=["']twitter:.*?["'][^>]*\/?>/gi, "");
 
         const ogPayload = `
   <!-- Dinamic Custom Soundrive OG Sharing Metadata -->
