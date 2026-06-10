@@ -265,7 +265,7 @@ export default function Dashboard({
   const getPlanTracksLimit = (plan: 'free' | 'pro' | 'premium') => {
     if (plan === 'pro') return 15;
     if (plan === 'premium') return 50;
-    return 3;
+    return profile.musicLimit || 3;
   };
   const limitCount = getPlanTracksLimit(profile.plan);
 
@@ -464,7 +464,7 @@ export default function Dashboard({
     setFormError('');
 
     if (tracks.length >= limitCount) {
-      setFormError(`Limite atingido! O plano ${profile.plan.toUpperCase()} permite até ${limitCount} músicas.`);
+      setFormError('Você atingiu o limite do seu plano. Faça upgrade para enviar mais músicas.');
       setShowAddForm(false);
       setShowLimitPrompt(true);
       return;
@@ -1909,11 +1909,11 @@ export default function Dashboard({
               <h4 className="font-heading font-black text-xl uppercase tracking-wide text-white">
                 Limite de Plano Atingido
               </h4>
+              <p className="text-sm font-semibold text-orange-400">
+                Você atingiu o limite do seu plano. Faça upgrade para enviar mais músicas.
+              </p>
               <p className="text-xs text-slate-400 leading-relaxed font-semibold">
                 Você enviou <strong className="text-orange-400">{tracks.length} de {limitCount} músicas</strong> permitidas no plano <strong className="text-orange-400 uppercase">{profile.plan}</strong>.
-              </p>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Adicione mais faixas de demonstração, explore métricas, libere botões de vendas de guias e ative links personalizados fazendo upgrade para {profile.plan === 'free' ? 'Pro ou Premium' : 'Premium'}.
               </p>
             </div>
 

@@ -16,50 +16,62 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { uid, email, plan, planCode } = req.body || {};
-    const chosenPlan = planCode || plan;
+    const { uid, email, planCode } = req.body || {};
 
-    if (!uid || !email || !chosenPlan) {
+    if (!uid || !email || !planCode) {
       return res.status(400).json({ 
-        error: "Parâmetros obrigatórios ausentes. É necessário preencher uid, email e o plano (pro_monthly, pro_annual, premium_monthly, premium_annual)." 
+        error: "Parâmetros obrigatórios ausentes. É necessário preencher uid, email e o planCode (pro_mensal, premium_mensal, pro_anual, premium_anual)." 
       });
     }
 
-    // 2. Map plan attributes: price and description
-    let price = 19.90;
-    let reason = "Soundrive Pro Mensal";
-    let frequency = 1;
+    // 2. Map plan attributes: price, description, and preapproval_plan_id
+    const PLANS_MAP: Record<string, {
+      preapproval_plan_id: string;
+      reason: string;
+      plan: 'pro' | 'premium';
+      billingCycle: 'monthly' | 'annual';
+      musicLimit: number;
+    }> = {
+      pro_mensal: {
+        preapproval_plan_id: "122938c4f106404d843032de86628512",
+        reason: "Soundrive Pro",
+        plan: "pro",
+        billingCycle: "monthly",
+        musicLimit: 15
+      },
+      premium_mensal: {
+        preapproval_plan_id: "dbb8c10eacbb4c87ad6f5ee5ad15cd4a",
+        reason: "Soundrive Premium",
+        plan: "premium",
+        billingCycle: "monthly",
+        musicLimit: 50
+      },
+      pro_anual: {
+        preapproval_plan_id: "ea683f4d101746bb86c3933530814aa8",
+        reason: "Soundrive Pro Anual",
+        plan: "pro",
+        billingCycle: "annual",
+        musicLimit: 15
+      },
+      premium_anual: {
+        preapproval_plan_id: "986deaf44cf144d9af93c718b4870ca5",
+        reason: "Soundrive Premium Anual",
+        plan: "premium",
+        billingCycle: "annual",
+        musicLimit: 50
+      }
+    };
 
-    switch (chosenPlan) {
-      case 'pro_monthly':
-        price = 19.90;
-        reason = "Soundrive Pro Mensal";
-        frequency = 1;
-        break;
-      case 'pro_annual':
-        price = 199.00;
-        reason = "Soundrive Pro Anual";
-        frequency = 12;
-        break;
-      case 'premium_monthly':
-        price = 39.90;
-        reason = "Soundrive Premium Mensal";
-        frequency = 1;
-        break;
-      case 'premium_annual':
-        price = 399.00;
-        reason = "Soundrive Premium Anual";
-        frequency = 12;
-        break;
-      default:
-        return res.status(400).json({ 
-          error: `Plano '${chosenPlan}' inválido. Escolha entre: pro_monthly, pro_annual, premium_monthly, premium_annual.` 
-        });
+    const planConfig = PLANS_MAP[planCode];
+    if (!planConfig) {
+      return res.status(400).json({ 
+        error: `Plano '${planCode}' inválido. Escolha entre: pro_mensal, premium_mensal, pro_anual, premium_anual.` 
+      });
     }
 
     // 3. Setup redirection URLs and external_reference pattern matching
     // External reference: uid|planCode (as requested by user)
-    const externalReference = `${uid}|${chosenPlan}`;
+    const externalReference = `${uid}|${planCode}`;
 
     const host = req.headers.host || '';
     let baseUrl = 'https://soundrive.com.br';
@@ -69,27 +81,21 @@ export default async function handler(req: any, res: any) {
     console.log("[MercadoPago Create Subscription] Preparing preapproval with parameters:", {
       uid,
       email,
-      chosenPlan,
-      price,
-      reason,
-      frequency,
+      planCode,
+      reason: planConfig.reason,
+      preapproval_plan_id: planConfig.preapproval_plan_id,
       externalReference,
       backUrl
     });
 
-    // 4. Request creation to Mercado Pago API
+    // 4. Request creation to Mercado Pago API using the official preapproval_plan_id
     const mpUrl = "https://api.mercadopago.com/v1/preapproval";
     const body = {
+      preapproval_plan_id: planConfig.preapproval_plan_id,
       payer_email: email.trim().toLowerCase(),
       back_url: backUrl,
-      reason: reason,
+      reason: planConfig.reason,
       external_reference: externalReference,
-      auto_recurring: {
-        frequency: frequency,
-        frequency_type: "months",
-        transaction_amount: price,
-        currency_id: "BRL"
-      },
       status: "pending"
     };
 

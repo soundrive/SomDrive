@@ -128,18 +128,16 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     setCheckoutStep('payment');
   };
 
-  const handlePlanCheckout = async (planKey: 'pro' | 'premium') => {
+  const handlePlanCheckout = async (planCode: 'pro_mensal' | 'pro_anual' | 'premium_mensal' | 'premium_anual') => {
     if (!currentUser || !currentUser.userId || !currentUser.email) {
       setCheckoutError("Você precisa estar autenticado com e-mail para assinar um plano. Por favor, faça login ou registre-se.");
       return;
     }
 
+    const planKey = planCode.startsWith('pro') ? 'pro' : 'premium';
     setSelectedPlan(planKey);
     setLoadingPlan(planKey);
     setCheckoutError(null);
-
-    const isYearly = billingCycle === 'yearly';
-    const planCode = `${planKey}_${isYearly ? 'annual' : 'monthly'}`;
 
     try {
       const response = await fetch('/api/mercadopago/create-subscription', {
@@ -375,20 +373,26 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </ul>
             </div>
 
-            <div className="mt-8">
-              {profile.plan === 'pro' ? (
-                <div className="w-full text-center py-2.5 border-2 border-orange-500/30 text-orange-400 text-xs uppercase font-heading font-black tracking-widest rounded-xl bg-orange-950/50 font-bold">
-                  Plano Ativo ⭐
+            <div className="mt-8 space-y-3">
+              {profile.plan === 'pro' && (
+                <div className="w-full text-center py-2 border border-orange-500/30 text-orange-400 text-xs uppercase font-mono tracking-widest bg-orange-950/40 rounded-xl font-extrabold mb-1.5 flex items-center justify-center gap-1">
+                  Seu Plano Atual ⭐
                 </div>
-              ) : (
-                <button 
-                  onClick={() => handlePlanCheckout('pro')}
-                  disabled={loadingPlan !== null}
-                  className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10 disabled:opacity-50"
-                >
-                  {loadingPlan === 'pro' ? 'Carregando Mercado Pago...' : 'Quero ser Pro'}
-                </button>
               )}
+              <button 
+                onClick={() => handlePlanCheckout('pro_mensal')}
+                disabled={loadingPlan !== null}
+                className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-black shadow-lg shadow-orange-500/10 disabled:opacity-50"
+              >
+                {loadingPlan === 'pro' ? 'Acessando Mercado Pago...' : 'Assinar Pro Mensal'}
+              </button>
+              <button 
+                onClick={() => handlePlanCheckout('pro_anual')}
+                disabled={loadingPlan !== null}
+                className="w-full text-center py-3 bg-slate-955 hover:bg-slate-900 border border-slate-800 text-orange-400 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-black disabled:opacity-50"
+              >
+                {loadingPlan === 'pro' ? 'Acessando Mercado Pago...' : 'Assinar Pro Anual'}
+              </button>
             </div>
           </div>
 
@@ -430,20 +434,26 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </ul>
             </div>
 
-            <div className="mt-8">
-              {profile.plan === 'premium' ? (
-                <div className="w-full text-center py-2.5 border border-orange-500/20 text-orange-400 text-xs uppercase font-heading font-black tracking-widest rounded-xl bg-orange-950/20 font-bold">
-                  Plano Ativo 🚀
+            <div className="mt-8 space-y-3">
+              {profile.plan === 'premium' && (
+                <div className="w-full text-center py-2 border border-orange-500/30 text-orange-400 text-xs uppercase font-mono tracking-widest bg-orange-950/40 rounded-xl font-extrabold mb-1.5 flex items-center justify-center gap-1">
+                  Seu Plano Atual 🚀
                 </div>
-              ) : (
-                <button 
-                  onClick={() => handlePlanCheckout('premium')}
-                  disabled={loadingPlan !== null}
-                  className="w-full text-center py-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold disabled:opacity-50"
-                >
-                  {loadingPlan === 'premium' ? 'Carregando Mercado Pago...' : 'Quero ser Premium'}
-                </button>
               )}
+              <button 
+                onClick={() => handlePlanCheckout('premium_mensal')}
+                disabled={loadingPlan !== null}
+                className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-black shadow-lg shadow-orange-500/10 disabled:opacity-50"
+              >
+                {loadingPlan === 'premium' ? 'Acessando Mercado Pago...' : 'Assinar Premium Mensal'}
+              </button>
+              <button 
+                onClick={() => handlePlanCheckout('premium_anual')}
+                disabled={loadingPlan !== null}
+                className="w-full text-center py-3 bg-slate-955 hover:bg-slate-900 border border-slate-800 text-orange-400 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-black disabled:opacity-50"
+              >
+                {loadingPlan === 'premium' ? 'Acessando Mercado Pago...' : 'Assinar Premium Anual'}
+              </button>
             </div>
           </div>
 

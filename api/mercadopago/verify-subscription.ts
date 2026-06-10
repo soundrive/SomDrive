@@ -103,25 +103,32 @@ export default async function handler(req: any, res: any) {
     });
 
     // 3. Extract user ID and plan from externalReference
+    const PLANS_MAP: Record<string, {
+      plan: 'pro' | 'premium';
+      billingCycle: 'monthly' | 'annual';
+      musicLimit: number;
+    }> = {
+      pro_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15 },
+      premium_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50 },
+      pro_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15 },
+      premium_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50 }
+    };
+
     let userId: string | null = null;
     let explicitPlan: string | null = null;
     let explicitCycle: string | null = null;
+    let planCode = '';
 
     if (externalReference) {
       if (externalReference.includes('|')) {
         const parts = externalReference.split('|');
         if (parts.length >= 1) userId = parts[0];
         if (parts.length >= 2) {
-          const planCode = parts[1];
-          if (planCode.includes('pro')) {
-            explicitPlan = 'pro';
-          } else if (planCode.includes('premium')) {
-            explicitPlan = 'premium';
-          }
-          if (planCode.includes('annual') || planCode.includes('year')) {
-            explicitCycle = 'annual';
-          } else {
-            explicitCycle = 'monthly';
+          planCode = parts[1]; // pro_mensal, premium_mensal, pro_anual, premium_anual
+          const config = PLANS_MAP[planCode];
+          if (config) {
+            explicitPlan = config.plan;
+            explicitCycle = config.billingCycle;
           }
         }
       } else {
@@ -154,38 +161,39 @@ export default async function handler(req: any, res: any) {
     let billingCycle = explicitCycle || 'monthly';
     let musicLimit = finalPlan === 'premium' ? 50 : 15;
 
-    const isNowActive = statusConsulted === 'authorized' || statusConsulted === 'approved' || statusConsulted === 'active';
-    const updatedPlan = isNowActive ? finalPlan : 'free';
-    const updatedLimit = isNowActive ? musicLimit : 5;
-    const paymentStatusField = isNowActive ? 'active' : 'inactive';
-
-    const activatedAt = new Date();
-    const expiresAt = new Date();
-    if (billingCycle === 'annual') {
-      expiresAt.setFullYear(activatedAt.getFullYear() + 1);
-    } else {
-      expiresAt.setDate(activatedAt.getDate() + 31);
+    if (!planCode) {
+      planCode = `${finalPlan}_${billingCycle === 'annual' ? 'anual' : 'mensal'}`;
     }
 
-    const activatedStr = activatedAt.toISOString();
-    const expiresStr = expiresAt.toISOString();
+    const isNowActive = statusConsulted === 'authorized' || statusConsulted === 'approved' || statusConsulted === 'active';
+    const isInactiveOrCancelled = statusConsulted === 'paused' || statusConsulted === 'cancelled' || statusConsulted === 'inactive' || !isNowActive;
 
-    const updatePayload: any = {
-      plan: updatedPlan,
-      billingCycle: isNowActive ? billingCycle : 'monthly',
-      musicLimit: updatedLimit,
-      subscriptionStatus: isNowActive ? 'ativo' : 'cancelado',
-      paymentStatus: paymentStatusField,
-      accessType: isNowActive ? 'subscriber' : 'free',
-      planActivatedAt: isNowActive ? activatedStr : null,
-      planExpiresAt: isNowActive ? expiresStr : null,
-      subscriptionStartedAt: isNowActive ? activatedStr : null,
-      subscriptionEndsAt: isNowActive ? expiresStr : null,
-      updatedAt: activatedStr
-    };
+    let updatePayload: any = {};
 
-    if (subscriptionId) updatePayload.mercadoPagoSubscriptionId = subscriptionId;
-    if (paymentId) updatePayload.mercadoPagoPaymentId = paymentId;
+    if (isNowActive) {
+      updatePayload = {
+        plan: finalPlan,
+        billingCycle: billingCycle,
+        musicLimit: musicLimit,
+        subscriptionStatus: "active",
+        mercadoPagoSubscriptionId: subscriptionId || id,
+        mercadoPagoPlanCode: planCode,
+        planActivatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+    } else {
+      updatePayload = {
+        plan: "free",
+        billingCycle: null,
+        musicLimit: 3,
+        subscriptionStatus: statusConsulted,
+        updatedAt: FieldValue.serverTimestamp()
+      };
+    }
+
+    if (paymentId) {
+      updatePayload.mercadoPagoPaymentId = paymentId;
+    }
 
     // 5. Update user details in dual collection synchronizers
     await db.collection("users").doc(userId).set(updatePayload, { merge: true });
@@ -195,14 +203,16 @@ export default async function handler(req: any, res: any) {
     await db.collection("mp_subscriptions").doc(id).set({
       userId,
       email: payerEmail || "unknown",
-      plan: updatedPlan,
-      billingCycle,
+      plan: isNowActive ? finalPlan : "free",
+      billingCycle: isNowActive ? billingCycle : null,
       status: statusConsulted,
       paymentId: paymentId || id,
       subscriptionId: subscriptionId || id,
-      musicLimit: updatedLimit,
+      musicLimit: isNowActive ? musicLimit : 3,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
+
+    const updatedPlan = updatePayload.plan;
 
     return res.json({
       success: true,

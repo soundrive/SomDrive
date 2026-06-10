@@ -102,8 +102,8 @@ export default function PaymentReturnScreen({ currentUser, onNavigate, onRefresh
             </div>
             
             <div className="space-y-2">
-              <h3 className="text-xl md:text-2xl font-heading font-black uppercase text-white tracking-tight">
-                Processando Assinatura
+              <h3 className="text-xl md:text-2xl font-heading font-black text-white tracking-tight">
+                Estamos confirmando seu pagamento...
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
                 Confirmamos o seu checkout no Mercado Pago! Estamos ativando os seus limites ampliados em segundo plano. Isto leva apenas alguns instantes...
@@ -122,8 +122,8 @@ export default function PaymentReturnScreen({ currentUser, onNavigate, onRefresh
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl md:text-2xl font-heading font-black uppercase text-white tracking-tight">
-                Plano Ativado com Sucesso!
+              <h3 className="text-xl md:text-2xl font-heading font-black text-white tracking-tight text-emerald-400">
+                Plano ativado com sucesso
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
                 Parabéns! O seu perfil foi atualizado para o plano <strong className="text-orange-400 uppercase">{profile?.plan || 'PRO'}</strong>. O seu limite de cadastro de músicas foi expandido instantaneamente!
@@ -146,12 +146,18 @@ export default function PaymentReturnScreen({ currentUser, onNavigate, onRefresh
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xl md:text-2xl font-heading font-black uppercase text-white tracking-tight">
-                Pagamento Registrado
+              <h3 className="text-lg md:text-xl font-heading font-bold text-amber-300 tracking-tight">
+                Pagamento recebido ou em análise. Aguarde alguns instantes e atualize.
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
                 Seu pagamento foi confirmado pelo gateway. Caso os novos limites ainda não tenham aparecido por favor aguarde de 1 a 2 minutos para a propagação da API ou fale com nosso suporte.
               </p>
+              <button
+                onClick={() => { setAttempts(0); setChecking(true); }}
+                className="mt-4 px-4 py-2 bg-slate-800 text-xs hover:bg-slate-700 transition font-bold uppercase tracking-wider text-white rounded-lg cursor-pointer"
+              >
+                Atualizar e Tentar Sincronizar
+              </button>
             </div>
           </div>
         )}
