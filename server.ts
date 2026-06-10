@@ -9,6 +9,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
 import createSubscriptionHandler from "./api/mercadopago/create-subscription";
 import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
+import checkIntegrationsHandler from "./api/admin/check-integrations";
 import sharp from "sharp";
 
 dotenv.config();
@@ -643,6 +644,29 @@ async function startServer() {
       await verifySubscriptionHandler(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in local verify-subscription wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  // API Route for admin integrations check
+  app.get("/api/admin/check-integrations", async (req, res) => {
+    try {
+      await checkIntegrationsHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in check-integrations wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  app.post("/api/admin/check-integrations", async (req, res) => {
+    try {
+      await checkIntegrationsHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in check-integrations wrapper:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: err.message || String(err) });
       }

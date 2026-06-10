@@ -24,41 +24,51 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 2. Map plan attributes: price, description, and preapproval_plan_id
+    // 2. Map plan attributes as requested by user - WITHOUT preapproval_plan_id
     const PLANS_MAP: Record<string, {
-      preapproval_plan_id: string;
       reason: string;
+      frequency: number;
+      frequency_type: "months";
+      transaction_amount: number;
+      musicLimit: number;
       plan: 'pro' | 'premium';
       billingCycle: 'monthly' | 'annual';
-      musicLimit: number;
     }> = {
       pro_mensal: {
-        preapproval_plan_id: "122938c4f106404d843032de86628512",
-        reason: "Soundrive Pro",
+        reason: "Soundrive Pro Mensal",
+        frequency: 1,
+        frequency_type: "months",
+        transaction_amount: 19.90,
+        musicLimit: 15,
         plan: "pro",
-        billingCycle: "monthly",
-        musicLimit: 15
+        billingCycle: "monthly"
       },
       premium_mensal: {
-        preapproval_plan_id: "dbb8c10eacbb4c87ad6f5ee5ad15cd4a",
-        reason: "Soundrive Premium",
+        reason: "Soundrive Premium Mensal",
+        frequency: 1,
+        frequency_type: "months",
+        transaction_amount: 39.90,
+        musicLimit: 50,
         plan: "premium",
-        billingCycle: "monthly",
-        musicLimit: 50
+        billingCycle: "monthly"
       },
       pro_anual: {
-        preapproval_plan_id: "ea683f4d101746bb86c3933530814aa8",
         reason: "Soundrive Pro Anual",
+        frequency: 12,
+        frequency_type: "months",
+        transaction_amount: 199.00,
+        musicLimit: 15,
         plan: "pro",
-        billingCycle: "annual",
-        musicLimit: 15
+        billingCycle: "annual"
       },
       premium_anual: {
-        preapproval_plan_id: "986deaf44cf144d9af93c718b4870ca5",
         reason: "Soundrive Premium Anual",
+        frequency: 12,
+        frequency_type: "months",
+        transaction_amount: 399.00,
+        musicLimit: 50,
         plan: "premium",
-        billingCycle: "annual",
-        musicLimit: 50
+        billingCycle: "annual"
       }
     };
 
@@ -69,33 +79,38 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 3. Setup redirection URLs and external_reference pattern matching
+    // 3. Setup external_reference pattern matching
     const externalReference = `${uid}|${planCode}`;
+    const appBaseUrl = process.env.APP_BASE_URL ? process.env.APP_BASE_URL.replace(/\/$/, "") : "https://www.soundrive.com.br";
+    const backUrl = `${appBaseUrl}/pagamento/retorno`;
 
-    const appBaseUrl = process.env.APP_BASE_URL || 'https://www.soundrive.com.br';
-    const backUrl = `${appBaseUrl.replace(/\/$/, '')}/pagamento/retorno`;
-
-    // 4. Detailed logging before making the API request (strictly ensuring secure non-disclosure of access tokens)
-    console.log("[MercadoPago Create Subscription] Preparing preapproval with parameters:", {
-      planCode,
-      preapproval_plan_id: planConfig.preapproval_plan_id,
-      payer_email: email.trim().toLowerCase(),
-      external_reference: externalReference,
-      back_url: backUrl,
-      APP_BASE_URL: appBaseUrl
-    });
-
-    // 5. Request creation to Mercado Pago API using the correct official preapproval endpoint
-    const mpUrl = "https://api.mercadopago.com/preapproval";
+    // 4. Setup clean, compliant auto_recurring body configuration on Mercado Pago Preapproval API
     const body = {
-      preapproval_plan_id: planConfig.preapproval_plan_id,
-      payer_email: email.trim().toLowerCase(),
-      back_url: backUrl,
       reason: planConfig.reason,
       external_reference: externalReference,
+      payer_email: email.trim().toLowerCase(),
+      auto_recurring: {
+        frequency: planConfig.frequency,
+        frequency_type: planConfig.frequency_type,
+        transaction_amount: planConfig.transaction_amount,
+        currency_id: "BRL"
+      },
+      back_url: backUrl,
       status: "pending"
     };
 
+    // 5. Explicitly log exactly the structure requested:
+    console.log("[MercadoPago] Criando assinatura SEM preapproval_plan_id usando auto_recurring", {
+      reason: body.reason,
+      external_reference: body.external_reference,
+      payer_email: body.payer_email,
+      auto_recurring: body.auto_recurring,
+      back_url: body.back_url,
+      status: body.status
+    });
+
+    // 6. Request creation to Mercado Pago API using the official preapproval endpoint
+    const mpUrl = "https://api.mercadopago.com/preapproval";
     const mpResponse = await fetch(mpUrl, {
       method: "POST",
       headers: {
@@ -107,21 +122,27 @@ export default async function handler(req: any, res: any) {
 
     if (!mpResponse.ok) {
       const errorText = await mpResponse.text();
-      console.error(`[MercadoPago Create Subscription] Mercado Pago API error. Status: ${mpResponse.status}`, {
-        status: mpResponse.status,
-        body: errorText
-      });
-
-      // Point 7: If Mercado Pago returned 404 format message correctly for front-end feedback
-      if (mpResponse.status === 404 || errorText.toLowerCase().includes("resource not found")) {
-        return res.status(404).json({
-          error: "Plano Mercado Pago não encontrado. Verifique se o preapproval_plan_id pertence à mesma conta do Access Token.",
-          details: errorText
-        });
+      let errorParsed: any = {};
+      try {
+        errorParsed = JSON.parse(errorText);
+      } catch (e) {
+        errorParsed = { error: "Unparseable error block", message: errorText };
       }
 
-      return res.status(502).json({ 
-        error: "O Mercado Pago recusou a criação da assinatura. Status: " + mpResponse.status, 
+      // Log complete structure details including message, error, status, and cause
+      console.error("[MercadoPago Create Subscription] Mercado Pago API error details:", {
+        message: errorParsed.message || "N/A",
+        error: errorParsed.error || "N/A",
+        status: mpResponse.status,
+        cause: errorParsed.cause || errorParsed.message || "N/A",
+        fullError: errorParsed
+      });
+
+      return res.status(mpResponse.status || 400).json({ 
+        error: "O Mercado Pago recusou a criação da assinatura. Status: " + mpResponse.status,
+        message: errorParsed.message || "Erro retornado pela API do Mercado Pago",
+        status: mpResponse.status,
+        cause: errorParsed.cause || null,
         details: errorText 
       });
     }

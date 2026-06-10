@@ -87,6 +87,26 @@ export default function AdminArea({
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Integration States
+  const [integrationStatus, setIntegrationStatus] = useState<{
+    mercadoPagoAccessToken: boolean;
+    mercadoPagoPublicKey: boolean;
+    mercadoPagoWebhookSecret: boolean;
+    appBaseUrl: boolean;
+  } | null>(null);
+
+  const loadIntegrationStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/check-integrations');
+      if (res.ok) {
+        const data = await res.json();
+        setIntegrationStatus(data);
+      }
+    } catch (e) {
+      console.error("Error loading integration status:", e);
+    }
+  };
+
   // Manual release form state
   const [manualEmail, setManualEmail] = useState('');
   const [manualPlan, setManualPlan] = useState<'free' | 'pro' | 'premium'>('pro');
@@ -251,11 +271,15 @@ export default function AdminArea({
   useEffect(() => {
     loadData();
     loadPaymentSettings();
+    loadIntegrationStatus();
   }, []);
 
   useEffect(() => {
     if (activeTab === 'mercadopago') {
       loadSubscriptions();
+    }
+    if (activeTab === 'settings') {
+      loadIntegrationStatus();
     }
   }, [activeTab]);
 
@@ -1482,18 +1506,55 @@ export default function AdminArea({
                 </div>
 
                 {/* Check 4: Mercado Pago */}
-                <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-amber-500/10 border border-amber-500/20 text-yellow-400 rounded-xl">
-                      <AlertTriangle className="h-5 w-5" />
+                <div className="py-4 flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
+                  <div className="flex items-start space-x-3">
+                    <div className={`p-2 rounded-xl shrink-0 ${
+                      integrationStatus?.mercadoPagoAccessToken && integrationStatus?.mercadoPagoPublicKey
+                        ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                        : "bg-amber-500/10 border border-amber-500/20 text-yellow-400"
+                    }`}>
+                      {integrationStatus?.mercadoPagoAccessToken && integrationStatus?.mercadoPagoPublicKey ? (
+                        <CheckCircle className="h-5 w-5" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5" />
+                      )}
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">Integração Mercado Pago (Planos)</h4>
-                      <p className="text-[11px] text-slate-450">Estrutura de dados preparada para webhooks automáticos</p>
+                    <div className="space-y-1.5">
+                      <h4 className="text-sm font-semibold text-white">Integração Mercado Pago</h4>
+                      <div className="flex flex-col space-y-1 text-[11px] text-slate-440">
+                        <span className="flex items-center space-x-1.5">
+                          <span>• Mercado Pago:</span>
+                          {integrationStatus?.mercadoPagoAccessToken ? (
+                            <span className="text-emerald-400 font-semibold font-mono">Configurado</span>
+                          ) : (
+                            <span className="text-rose-450 font-semibold font-mono">Aguardando MERCADOPAGO_ACCESS_TOKEN</span>
+                          )}
+                        </span>
+                        <span className="flex items-center space-x-1.5">
+                          <span>• Webhook:</span>
+                          {integrationStatus?.mercadoPagoWebhookSecret ? (
+                            <span className="text-emerald-400 font-semibold font-mono">Configurado</span>
+                          ) : (
+                            <span className="text-rose-450 font-semibold font-mono">Aguardando MERCADOPAGO_WEBHOOK_SECRET</span>
+                          )}
+                        </span>
+                        <span className="flex items-center space-x-1.5">
+                          <span>• APP_BASE_URL:</span>
+                          {integrationStatus?.appBaseUrl ? (
+                            <span className="text-emerald-400 font-semibold font-mono">Configurado</span>
+                          ) : (
+                            <span className="text-rose-450 font-semibold font-mono">Aguardando APP_BASE_URL</span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right flex items-center space-x-2">
-                    <span className="font-mono text-[10px] px-2.5 py-1 bg-yellow-950 text-yellow-400 font-bold border border-yellow-500/20 rounded-full">AGUARDANDO CREDENCIAIS</span>
+                  <div className="text-right flex items-center space-x-2 shrink-0">
+                    {integrationStatus?.mercadoPagoAccessToken && integrationStatus?.mercadoPagoPublicKey && integrationStatus?.mercadoPagoWebhookSecret && integrationStatus?.appBaseUrl ? (
+                      <span className="font-mono text-[10px] px-2.5 py-1 bg-emerald-950 text-emerald-400 font-bold border border-emerald-500/20 rounded-full">CONFIGURADO</span>
+                    ) : (
+                      <span className="font-mono text-[10px] px-2.5 py-1 bg-yellow-950 text-yellow-400 font-bold border border-yellow-500/20 rounded-full">AGUARDANDO CREDENCIAIS</span>
+                    )}
                   </div>
                 </div>
 
