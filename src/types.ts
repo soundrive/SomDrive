@@ -30,6 +30,7 @@ export interface Artist {
   customNoticeText?: string;
   customSongsListTitle?: string;
   customSongsListSubtitle?: string;
+  customCardImageUrl?: string;
 
   // Extended Admin properties
   role?: 'user' | 'admin';

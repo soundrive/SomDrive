@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Disc, 
@@ -95,6 +95,8 @@ export default function Dashboard({
   const [customCoverUrl, setCustomCoverUrl] = useState('');
   const [audioOption, setAudioOption] = useState('file'); // default file upload option
   const [customAudioUrl, setCustomAudioUrl] = useState('');
+  const [newTrackStatus, setNewTrackStatus] = useState<'active' | 'inactive'>('active');
+  const [editTrackStatus, setEditTrackStatus] = useState<'active' | 'inactive'>('active');
   const [formError, setFormError] = useState('');
   
   // File handlers for browser object url injection
@@ -126,6 +128,81 @@ export default function Dashboard({
   const [profCustomNoticeText, setProfCustomNoticeText] = useState('');
   const [profCustomSongsListTitle, setProfCustomSongsListTitle] = useState('');
   const [profCustomSongsListSubtitle, setProfCustomSongsListSubtitle] = useState('');
+
+  // Custom Executive Sharing Card Image upload states & actions
+  const [isUploadingCardImage, setIsUploadingCardImage] = useState(false);
+  const [cardImageUploadProgress, setCardImageUploadProgress] = useState(0);
+  const [cardImageError, setCardImageError] = useState('');
+  const cardImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (max 10MB)
+    const maxSizeBytes = 10 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      setCardImageError('A imagem excede o tamanho máximo de 10 MB.');
+      return;
+    }
+
+    // Validate format (only jpg/png/webp)
+    const mimeLower = file.type.toLowerCase();
+    const isImage = mimeLower.startsWith('image/');
+    if (!isImage) {
+      setCardImageError('Por favor, selecione um arquivo de imagem válido (PNG, JPG, JPEG ou WEBP).');
+      return;
+    }
+
+    setIsUploadingCardImage(true);
+    setCardImageUploadProgress(10);
+    setCardImageError('');
+
+    try {
+      setCardImageUploadProgress(30);
+      // Upload using Firebase storage
+      const uploadedUrl = await dbService.uploadFile(profile.userId, file, 'cover', (prog) => {
+        setCardImageUploadProgress(Math.min(90, 30 + Math.round(prog * 0.6)));
+      });
+
+      setCardImageUploadProgress(95);
+      
+      // Update the profile in local reference and remote Firestore database!
+      const updatedProfile = dbService.updateArtistProfile(profile.userId, {
+        customCardImageUrl: uploadedUrl
+      });
+
+      setProfile(updatedProfile);
+      setCardImageUploadProgress(100);
+      setToastMessage("Sua foto do Cartão Executivo foi atualizada com sucesso!");
+      
+      // Clear input value
+      if (cardImageInputRef.current) cardImageInputRef.current.value = '';
+    } catch (err: any) {
+      console.error("Error uploading custom card image:", err);
+      setCardImageError('Erro ao enviar imagem. Verifique sua conexão e tente novamente.');
+    } finally {
+      setIsUploadingCardImage(false);
+      setTimeout(() => setCardImageUploadProgress(0), 4000);
+    }
+  };
+
+  const handleRemoveCustomCardImage = async () => {
+    if (confirm("Deseja realmente remover sua imagem personalizada e voltar ao vinil de design padrão?")) {
+      setIsUploadingCardImage(true);
+      try {
+        const updatedProfile = dbService.updateArtistProfile(profile.userId, {
+          customCardImageUrl: "" // Empty string clears it
+        });
+        setProfile(updatedProfile);
+        setToastMessage("Cartão executivo redefinido para o padrão com sucesso!");
+      } catch (err) {
+        console.error("Error clearing custom card image:", err);
+      } finally {
+        setIsUploadingCardImage(false);
+      }
+    }
+  };
 
   const handleOpenProfileModal = () => {
     setProfName(profile.name || '');
@@ -624,7 +701,7 @@ export default function Dashboard({
           coverUrl: finalCover,
           lyrics: lyrics.trim(),
           plays: 0,
-          status: "active",
+          status: newTrackStatus,
           storageProvider: r2StorageProvider,
           storagePath: r2StoragePath,
           fileSize: r2FileSize,
@@ -749,6 +826,7 @@ export default function Dashboard({
     setEditGenre(track.genre || '');
     setEditDesc(track.description || '');
     setEditLyrics(track.lyrics || '');
+    setEditTrackStatus((track.status || 'active') as 'active' | 'inactive');
     setFormError('');
     setShowEditForm(true);
   };
@@ -776,7 +854,8 @@ export default function Dashboard({
         partners: editPartners.trim(),
         genre: editGenre.trim(),
         description: editDesc.trim(),
-        lyrics: editLyrics.trim()
+        lyrics: editLyrics.trim(),
+        status: editTrackStatus
       });
 
       // Synchronously update active status list
@@ -1067,6 +1146,62 @@ export default function Dashboard({
                 <span>•</span>
                 <span>Formato: Imagem PNG de Alta Definição</span>
               </div>
+
+              {/* Custom Cover Upload Control inside Sharing Card */}
+              <div className="mt-4 w-full border-t border-slate-900 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900/60">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-bold text-slate-200">Personalizar Imagem do Cartão</p>
+                  <p className="text-[10px] text-slate-450 font-sans">Substitua a gravura do disco por uma foto sua ou capa de sua escolha.</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    ref={cardImageInputRef}
+                    accept="image/*"
+                    onChange={handleCardImageUpload}
+                    className="hidden"
+                  />
+                  
+                  {profile.customCardImageUrl && (
+                    <button
+                      onClick={handleRemoveCustomCardImage}
+                      type="button"
+                      disabled={isUploadingCardImage}
+                      className="px-3 py-1.5 bg-rose-950/40 border border-rose-900/40 hover:border-rose-500 text-rose-400 rounded-lg text-[10px] font-mono uppercase font-bold transition disabled:opacity-50 cursor-pointer"
+                    >
+                      Remover Foto
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => cardImageInputRef.current?.click()}
+                    type="button"
+                    disabled={isUploadingCardImage}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-orange-600/10 to-yellow-500/10 hover:from-orange-600/20 hover:to-yellow-500/20 border border-orange-500/30 hover:border-orange-550 text-orange-400 hover:text-white rounded-lg text-[10px] font-heading font-black uppercase tracking-wider transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer font-bold"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    {isUploadingCardImage ? `Subindo...` : profile.customCardImageUrl ? 'Substituir Foto' : 'Enviar Foto'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress and status display feedback */}
+              {cardImageUploadProgress > 0 && (
+                <div className="w-full mt-2.5 space-y-1 animate-fade-in px-1">
+                  <div className="flex justify-between text-[9px] font-mono font-bold text-orange-450">
+                    <span>Enviando nova imagem customizada...</span>
+                    <span>{cardImageUploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
+                    <div className="bg-gradient-to-r from-orange-500 to-yellow-400 h-full transition-all duration-200" style={{ width: `${cardImageUploadProgress}%` }}></div>
+                  </div>
+                </div>
+              )}
+
+              {cardImageError && (
+                <p className="w-full text-left mt-2.5 text-[10px] font-mono text-red-400 font-bold px-1">{cardImageError}</p>
+              )}
             </div>
 
             {/* Information & Description Area */}
@@ -1703,6 +1838,44 @@ export default function Dashboard({
                 ></textarea>
               </div>
 
+              {/* Visibilidade do Catálogo */}
+              <div className="pt-2 pb-1 border-t border-slate-850/60">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block mb-2">Visibilidade inicial no Catálogo Público</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setNewTrackStatus('active')}
+                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer select-none ${
+                      newTrackStatus === 'active'
+                        ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-400'
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${newTrackStatus === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                      <span className="text-xs font-bold uppercase tracking-wider">Ativa / Visível</span>
+                    </div>
+                    <p className="text-[10px] text-slate-450 font-sans leading-relaxed">Seus ouvintes poderão visualizar e tocar no seu link público.</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewTrackStatus('inactive')}
+                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer select-none ${
+                      newTrackStatus === 'inactive'
+                        ? 'bg-rose-950/20 border-rose-500/50 text-rose-400'
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${newTrackStatus === 'inactive' ? 'bg-rose-500' : 'bg-slate-500'}`}></span>
+                      <span className="text-xs font-bold uppercase tracking-wider">Inativa / Oculta</span>
+                    </div>
+                    <p className="text-[10px] text-slate-450 font-sans leading-relaxed">Oculta do seu catálogo principal público. Fica reservada privada.</p>
+                  </button>
+                </div>
+              </div>
+
               {/* Action buttons */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
                 <button 
@@ -1867,6 +2040,44 @@ export default function Dashboard({
                   rows={4}
                   className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
                 ></textarea>
+              </div>
+
+              {/* Visibilidade do Catálogo */}
+              <div className="pt-2 pb-1 border-t border-slate-850/60">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block mb-2">Visibilidade no Catálogo Público</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditTrackStatus('active')}
+                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer select-none ${
+                      editTrackStatus === 'active'
+                        ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-400'
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${editTrackStatus === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                      <span className="text-xs font-bold uppercase tracking-wider">Ativa / Visível</span>
+                    </div>
+                    <p className="text-[10px] text-slate-450 font-sans leading-relaxed">Seus ouvintes poderão visualizar e tocar no seu link público.</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditTrackStatus('inactive')}
+                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer select-none ${
+                      editTrackStatus === 'inactive'
+                        ? 'bg-rose-950/20 border-rose-500/50 text-rose-400'
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${editTrackStatus === 'inactive' ? 'bg-rose-500' : 'bg-slate-500'}`}></span>
+                      <span className="text-xs font-bold uppercase tracking-wider">Inativa / Oculta</span>
+                    </div>
+                    <p className="text-[10px] text-slate-450 font-sans leading-relaxed">Oculta do seu catálogo principal público. Fica reservada privada.</p>
+                  </button>
+                </div>
               </div>
 
               {/* Action buttons */}

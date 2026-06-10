@@ -717,12 +717,13 @@ async function startServer() {
   // Robust method to fetch public artist profiles using public Firestore REST API
   // This bypasses any server-side service-account PERMISSION_DENIED issues completely!
   // Also supports friendly sluggified names and ID search
-  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string }> => {
+  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string }> => {
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     let name = "Compositor";
     let genre = "Música Sertaneja";
     let city = "Brasil";
+    let customCardImageUrl = "";
     let resolvedUserId = idOrSlug;
 
     const cleanId = (idOrSlug || "").trim();
@@ -751,8 +752,9 @@ async function startServer() {
           name = f.name?.stringValue || f.artistName?.stringValue || name;
           genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
           city = f.city?.stringValue || city;
+          customCardImageUrl = f.customCardImageUrl?.stringValue || "";
           resolvedUserId = doc.name.split('/').pop() || cleanId;
-          return { userId: resolvedUserId, name, genre, city };
+          return { userId: resolvedUserId, name, genre, city, customCardImageUrl };
         }
       }
     } catch (err) {
@@ -772,13 +774,15 @@ async function startServer() {
           const artistName = f.name?.stringValue || f.artistName?.stringValue || '';
           const artistGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
           const artistCity = f.city?.stringValue || '';
+          const artistCustomCardUrl = f.customCardImageUrl?.stringValue || '';
           
           if (docId.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
             return {
               userId: docId,
               name: artistName || name,
               genre: artistGenre || genre,
-              city: artistCity || city
+              city: artistCity || city,
+              customCardImageUrl: artistCustomCardUrl
             };
           }
         }
@@ -800,13 +804,15 @@ async function startServer() {
           const userName = f.name?.stringValue || f.artistName?.stringValue || '';
           const userGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
           const userCity = f.city?.stringValue || '';
+          const userCustomCardUrl = f.customCardImageUrl?.stringValue || '';
           
           if (docId.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
             return {
               userId: docId,
               name: userName || name,
               genre: userGenre || genre,
-              city: userCity || city
+              city: userCity || city,
+              customCardImageUrl: userCustomCardUrl
             };
           }
         }
@@ -823,6 +829,7 @@ async function startServer() {
         name = data?.name || data?.artistName || name;
         genre = data?.genre || data?.mainGenre || genre;
         city = data?.city || city;
+        customCardImageUrl = data?.customCardImageUrl || "";
         resolvedUserId = cleanId;
       } else {
         const uDoc = await db.collection("users").doc(cleanId).get();
@@ -831,6 +838,7 @@ async function startServer() {
           name = uData?.name || name;
           genre = uData?.genre || uData?.mainGenre || genre;
           city = uData?.city || city;
+          customCardImageUrl = uData?.customCardImageUrl || "";
           resolvedUserId = cleanId;
         }
       }
@@ -838,17 +846,18 @@ async function startServer() {
       console.warn("Firestore Admin fallback exception:", adminErr);
     }
 
-    return { userId: resolvedUserId, name, genre, city };
+    return { userId: resolvedUserId, name, genre, city, customCardImageUrl };
   };
 
   // Helper to generate dynamic Open Graph PNG buffers
   const generateArtistPngBuffer = async (artistId: string): Promise<{ buffer: Buffer; contentType: string }> => {
-    const { name, genre, city } = await fetchArtistRest(artistId);
+    const { name, genre, city, customCardImageUrl } = await fetchArtistRest(artistId);
 
     // Safe formatting with guaranteed string values
     const cleanName = escapeXml((name || "Compositor").trim().toUpperCase());
     const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
     const cleanCity = escapeXml((city || "Brasil").trim());
+    const cleanCardImageUrl = customCardImageUrl ? escapeXml(customCardImageUrl) : "";
 
     let subtitle = "";
     if (cleanGenre && cleanCity) {
@@ -906,6 +915,10 @@ async function startServer() {
       <stop offset="0%" stop-color="#7c3aed" />
       <stop offset="100%" stop-color="#c084fc" />
     </linearGradient>
+
+    <clipPath id="card-rounded">
+      <rect x="510" y="115" width="340" height="400" rx="16" ry="16" />
+    </clipPath>
 
     <!-- Sleeve cover gradient -->
     <linearGradient id="sleeve-grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -986,6 +999,11 @@ async function startServer() {
     <!-- Sleek album cover sleeve layout -->
     <rect x="510" y="115" width="340" height="400" rx="16" fill="url(#sleeve-grad)" stroke="url(#glow-border)" stroke-width="1.8" />
     
+    ${cleanCardImageUrl ? `
+    <image href="${cleanCardImageUrl}" x="510" y="115" width="340" height="400" preserveAspectRatio="xMidYMid slice" clip-path="url(#card-rounded)" />
+    <!-- Overlay a very subtle inner glowing border on the image -->
+    <rect x="510" y="115" width="340" height="400" rx="16" fill="none" stroke="url(#glow-border)" stroke-width="1.8" />
+    ` : `
     <!-- Sleek inner design lines for the cover art -->
     <rect x="532" y="137" width="296" height="356" rx="10" stroke="#c084fc" stroke-width="1" fill="none" opacity="0.15" />
     <rect x="544" y="149" width="272" height="332" rx="6" stroke="#c084fc" stroke-width="1.2" fill="none" opacity="0.1" stroke-dasharray="8,4" />
@@ -1001,6 +1019,7 @@ async function startServer() {
 
     <!-- Super polished monogram watermark in the middle of cover -->
     <text x="680" y="340" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="120" stroke="url(#gold-gradient)" stroke-width="1.5" fill="none" opacity="0.12">${initialLetter}</text>
+    `}
 
     <!-- Tiny text on bottom part of sleeve to make it look highly authentic and detailed -->
     <text x="680" y="455" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="800" font-size="9" fill="#94a3b8" letter-spacing="3px" opacity="0.5">EXCLUSIVE DIGITAL AUDIO</text>
