@@ -70,26 +70,23 @@ export default async function handler(req: any, res: any) {
     }
 
     // 3. Setup redirection URLs and external_reference pattern matching
-    // External reference: uid|planCode (as requested by user)
     const externalReference = `${uid}|${planCode}`;
 
-    const host = req.headers.host || '';
-    let baseUrl = 'https://soundrive.com.br';
+    const appBaseUrl = process.env.APP_BASE_URL || 'https://www.soundrive.com.br';
+    const backUrl = `${appBaseUrl.replace(/\/$/, '')}/pagamento/retorno`;
 
-    const backUrl = `${baseUrl}/pagamento/retorno`;
-
+    // 4. Detailed logging before making the API request (strictly ensuring secure non-disclosure of access tokens)
     console.log("[MercadoPago Create Subscription] Preparing preapproval with parameters:", {
-      uid,
-      email,
       planCode,
-      reason: planConfig.reason,
       preapproval_plan_id: planConfig.preapproval_plan_id,
-      externalReference,
-      backUrl
+      payer_email: email.trim().toLowerCase(),
+      external_reference: externalReference,
+      back_url: backUrl,
+      APP_BASE_URL: appBaseUrl
     });
 
-    // 4. Request creation to Mercado Pago API using the official preapproval_plan_id
-    const mpUrl = "https://api.mercadopago.com/v1/preapproval";
+    // 5. Request creation to Mercado Pago API using the correct official preapproval endpoint
+    const mpUrl = "https://api.mercadopago.com/preapproval";
     const body = {
       preapproval_plan_id: planConfig.preapproval_plan_id,
       payer_email: email.trim().toLowerCase(),
@@ -110,9 +107,21 @@ export default async function handler(req: any, res: any) {
 
     if (!mpResponse.ok) {
       const errorText = await mpResponse.text();
-      console.error(`[MercadoPago Create Subscription] Mercado Pago API error. Status: ${mpResponse.status}`, errorText);
+      console.error(`[MercadoPago Create Subscription] Mercado Pago API error. Status: ${mpResponse.status}`, {
+        status: mpResponse.status,
+        body: errorText
+      });
+
+      // Point 7: If Mercado Pago returned 404 format message correctly for front-end feedback
+      if (mpResponse.status === 404 || errorText.toLowerCase().includes("resource not found")) {
+        return res.status(404).json({
+          error: "Plano Mercado Pago não encontrado. Verifique se o preapproval_plan_id pertence à mesma conta do Access Token.",
+          details: errorText
+        });
+      }
+
       return res.status(502).json({ 
-        error: "O Mercado Pago recusou a criação da assinatura.", 
+        error: "O Mercado Pago recusou a criação da assinatura. Status: " + mpResponse.status, 
         details: errorText 
       });
     }

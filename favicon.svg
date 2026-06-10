@@ -1,20 +1,62 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="fav-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffe259" />
-      <stop offset="100%" stop-color="#ffa751" />
+    <!-- Seamless glowing golden-orange gradient -->
+    <linearGradient id="golden-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE000" />
+      <stop offset="50%" stop-color="#FF9E00" />
+      <stop offset="100%" stop-color="#FF5100" />
     </linearGradient>
+    
+    <!-- Neon glow filter -->
+    <filter id="glow-effect" x="-20%" y="-20%" width="140%" height="140%">
+      <!-- Strong blur shadow -->
+      <feGaussianBlur stdDeviation="15" result="blur1" />
+      <!-- Lighter blur shadow -->
+      <feGaussianBlur stdDeviation="6" result="blur2" />
+      
+      <!-- Merge shadows on top of each other and under graphic -->
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    
+    <!-- Soft shadow filter for Play Button overlay -->
+    <filter id="shadow-effect" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.8" />
+    </filter>
   </defs>
-  <rect width="32" height="32" rx="8" fill="#081224" />
-  <!-- Combined sleek soundwave style musical note -->
-  <g transform="translate(4, 4)">
-    <!-- Music note stem -->
-    <path d="M16 6 L16 16" stroke="url(#fav-grad)" stroke-width="2.5" stroke-linecap="round" />
-    <!-- Note flag / connector -->
-    <path d="M16 7 C19 7, 21 9, 21 9" stroke="url(#fav-grad)" stroke-width="2.5" stroke-linecap="round" fill="none" />
-    <!-- Note base -->
-    <ellipse cx="12" cy="16" rx="4.5" ry="3.5" fill="url(#fav-grad)" transform="rotate(-15 12 16)" />
-    <!-- Subtle overlay SD -->
-    <text x="12" y="14" font-family="-apple-system, sans-serif" font-size="7" font-weight="900" fill="#081224" text-anchor="middle" letter-spacing="-0.5">SD</text>
+
+  <!-- Squircle canvas matching user logo rounded boundaries -->
+  <rect width="512" height="512" rx="128" fill="#03030b" />
+  
+  <!-- Subtle inner ambient rim glow -->
+  <rect x="8" y="8" width="496" height="496" rx="120" fill="none" stroke="url(#golden-grad)" stroke-width="2" opacity="0.08" />
+
+  <!-- Symmetrical vertical bars with glow -->
+  <g filter="url(#glow-effect)" opacity="0.95">
+    <rect x="74" y="224" width="28" height="64" rx="14" fill="url(#golden-grad)" />
+    <rect x="130" y="170" width="28" height="172" rx="14" fill="url(#golden-grad)" />
+    <rect x="186" y="112" width="28" height="288" rx="14" fill="url(#golden-grad)" />
+    
+    <!-- Column 4 (Center vertical line, top-bottom split) -->
+    <rect x="242" y="60" width="28" height="120" rx="14" fill="url(#golden-grad)" />
+    <rect x="242" y="332" width="28" height="120" rx="14" fill="url(#golden-grad)" />
+    
+    <rect x="298" y="112" width="28" height="288" rx="14" fill="url(#golden-grad)" />
+    <rect x="354" y="170" width="28" height="172" rx="14" fill="url(#golden-grad)" />
+    <rect x="410" y="224" width="28" height="64" rx="14" fill="url(#golden-grad)" />
+  </g>
+
+  <!-- Glow and Shadow on Play button to make it visually distinct and overlayed -->
+  <g filter="url(#shadow-effect)">
+    <!-- Play button overlay with same glowing gradient, rounded via stroke -->
+    <path d="M 214,204 L 302,256 L 214,308 Z" 
+          stroke="url(#golden-grad)" 
+          stroke-width="20" 
+          stroke-linejoin="round" 
+          fill="url(#golden-grad)"
+          filter="url(#glow-effect)" />
   </g>
 </svg>
