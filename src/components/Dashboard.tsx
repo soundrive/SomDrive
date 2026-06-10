@@ -352,7 +352,7 @@ export default function Dashboard({
   };
   const limitCount = getPlanTracksLimit(profile.plan);
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const slugifyStr = (text: string) => {
       return text
         .toString()
@@ -362,19 +362,25 @@ export default function Dashboard({
         .trim()
         .replace(/[^a-z0-9\s-]/g, '')
         .replace(/[\s_]+/g, '-')
-        .replace(/-+/g, '-');
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
     };
-    const nameToUse = (profile.name || profile.artistName || "").trim();
-    const pageUrl = nameToUse 
-      ? `https://www.soundrive.com.br/catalogo/${slugifyStr(nameToUse)}` 
-      : `https://www.soundrive.com.br/artista/${profile.userId}`;
 
+    let slug = profile.slug;
+    if (!slug) {
+      const nameToUse = (profile.name || profile.artistName || "artista").trim();
+      slug = slugifyStr(nameToUse);
+      dbService.updateArtistProfile(profile.userId, { slug });
+      setProfile({ ...profile, slug });
+    }
+
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
   };
 
-  const handleShareWhatsApp = () => {
+  const handleShareWhatsApp = async () => {
     const slugifyStr = (text: string) => {
       return text
         .toString()
@@ -384,16 +390,48 @@ export default function Dashboard({
         .trim()
         .replace(/[^a-z0-9\s-]/g, '')
         .replace(/[\s_]+/g, '-')
-        .replace(/-+/g, '-');
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
     };
-    const nameToUse = (profile.name || profile.artistName || "").trim();
-    const pageUrl = nameToUse 
-      ? `https://www.soundrive.com.br/catalogo/${slugifyStr(nameToUse)}` 
-      : `https://www.soundrive.com.br/artista/${profile.userId}`;
 
+    let slug = profile.slug;
+    if (!slug) {
+      const nameToUse = (profile.name || profile.artistName || "artista").trim();
+      slug = slugifyStr(nameToUse);
+      dbService.updateArtistProfile(profile.userId, { slug });
+      setProfile({ ...profile, slug });
+    }
+
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
     const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
+  };
+
+  const handleUpdateShareLink = async () => {
+    const slugifyStr = (text: string) => {
+      return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    };
+
+    const nameToUse = (profile.name || profile.artistName || "artista").trim();
+    const generatedSlug = slugifyStr(nameToUse);
+    
+    dbService.updateArtistProfile(profile.userId, { slug: generatedSlug });
+    setProfile({ ...profile, slug: generatedSlug });
+    
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${generatedSlug}`;
+    navigator.clipboard.writeText(pageUrl);
+    setCopiedAlert(true);
+    setTimeout(() => setCopiedAlert(false), 2000);
   };
 
   const handleUpgradePlan = () => {
@@ -972,6 +1010,26 @@ export default function Dashboard({
             <p className="text-slate-400 text-xs md:text-sm leading-relaxed">
               Aqui você controla seu acervo e acompanha cliques nas suas faixas. Seu link público está ativo e pronto para receber visitas.
             </p>
+            <div className="pt-2 flex flex-col gap-1.5 font-mono text-xs text-slate-400">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-orange-400 font-bold font-sans">Seu link público:</span>
+                <a 
+                  href={`https://www.soundrive.com.br/catalogo/${profile.slug || profile.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-slate-300 underline hover:text-yellow-400 break-all transition"
+                >
+                  https://www.soundrive.com.br/catalogo/{profile.slug || profile.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "")}
+                </a>
+              </div>
+              <button
+                onClick={handleUpdateShareLink}
+                className="self-start text-[10px] text-orange-400/80 hover:text-orange-400 border border-orange-500/20 hover:border-orange-500/50 bg-orange-950/20 px-2.5 py-1 rounded transition flex items-center gap-1 mt-1 cursor-pointer"
+                title="Garante que o link amigável está configurado corretamente e copia para a área de transferência"
+              >
+                <Sparkles className="w-3 h-3 text-orange-400" /> Atualizar link de compartilhamento
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
@@ -986,7 +1044,7 @@ export default function Dashboard({
 
             <button 
               id="view-catalog-btn"
-              onClick={() => onNavigate('public', { id: profile.userId })}
+              onClick={() => onNavigate('public', { id: profile.slug || profile.userId })}
               className="px-4.5 py-3 bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition hover:scale-102"
             >
               <Globe className="w-4 h-4 text-orange-400 animate-pulse" /> Ver Catálogo Público

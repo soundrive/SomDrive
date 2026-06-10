@@ -219,10 +219,23 @@ export const dbService = {
     const emailLower = (artist.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
 
+    const nameToSlug = (artist.name || artist.artistName || "artista").trim();
+    const cleanSlug = artist.slug || nameToSlug
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/[\s_]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
     return {
       uid: artist.userId,
       email: artist.email || '',
       artistName: artist.artistName || artist.name || '',
+      slug: cleanSlug,
       whatsapp: artist.whatsapp || artist.phone || '',
       phone: artist.phone || artist.whatsapp || '',
       instagram: artist.instagram || '',
@@ -341,9 +354,10 @@ export const dbService = {
     
     // Exact or slugged search (replacing accents/spaces)
     const found = (Object.values(artists) as Artist[]).find((art: Artist) => {
+      const artSlugField = (art.slug || "").toLowerCase().trim();
       const artSlug = art.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
       const uriSlug = art.userId.toLowerCase();
-      return artSlug === normalized || uriSlug === normalized || art.userId === id;
+      return artSlugField === normalized || artSlug === normalized || uriSlug === normalized || art.userId === id;
     });
 
     const artistToReturn = found || artists[id] || null;
@@ -731,7 +745,21 @@ export const dbService = {
 
   getArtistMusics(artistId: string): Music[] {
     const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
-    const tracks: Music[] = musicsMap[artistId] || [];
+    
+    // Resolve artistId if it is a slug
+    let targetId = artistId;
+    const artists = this.getAllArtists();
+    const foundArtist = (Object.values(artists) as Artist[]).find((artList: Artist) => {
+      const artSlugField = (artList.slug || "").toLowerCase().trim();
+      const artSlugName = artList.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+      const inputSlug = artistId.toLowerCase().trim();
+      return artSlugField === inputSlug || artSlugName === inputSlug || artList.userId === artistId;
+    });
+    if (foundArtist) {
+      targetId = foundArtist.userId;
+    }
+
+    const tracks: Music[] = musicsMap[targetId] || musicsMap[artistId] || [];
     const sorted = tracks.map((t, idx) => {
       if (artistId === "gabriel-silva" && !t.lyrics) {
         return {
@@ -1020,98 +1048,142 @@ export const dbService = {
   // ----------------------------------------------------
   async syncArtistData(artistId: string): Promise<boolean> {
     try {
-      const normalizedId = artistId.trim();
-      const artistDocRef = doc(db, 'artists', normalizedId);
-      const artistSnap = await getDoc(artistDocRef).catch(e => {
-        handleFirestoreError(e, OperationType.GET, `artists/${normalizedId}`);
-        throw e;
-      });
-      
-      if (artistSnap.exists()) {
-        const artData = artistSnap.data();
-        const formattedArtist: Artist = {
-          userId: artData.userId || normalizedId,
-          name: artData.name || "Artista",
-          avatarUrl: artData.avatarUrl || "",
-          city: artData.city || "",
-          genre: artData.genre || "",
-          whatsapp: artData.whatsapp || "",
-          instagram: artData.instagram || "",
-          email: artData.email || "",
-          bio: artData.bio || "",
-          plan: artData.plan || "free",
-          subscriptionDate: artData.subscriptionDate || "",
-          subscriptionStatus: artData.subscriptionStatus || "ativo",
-          createdAt: artData.createdAt instanceof Timestamp ? artData.createdAt.toDate().toISOString() : artData.createdAt || new Date().toISOString()
-        };
+      const normalizedQuery = artistId.trim();
+      let resolvedUserId = normalizedQuery;
+      let artData: any = null;
 
-        // Cache artist profile
-        const cachedArtists = this.getAllArtists();
-        cachedArtists[normalizedId] = formattedArtist;
-        localStorage.setItem(LS_ARTISTS, JSON.stringify(cachedArtists));
+      // Helper function to create clean slug
+      const generateCleanSlug = (nameStr: string): string => {
+        if (!nameStr) return "";
+        return nameStr
+          .toString()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .replace(/[\s_]+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      };
 
-        const curr = this.getCurrentUser();
-        if (curr && curr.userId === normalizedId) {
-          localStorage.setItem(LS_CURR_USER, JSON.stringify(formattedArtist));
+      // 1. Try to find the document directly by ID in 'artists' collection
+      const artistDocRef = doc(db, 'artists', normalizedQuery);
+      const artistSnap = await getDoc(artistDocRef).catch(() => null);
+
+      if (artistSnap && artistSnap.exists()) {
+        artData = artistSnap.data();
+        resolvedUserId = artData.userId || normalizedQuery;
+      } else {
+        // 2. Query 'artists' collection for slug
+        const qArtists = query(collection(db, 'artists'), where('slug', '==', normalizedQuery));
+        const snapArtists = await getDocs(qArtists).catch(() => null);
+        if (snapArtists && !snapArtists.empty) {
+          const docSnap = snapArtists.docs[0];
+          artData = docSnap.data();
+          resolvedUserId = artData.userId || docSnap.id;
+        } else {
+          // 3. Query 'users' collection for slug
+          const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedQuery));
+          const snapUsers = await getDocs(qUsers).catch(() => null);
+          if (snapUsers && !snapUsers.empty) {
+            const docSnap = snapUsers.docs[0];
+            artData = docSnap.data();
+            resolvedUserId = artData.uid || artData.userId || docSnap.id;
+          } else {
+            // 4. Try direct get from 'users' collection too
+            const userDocRef = doc(db, 'users', normalizedQuery);
+            const userSnap = await getDoc(userDocRef).catch(() => null);
+            if (userSnap && userSnap.exists()) {
+              artData = userSnap.data();
+              resolvedUserId = artData.uid || artData.userId || normalizedQuery;
+            }
+          }
         }
       }
 
-      // Fetch songs from root 'songs' collection where ownerId == normalizedId
-      let fetchedTracks: Music[] = [];
-      const songsQuery = query(collection(db, 'songs'), where('ownerId', '==', normalizedId));
-      const songsSnap = await getDocs(songsQuery).catch(e => {
-        handleFirestoreError(e, OperationType.GET, 'songs');
-        throw e;
-      });
+      // If we found the artist data, load complete profile from 'artists/' + resolvedUserId
+      if (resolvedUserId) {
+        const fullArtistRef = doc(db, 'artists', resolvedUserId);
+        const fullArtistSnap = await getDoc(fullArtistRef).catch(() => null);
+        if (fullArtistSnap && fullArtistSnap.exists()) {
+          artData = { ...artData, ...fullArtistSnap.data() };
+        }
 
-      if (!songsSnap.empty) {
-        fetchedTracks = songsSnap.docs.map(docSnap => {
-          const d = docSnap.data();
-          return {
-            trackId: docSnap.id || d.songId || d.trackId,
-            artistId: d.ownerId || d.artistId || normalizedId,
-            title: d.title,
-            composer: d.composer || "",
-            partners: d.partners || "",
-            singer: d.performer || d.singer || "",
-            performer: d.performer || d.singer || "",
-            genre: d.genre || "",
-            description: d.description || "",
-            audioUrl: d.audioUrl,
-            coverUrl: d.coverUrl || "",
-            lyrics: d.lyrics || "",
-            playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-            plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-            status: d.status || "active",
-            storageProvider: d.storageProvider || "cloudflare_r2",
-            storagePath: d.storagePath || "",
-            fileSize: d.fileSize || 0,
-            mimeType: d.mimeType || "audio/mpeg",
-            originalFileName: d.originalFileName || "",
-            audioFileId: d.audioFileId || "",
-            position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
-            orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
-            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-            updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
-          };
-        });
-      } else {
-        // Fallback to legacy artist musics subcollection
-        const musicsColRef = collection(db, 'artists', normalizedId, 'musics');
-        const musicsSnap = await getDocs(musicsColRef).catch(e => {
-          handleFirestoreError(e, OperationType.GET, `artists/${normalizedId}/musics`);
+        // If no slug exists in the doc, generate and save it automatically!
+        if (artData && !artData.slug) {
+          const generatedSlug = generateCleanSlug(artData.name || artData.artistName || "artista");
+          if (generatedSlug) {
+            artData.slug = generatedSlug;
+            
+            // Save to 'artists'
+            await setDoc(doc(db, "artists", resolvedUserId), { slug: generatedSlug }, { merge: true }).catch(err => {
+              console.error("Failed to update auto slug in artists collection:", err);
+            });
+
+            // Save to 'users'
+            await setDoc(doc(db, "users", resolvedUserId), { slug: generatedSlug }, { merge: true }).catch(err => {
+              console.error("Failed to update auto slug in users collection:", err);
+            });
+          }
+        }
+
+        const formattedArtist: Artist = {
+          userId: resolvedUserId,
+          name: artData?.name || artData?.artistName || "Artista",
+          artistName: artData?.artistName || artData?.name || "Artista",
+          avatarUrl: artData?.avatarUrl || artData?.profileImageUrl || artData?.photoURL || "",
+          profileImageUrl: artData?.profileImageUrl || artData?.avatarUrl || artData?.photoURL || "",
+          photoURL: artData?.photoURL || artData?.avatarUrl || artData?.profileImageUrl || "",
+          slug: artData?.slug || "",
+          city: artData?.city || "",
+          state: artData?.state || "",
+          genre: artData?.genre || artData?.mainGenre || "",
+          mainGenre: artData?.mainGenre || artData?.genre || "",
+          whatsapp: artData?.whatsapp || artData?.phone || "",
+          phone: artData?.phone || artData?.whatsapp || "",
+          instagram: artData?.instagram || "",
+          email: artData?.email || "",
+          bio: artData?.bio || "",
+          plan: artData?.plan || "free",
+          subscriptionStatus: artData?.subscriptionStatus || "ativo",
+          createdAt: artData?.createdAt instanceof Timestamp ? artData.createdAt.toDate().toISOString() : artData?.createdAt || new Date().toISOString()
+        };
+
+        // Cache artist profile in LocalStorage under BOTH resolvedUserId and slug for instant rendering
+        const cachedArtists = this.getAllArtists();
+        cachedArtists[resolvedUserId] = formattedArtist;
+        if (formattedArtist.slug) {
+          cachedArtists[formattedArtist.slug] = formattedArtist;
+        }
+        if (normalizedQuery !== resolvedUserId && normalizedQuery !== formattedArtist.slug) {
+          cachedArtists[normalizedQuery] = formattedArtist;
+        }
+        localStorage.setItem(LS_ARTISTS, JSON.stringify(cachedArtists));
+
+        const curr = this.getCurrentUser();
+        if (curr && curr.userId === resolvedUserId) {
+          localStorage.setItem(LS_CURR_USER, JSON.stringify(formattedArtist));
+        }
+
+        // Fetch songs from root 'songs' collection where ownerId == resolvedUserId
+        let fetchedTracks: Music[] = [];
+        const songsQuery = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
+        const songsSnap = await getDocs(songsQuery).catch(e => {
+          handleFirestoreError(e, OperationType.GET, 'songs');
           throw e;
         });
-        if (!musicsSnap.empty) {
-          fetchedTracks = musicsSnap.docs.map(docSnap => {
+
+        if (songsSnap && !songsSnap.empty) {
+          fetchedTracks = songsSnap.docs.map(docSnap => {
             const d = docSnap.data();
             return {
-              trackId: d.trackId || d.id || docSnap.id,
-              artistId: d.artistId || d.ownerId || normalizedId,
+              trackId: docSnap.id || d.songId || d.trackId,
+              artistId: d.ownerId || d.artistId || resolvedUserId,
               title: d.title,
               composer: d.composer || "",
               partners: d.partners || "",
-              singer: d.singer || d.performer || "",
+              singer: d.performer || d.singer || "",
               performer: d.performer || d.singer || "",
               genre: d.genre || "",
               description: d.description || "",
@@ -1133,102 +1205,110 @@ export const dbService = {
               updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
             };
           });
-
-          // Automatically migrate these tracks to the root "songs" collection for future correctness
-          for (const track of fetchedTracks) {
-            const songDocRef = doc(db, 'songs', track.trackId);
-            setDoc(songDocRef, {
-              songId: track.trackId,
-              ownerId: track.artistId,
-              title: track.title,
-              composer: track.composer || '',
-              partners: track.partners || '',
-              performer: track.performer || '',
-              genre: track.genre || '',
-              lyrics: track.lyrics || '',
-              description: track.description || '',
-              audioFileId: track.audioFileId || `migrated-${track.trackId}`,
-              audioUrl: track.audioUrl,
-              storagePath: track.storagePath || '',
-              storageProvider: track.storageProvider || 'cloudflare_r2',
-              fileSize: track.fileSize || 0,
-              mimeType: track.mimeType || 'audio/mpeg',
-              originalFileName: track.originalFileName || '',
-              plays: track.plays !== undefined ? track.plays : 0,
-              createdAt: Timestamp.fromDate(new Date(track.createdAt)),
-              updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
-            }, { merge: true }).catch(err => {
-              console.error("Migration to songs collection failed: ", err);
+        } else {
+          // Fallback to legacy subcollection
+          const musicsColRef = collection(db, 'artists', resolvedUserId, 'musics');
+          const musicsSnap = await getDocs(musicsColRef).catch(e => {
+            handleFirestoreError(e, OperationType.GET, `artists/${resolvedUserId}/musics`);
+            throw e;
+          });
+          if (musicsSnap && !musicsSnap.empty) {
+            fetchedTracks = musicsSnap.docs.map(docSnap => {
+              const d = docSnap.data();
+              return {
+                trackId: d.trackId || d.id || docSnap.id,
+                artistId: d.artistId || d.ownerId || resolvedUserId,
+                title: d.title,
+                composer: d.composer || "",
+                partners: d.partners || "",
+                singer: d.singer || d.performer || "",
+                performer: d.performer || d.singer || "",
+                genre: d.genre || "",
+                description: d.description || "",
+                audioUrl: d.audioUrl,
+                coverUrl: d.coverUrl || "",
+                lyrics: d.lyrics || "",
+                playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                status: d.status || "active",
+                storageProvider: d.storageProvider || "cloudflare_r2",
+                storagePath: d.storagePath || "",
+                fileSize: d.fileSize || 0,
+                mimeType: d.mimeType || "audio/mpeg",
+                originalFileName: d.originalFileName || "",
+                audioFileId: d.audioFileId || "",
+                position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+                orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+                createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+              };
             });
+
+            // Automatically migrate these tracks to the root "songs" collection for future correctness
+            for (const track of fetchedTracks) {
+              const songDocRef = doc(db, 'songs', track.trackId);
+              setDoc(songDocRef, {
+                songId: track.trackId,
+                ownerId: track.artistId,
+                title: track.title,
+                composer: track.composer || '',
+                partners: track.partners || '',
+                performer: track.performer || '',
+                genre: track.genre || '',
+                lyrics: track.lyrics || '',
+                description: track.description || '',
+                audioFileId: track.audioFileId || `migrated-${track.trackId}`,
+                audioUrl: track.audioUrl,
+                storagePath: track.storagePath || '',
+                storageProvider: track.storageProvider || 'cloudflare_r2',
+                fileSize: track.fileSize || 0,
+                mimeType: track.mimeType || 'audio/mpeg',
+                originalFileName: track.originalFileName || '',
+                plays: track.plays !== undefined ? track.plays : 0,
+                createdAt: Timestamp.fromDate(new Date(track.createdAt)),
+                updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
+              }, { merge: true }).catch(err => {
+                console.error("Migration to songs collection failed: ", err);
+              });
+            }
           }
         }
-      }
 
-      if (fetchedTracks.length > 0) {
-        const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
-        musicsMap[normalizedId] = fetchedTracks;
-        localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
-      } else {
-        // If Firestore musics are empty but local has seed files, migrate them up to Firestore!
-        const localMusics = this.getArtistMusics(normalizedId);
-        for (const localT of localMusics) {
-          const songPayload = {
-            songId: localT.trackId,
-            ownerId: localT.artistId,
-            title: localT.title,
-            composer: localT.composer || '',
-            partners: localT.partners || '',
-            performer: localT.performer || localT.singer || '',
-            genre: localT.genre || '',
-            lyrics: localT.lyrics || '',
-            description: localT.description || '',
-            audioFileId: localT.audioFileId || `seed-${localT.trackId}`,
-            audioUrl: localT.audioUrl,
-            storagePath: localT.storagePath || '',
-            storageProvider: localT.storageProvider || 'cloudflare_r2',
-            fileSize: localT.fileSize || 0,
-            mimeType: localT.mimeType || 'audio/mpeg',
-            originalFileName: localT.originalFileName || '',
-            plays: localT.plays !== undefined ? localT.plays : 0,
-            createdAt: Timestamp.fromDate(new Date(localT.createdAt)),
-            updatedAt: Timestamp.fromDate(new Date(localT.updatedAt || localT.createdAt))
-          };
-
-          setDoc(doc(db, 'songs', localT.trackId), songPayload, { merge: true }).catch(() => {});
-          setDoc(doc(db, 'artists', normalizedId, 'musics', localT.trackId), {
-            ...songPayload,
-            id: localT.trackId,
-            playsCount: localT.playsCount || 0,
-            trackId: localT.trackId,
-            artistId: localT.artistId,
-            coverUrl: localT.coverUrl || ''
-          }, { merge: true }).catch(err => {
-            console.error("Initial track migration err: ", err);
-            handleFirestoreError(err, OperationType.WRITE, `artists/${normalizedId}/musics/${localT.trackId}`);
-          });
+        // Cache tracks
+        const allMusics = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+        allMusics[resolvedUserId] = fetchedTracks;
+        if (formattedArtist.slug) {
+          allMusics[formattedArtist.slug] = fetchedTracks;
         }
-      }
+        if (normalizedQuery !== resolvedUserId && normalizedQuery !== formattedArtist.slug) {
+          allMusics[normalizedQuery] = fetchedTracks;
+        }
+        localStorage.setItem(LS_MUSICS, JSON.stringify(allMusics));
 
-      // Fetch analytics
-      const analyticsRef = doc(db, 'artists', normalizedId, 'analytics', 'metrics');
-      const analyticsSnap = await getDoc(analyticsRef).catch(e => {
-        handleFirestoreError(e, OperationType.GET, `artists/${normalizedId}/analytics/metrics`);
-        throw e;
-      });
-      if (analyticsSnap.exists()) {
-        const anData = analyticsSnap.data() as Analytics;
-        const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
-        analyticsMap[normalizedId] = anData;
-        localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
-      } else {
-        const localAn = this.getAnalytics(normalizedId);
-        setDoc(analyticsRef, localAn, { merge: true }).catch(e => {
-          console.error(e);
-          handleFirestoreError(e, OperationType.WRITE, `artists/${normalizedId}/analytics/metrics`);
+        // Fetch analytics
+        const analyticsRef = doc(db, 'artists', resolvedUserId, 'analytics', 'metrics');
+        const analyticsSnap = await getDoc(analyticsRef).catch(e => {
+          handleFirestoreError(e, OperationType.GET, `artists/${resolvedUserId}/analytics/metrics`);
+          throw e;
         });
+        if (analyticsSnap && analyticsSnap.exists()) {
+          const anData = analyticsSnap.data() as Analytics;
+          const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+          analyticsMap[resolvedUserId] = anData;
+          analyticsMap[normalizedQuery] = anData;
+          if (formattedArtist.slug) {
+            analyticsMap[formattedArtist.slug] = anData;
+          }
+          localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+        } else {
+          const localAn = this.getAnalytics(resolvedUserId);
+          setDoc(analyticsRef, localAn, { merge: true }).catch(() => {});
+        }
+
+        return true;
       }
 
-      return true;
+      return false;
     } catch (e) {
       console.error("syncArtistData failed gracefully, preserving cached offline state: ", e);
       return false;

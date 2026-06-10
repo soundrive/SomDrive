@@ -50,6 +50,7 @@ export interface Artist {
   artistName?: string;
   userType?: string;
   mainGenre?: string;
+  slug?: string;
 }
 
 export interface Music {

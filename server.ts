@@ -954,7 +954,7 @@ async function startServer() {
   // Robust method to fetch public artist profiles using public Firestore REST API
   // This bypasses any server-side service-account PERMISSION_DENIED issues completely!
   // Also supports friendly sluggified names and ID search
-  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string }> => {
+  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string; slug: string }> => {
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     let name = "Compositor";
@@ -962,6 +962,7 @@ async function startServer() {
     let city = "Brasil";
     let customCardImageUrl = "";
     let resolvedUserId = idOrSlug;
+    let dbSlug = "";
 
     const cleanId = (idOrSlug || "").trim();
     const cleanIdLower = cleanId.toLowerCase();
@@ -980,25 +981,24 @@ async function startServer() {
 
     // First try direct document fetch (if it's a solid UID)
     try {
-      if (cleanId && !cleanId.includes('-')) {
-        const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${cleanId}`;
-        const res = await fetch(artistUrl);
-        if (res.ok) {
-          const doc = await res.json();
-          const f = doc.fields || {};
-          name = f.name?.stringValue || f.artistName?.stringValue || name;
-          genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
-          city = f.city?.stringValue || city;
-          customCardImageUrl = f.customCardImageUrl?.stringValue || "";
-          resolvedUserId = doc.name.split('/').pop() || cleanId;
-          return { userId: resolvedUserId, name, genre, city, customCardImageUrl };
-        }
+      const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${cleanId}`;
+      const res = await fetch(artistUrl);
+      if (res.ok) {
+        const doc = await res.json();
+        const f = doc.fields || {};
+        name = f.name?.stringValue || f.artistName?.stringValue || name;
+        genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
+        city = f.city?.stringValue || city;
+        customCardImageUrl = f.customCardImageUrl?.stringValue || "";
+        resolvedUserId = doc.name.split('/').pop() || cleanId;
+        dbSlug = f.slug?.stringValue || slugifyStr(name);
+        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, slug: dbSlug };
       }
     } catch (err) {
       console.warn("Direct direct artist fetch failed, will try collection scan.");
     }
 
-    // Scan 'artists' collection to match sluggified name
+    // Scan 'artists' collection to match sluggified name or slug field
     try {
       const artistsListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists?pageSize=100`;
       const res = await fetch(artistsListUrl);
@@ -1012,14 +1012,16 @@ async function startServer() {
           const artistGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
           const artistCity = f.city?.stringValue || '';
           const artistCustomCardUrl = f.customCardImageUrl?.stringValue || '';
+          const artistSlug = f.slug?.stringValue || slugifyStr(artistName);
           
-          if (docId.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
+          if (docId.toLowerCase() === cleanIdLower || artistSlug.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
             return {
               userId: docId,
               name: artistName || name,
               genre: artistGenre || genre,
               city: artistCity || city,
-              customCardImageUrl: artistCustomCardUrl
+              customCardImageUrl: artistCustomCardUrl,
+              slug: artistSlug
             };
           }
         }
@@ -1042,14 +1044,36 @@ async function startServer() {
           const userGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
           const userCity = f.city?.stringValue || '';
           const userCustomCardUrl = f.customCardImageUrl?.stringValue || '';
+          const userSlug = f.slug?.stringValue || slugifyStr(userName);
           
-          if (docId.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
+          if (docId.toLowerCase() === cleanIdLower || userSlug.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
+            let finalName = userName || name;
+            let finalGenre = userGenre || genre;
+            let finalCity = userCity || city;
+            let finalImg = userCustomCardUrl;
+            let finalSlug = userSlug;
+
+            try {
+              const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${docId}`;
+              const aRes = await fetch(artistUrl);
+              if (aRes.ok) {
+                const aDoc = await aRes.json();
+                const af = aDoc.fields || {};
+                finalName = af.name?.stringValue || af.artistName?.stringValue || finalName;
+                finalGenre = af.genre?.stringValue || af.mainGenre?.stringValue || finalGenre;
+                finalCity = af.city?.stringValue || finalCity;
+                finalImg = af.customCardImageUrl?.stringValue || finalImg;
+                finalSlug = af.slug?.stringValue || finalSlug;
+              }
+            } catch {}
+
             return {
               userId: docId,
-              name: userName || name,
-              genre: userGenre || genre,
-              city: userCity || city,
-              customCardImageUrl: userCustomCardUrl
+              name: finalName,
+              genre: finalGenre,
+              city: finalCity,
+              customCardImageUrl: finalImg,
+              slug: finalSlug
             };
           }
         }
@@ -1067,6 +1091,7 @@ async function startServer() {
         genre = data?.genre || data?.mainGenre || genre;
         city = data?.city || city;
         customCardImageUrl = data?.customCardImageUrl || "";
+        dbSlug = data?.slug || "";
         resolvedUserId = cleanId;
       } else {
         const uDoc = await db.collection("users").doc(cleanId).get();
@@ -1076,6 +1101,7 @@ async function startServer() {
           genre = uData?.genre || uData?.mainGenre || genre;
           city = uData?.city || city;
           customCardImageUrl = uData?.customCardImageUrl || "";
+          dbSlug = uData?.slug || "";
           resolvedUserId = cleanId;
         }
       }
@@ -1083,7 +1109,7 @@ async function startServer() {
       console.warn("Firestore Admin fallback exception:", adminErr);
     }
 
-    return { userId: resolvedUserId, name, genre, city, customCardImageUrl };
+    return { userId: resolvedUserId, name, genre, city, customCardImageUrl, slug: dbSlug || slugifyStr(name) };
   };
 
   // Helper to generate dynamic Open Graph PNG buffers
@@ -1376,7 +1402,7 @@ async function startServer() {
   app.get(["/artista/:userId", "/catalogo/:userId"], async (req, res, next) => {
     try {
       const userId = req.params.userId;
-      const { userId: resolvedArtistId, name, genre, city } = await fetchArtistRest(userId);
+      const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(userId);
 
       const formattedName = name.trim();
       const formattedGenre = genre.trim();
@@ -1405,21 +1431,29 @@ async function startServer() {
           .replace(/-+/g, '-');
       };
 
-      const cleanSlug = formattedName ? slugifyStr(formattedName) : resolvedArtistId;
+      const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
 
       // 1. Fetch global sharing image if configured in settings/shareCard
       const host = req.get("host") || "www.soundrive.com.br";
       const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
 
       let ogImageToUse = `${protocol}://${host}/api/og-artista?id=${resolvedArtistId}`;
-      let ogUrlToUse = `${protocol}://${host}/artista/${cleanSlug}`;
+      let ogUrlToUse = `https://www.soundrive.com.br/artista/${cleanSlug}`;
 
       try {
         const shareCardDoc = await db.collection("settings").doc("shareCard").get();
         if (shareCardDoc.exists) {
           const shareCardData = shareCardDoc.data();
           if (shareCardData && shareCardData.ogImageUrl) {
-            ogImageToUse = `${protocol}://${host}/api/global-share-card.png`;
+            let version = "1.0.0";
+            if (shareCardData.updatedAt) {
+              if (typeof shareCardData.updatedAt.toDate === "function") {
+                version = String(shareCardDoc.data()?.updatedAt.toDate().getTime());
+              } else {
+                version = encodeURIComponent(String(shareCardDoc.data()?.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+              }
+            }
+            ogImageToUse = `${shareCardData.ogImageUrl}?v=${version}`;
           }
         }
       } catch (fErr) {
@@ -1427,7 +1461,7 @@ async function startServer() {
       }
 
       if (req.path.startsWith("/catalogo/")) {
-        ogUrlToUse = `${protocol}://${host}/catalogo/${cleanSlug}`;
+        ogUrlToUse = `https://www.soundrive.com.br/catalogo/${cleanSlug}`;
       }
 
       const indexPath = process.env.NODE_ENV === "production" 

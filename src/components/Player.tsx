@@ -519,7 +519,7 @@ export default function Player({
           {/* Expanded scrolling lyrics inside Car Modal */}
           {carLyricsActive && (
             <div className="flex-1 lg:w-[50%] h-[250px] lg:h-[400px] w-full bg-[#050609]/60 border border-zinc-805/40 p-6 sm:p-8 rounded-3xl overflow-y-auto scrollbar-none flex flex-col justify-start relative select-text transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.5)]">
-              <div className="space-y-4 text-center py-4 my-auto">
+              <div className="space-y-4 text-left py-4 my-auto w-full">
                 {currentTrack.lyrics ? (
                   currentTrack.lyrics.split('\n').map((line, idx) => {
                     const isHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
@@ -1042,7 +1042,7 @@ export default function Player({
         <div className="relative flex-1 flex flex-col my-5 overflow-hidden z-10">
           <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#090b10] to-transparent pointer-events-none z-10"></div>
           
-          <div className="flex-1 overflow-y-auto px-2 space-y-4 py-5 text-center scroll-smooth scrollbar-none">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 space-y-4 py-5 text-left scroll-smooth scrollbar-none">
             {currentTrack.lyrics ? (
               currentTrack.lyrics.split('\n').map((line, idx) => {
                 const isSectionHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
