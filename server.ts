@@ -42,6 +42,21 @@ if (!getApps().length) {
 
 const db = getFirestore(firebaseAdminApp, "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff");
 
+const cleanR2BucketName = (bucket: string): string => {
+  let val = bucket.trim();
+  if (val.startsWith("R2_BUCKET_NAME")) {
+    const parts = val.split("=");
+    if (parts.length > 1) {
+      val = parts.slice(1).join("=");
+    }
+  }
+  val = val.trim();
+  if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+    val = val.slice(1, -1).trim();
+  }
+  return val.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+};
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -122,7 +137,7 @@ async function startServer() {
       };
 
       const R2_ACCOUNT_ID = cleanId(rawAccountId!);
-      const R2_BUCKET_NAME = rawBucketName!.trim();
+      const R2_BUCKET_NAME = cleanR2BucketName(rawBucketName!);
       const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
       const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
       const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
@@ -255,7 +270,7 @@ async function startServer() {
       };
 
       const R2_ACCOUNT_ID = cleanId(rawAccountId!);
-      const R2_BUCKET_NAME = rawBucketName!.trim();
+      const R2_BUCKET_NAME = cleanR2BucketName(rawBucketName!);
       const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
       const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
       const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
@@ -395,7 +410,7 @@ async function startServer() {
       };
 
       const R2_ACCOUNT_ID = cleanId(rawAccountId!);
-      const R2_BUCKET_NAME = rawBucketName!.trim();
+      const R2_BUCKET_NAME = cleanR2BucketName(rawBucketName!);
       const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
       const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
       const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
@@ -551,7 +566,7 @@ async function startServer() {
       };
 
       const R2_ACCOUNT_ID = cleanId(rawAccountId!);
-      const R2_BUCKET_NAME = rawBucketName!.trim();
+      const R2_BUCKET_NAME = cleanR2BucketName(rawBucketName!);
       const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
       const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
       const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
@@ -714,15 +729,15 @@ async function startServer() {
       };
 
       const R2_ACCOUNT_ID = cleanR2Id(rawAccountId!);
-      const R2_BUCKET_NAME = rawBucketName!.trim();
+      const R2_BUCKET_NAME = cleanR2BucketName(rawBucketName!);
       const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
       const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
       const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
 
-      // 4. Caminho de salvamento fixo com timestamp
+      // 4. Caminho de salvamento fixo com timestamp sob prefixo 'users/.../avatar/' para cumprir as políticas do R2
       const timestamp = Date.now();
       const safeFileName = fileName.replace(/[^a-zA-Z0-9.]/g, "_");
-      const storagePath = `share/global-share-card-${timestamp}-${safeFileName}`;
+      const storagePath = `users/${userId}/avatar/global-share-card-${timestamp}-${safeFileName}`;
 
       // 5. Inicializar S3Client compatível
       const endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
@@ -756,20 +771,28 @@ async function startServer() {
       const publicImageUrl = `${baseSlash}/${storagePath}`;
 
       // 8. Salvar URL no Firestore em settings/shareCard
-      await db.collection("settings").doc("shareCard").set({
-        ogImageUrl: publicImageUrl,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: userId
-      }, { merge: true });
+      let dbWriteSucceeded = false;
+      try {
+        await db.collection("settings").doc("shareCard").set({
+          ogImageUrl: publicImageUrl,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: userId
+        }, { merge: true });
+        dbWriteSucceeded = true;
+      } catch (dbErr: any) {
+        console.warn("Could not save to settings/shareCard from server (falling back to client write):", dbErr.message || dbErr);
+      }
 
-      console.log("Global Share Card Upload - Concluído com sucesso:", {
+      console.log("Global Share Card Upload - Concluido com sucesso:", {
         storagePath,
-        publicImageUrl
+        publicImageUrl,
+        dbWriteSucceeded
       });
 
       return res.status(200).json({
         storagePath,
-        publicImageUrl
+        publicImageUrl,
+        dbWriteSucceeded
       });
 
     } catch (e: any) {

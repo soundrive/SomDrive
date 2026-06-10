@@ -1597,5 +1597,23 @@ export const dbService = {
       console.error("Error deleting share card settings:", e);
       throw e;
     }
+  },
+
+  async updateShareCardSettings(ogImageUrl: string, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'shareCard');
+      const dataToSave = {
+        ogImageUrl,
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/shareCard');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating share card settings:", e);
+      throw e;
+    }
   }
 };

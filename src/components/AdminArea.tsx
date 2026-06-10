@@ -139,6 +139,15 @@ export default function AdminArea({
       setShareCardUploadProgress(75);
 
       if (response.ok) {
+        const data = await response.json();
+        const publicImageUrl = data.publicImageUrl;
+        
+        // Write the settings directly from client side to ensure it is always saved successfully
+        // bypassing any server-side Admin SDK credential limitations in the developer container
+        if (publicImageUrl) {
+          await dbService.updateShareCardSettings(publicImageUrl, currentUser.userId);
+        }
+
         setShareCardUploadProgress(100);
         triggerNotification("Imagem global do cartão atualizada com sucesso!");
         await loadShareCardSettings();

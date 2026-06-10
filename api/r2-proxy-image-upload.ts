@@ -94,7 +94,11 @@ export default async function handler(req: any, res: any) {
     };
 
     const R2_ACCOUNT_ID = cleanId(rawAccountId!);
-    const R2_BUCKET_NAME = rawBucketName!.trim();
+    const R2_BUCKET_NAME = (rawBucketName!.includes("=") ? rawBucketName!.split("=")[1] : rawBucketName!)
+      .trim()
+      .replace(/^['"]|['"]$/g, "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
     const R2_ACCESS_KEY_ID = rawAccessKeyId!.trim();
     const R2_SECRET_ACCESS_KEY = rawSecretAccessKey!.trim();
     const R2_PUBLIC_BASE_URL = rawPublicBaseUrl!.trim();
