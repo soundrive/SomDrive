@@ -1473,6 +1473,13 @@ async function startServer() {
       if (fsMod.existsSync(indexPath)) {
         let htmlContents = fsMod.readFileSync(indexPath, 'utf8');
 
+        // Clean static tags to prevent duplicates and legacy tag leakage
+        htmlContents = htmlContents
+          .replace(/<title>.*?<\/title>/gi, "")
+          .replace(/<meta\s+name="description"[^>]*\/?>/gi, "")
+          .replace(/<meta\s+property="og:[^>]*\/?>/gi, "")
+          .replace(/<meta\s+name="twitter:[^>]*\/?>/gi, "");
+
         const ogPayload = `
   <!-- Dinamic Custom Soundrive OG Sharing Metadata -->
   <title>Catálogo musical de ${formattedName} | Soundrive</title>
