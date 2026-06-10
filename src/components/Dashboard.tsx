@@ -382,8 +382,7 @@ export default function Dashboard({
       setProfile({ ...profile, slug });
     }
 
-    const updatedAtTime = profile.updatedAt ? new Date(profile.updatedAt).getTime() : Date.now();
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}?v=${updatedAtTime}`;
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -411,8 +410,7 @@ export default function Dashboard({
       setProfile({ ...profile, slug });
     }
 
-    const updatedAtTime = profile.updatedAt ? new Date(profile.updatedAt).getTime() : Date.now();
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}?v=${updatedAtTime}`;
+    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
     const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     

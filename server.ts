@@ -869,57 +869,148 @@ async function startServer() {
     }
   };
 
+  // Helper to dynamically build/inject the Open Graph metadata for any artist URI/slug
+  const generateArtistHtml = async (slugOrId: string, req: any) => {
+    const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
+    const formattedName = name.trim();
+
+    const slugifyStr = (text: string) => {
+      return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-');
+    };
+
+    const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
+
+    // Default Soundrive image background fallback, never show/crowd/plateia/unsplash
+    let ogImageToUse = "https://www.soundrive.com.br/favicon.svg"; 
+    let baseImageUrl = "";
+    try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl) {
+        baseImageUrl = shareCard.ogImageUrl;
+        let version = "1.0.0";
+        if (shareCard.updatedAt) {
+          version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+        }
+        ogImageToUse = baseImageUrl.includes("?") ? `${baseImageUrl}&v=${version}` : `${baseImageUrl}?v=${version}`;
+      }
+    } catch (fErr) {
+      console.warn("Could not fetch global share card settings:", fErr);
+    }
+
+    let ogUrlToUse = `https://www.soundrive.com.br/catalogo/${cleanSlug}`;
+
+    const indexPath = process.env.NODE_ENV === "production" 
+      ? path.join(process.cwd(), 'dist', 'index.html')
+      : path.join(process.cwd(), 'index.html');
+
+    const fsMod = await import('fs');
+    if (fsMod.existsSync(indexPath)) {
+      let htmlContents = fsMod.readFileSync(indexPath, 'utf8');
+
+      // Clean static tags fully to prevent duplicates and legacy tag leakage
+      htmlContents = htmlContents
+        .replace(/<title>.*?<\/title>/gi, "")
+        .replace(/<meta\s+[^>]*name=["']description["'][^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*property=["']og:.*?["'][^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*name=["']twitter:.*?["'][^>]*\/?>/gi, "");
+
+      const ogPayload = `
+  <!-- Dynamic Custom Soundrive OG Sharing Metadata -->
+  <title>Catálogo musical de ${formattedName} | Soundrive</title>
+  <meta name="description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <meta property="og:title" content="Catálogo musical de ${formattedName} | Soundrive" />
+  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <meta property="og:image" content="${ogImageToUse}" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="${ogUrlToUse}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Soundrive" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | Soundrive" />
+  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <meta name="twitter:image" content="${ogImageToUse}" />
+`;
+
+      if (htmlContents.includes("</head>")) {
+        htmlContents = htmlContents.replace("</head>", `${ogPayload}\n</head>`);
+      } else {
+        htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
+      }
+
+      return {
+        html: htmlContents,
+        artistName: formattedName,
+        ogImageUrl: baseImageUrl,
+        finalOgImageUrl: ogImageToUse,
+        ogUrl: ogUrlToUse,
+        artistFound: true
+      };
+    } else {
+      throw new Error(`index.html not found`);
+    }
+  };
+
   app.get("/api/global-share-card", serveGlobalShareCard);
   app.get("/api/global-share-card.png", serveGlobalShareCard);
 
   // Debugging route for verifying matching OG properties
   app.get("/api/debug/og", async (req: any, res: any) => {
+    const slug = String(req.query.slug || "ze-quirino").trim();
     try {
-      const slug = String(req.query.slug || "ze-quirino").trim();
-      let artistFound = false;
-      let artistName = "";
-      let ogImageUrl = "";
-      let finalOgImageUrl = "";
-      let ogUrl = "";
-
-      try {
-        const artist = await fetchArtistRest(slug);
-        if (artist && artist.userId) {
-          artistFound = true;
-          artistName = artist.name;
-          ogUrl = `https://www.soundrive.com.br/catalogo/${artist.slug}`;
-        }
-      } catch (err) {
-        console.warn("Debug OG fetch failed:", err);
-      }
-
-      // Check global shareCard via REST helper to bypass the auth limitation
-      try {
-        const shareCard = await fetchGlobalShareCardRest();
-        if (shareCard && shareCard.ogImageUrl) {
-          ogImageUrl = shareCard.ogImageUrl;
-          let version = "1.0.0";
-          if (shareCard.updatedAt) {
-            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
-          }
-          const host = req.get("host") || "www.soundrive.com.br";
-          const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-          finalOgImageUrl = `${protocol}://${host}/api/global-share-card.png?v=${version}`;
-        }
-      } catch (shareErr) {
-        console.warn("Debug OG shareCard settings fetch failed:", shareErr);
-      }
+      const result = await generateArtistHtml(slug, req);
+      const html = result.html;
+      const htmlHasOldImage = /unsplash|show|concert|crowd|plateia/i.test(html);
+      const htmlOgImageCount = (html.match(/<meta[^>]*property=["']og:image["']/gi) || []).length;
+      const htmlTwitterImageCount = (html.match(/<meta[^>]*name=["']twitter:image["']/gi) || []).length;
 
       return res.status(200).json({
         slug,
-        artistFound,
-        artistName,
-        ogImageUrl,
-        finalOgImageUrl,
-        ogUrl
+        artistFound: result.artistFound,
+        artistName: result.artistName,
+        ogImageUrl: result.ogImageUrl,
+        finalOgImageUrl: result.finalOgImageUrl,
+        ogUrl: result.ogUrl,
+        htmlHasOldImage,
+        htmlOgImageCount,
+        htmlTwitterImageCount
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(200).json({
+        slug,
+        artistFound: false,
+        artistName: "",
+        ogImageUrl: "",
+        finalOgImageUrl: "",
+        ogUrl: `https://www.soundrive.com.br/catalogo/${slug}`,
+        htmlHasOldImage: false,
+        htmlOgImageCount: 0,
+        htmlTwitterImageCount: 0,
+        error: err.message
+      });
+    }
+  });
+
+  // HTML OG visualizer requested
+  app.get("/api/debug/og-html", async (req: any, res: any) => {
+    const slug = String(req.query.slug || "ze-quirino").trim();
+    try {
+      const result = await generateArtistHtml(slug, req);
+      const headContent = result.html.split("<head>")[1]?.split("</head>")[0] || result.html;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      return res.send(headContent.trim());
+    } catch (err: any) {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      return res.status(500).send("Error compiling OG Head: " + err.message);
     }
   });
 
@@ -1474,108 +1565,9 @@ async function startServer() {
   app.get(["/artista/:userId", "/catalogo/:userId"], async (req, res, next) => {
     try {
       const userId = req.params.userId;
-      const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(userId);
-
-      const formattedName = name.trim();
-      const formattedGenre = genre.trim();
-      const formattedCity = city.trim();
-
-      let subtitle = "";
-      if (formattedGenre && formattedCity) {
-        subtitle = `${formattedGenre} • ${formattedCity}`;
-      } else if (formattedGenre) {
-        subtitle = formattedGenre;
-      } else if (formattedCity) {
-        subtitle = formattedCity;
-      } else {
-        subtitle = "Catálogo Autoral Verificado";
-      }
-
-      const slugifyStr = (text: string) => {
-        return text
-          .toString()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/[\s_]+/g, '-')
-          .replace(/-+/g, '-');
-      };
-
-      const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
-
-      // 1. Fetch global sharing image if configured in settings/shareCard
-      const host = req.get("host") || "www.soundrive.com.br";
-      const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-
-      let ogImageToUse = `${protocol}://${host}/api/og-artista?id=${resolvedArtistId}`;
-      let ogUrlToUse = `https://www.soundrive.com.br/artista/${cleanSlug}`;
-
-      try {
-        const shareCard = await fetchGlobalShareCardRest();
-        if (shareCard && shareCard.ogImageUrl) {
-          let version = "1.0.0";
-          if (shareCard.updatedAt) {
-            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
-          }
-          ogImageToUse = `${protocol}://${host}/api/global-share-card.png?v=${version}`;
-        }
-      } catch (fErr) {
-        console.warn("Could not fetch global share card settings from Firestore:", fErr);
-      }
-
-      if (req.path.startsWith("/catalogo/")) {
-        ogUrlToUse = `https://www.soundrive.com.br/catalogo/${cleanSlug}`;
-      }
-
-      const indexPath = process.env.NODE_ENV === "production" 
-        ? path.join(process.cwd(), 'dist', 'index.html')
-        : path.join(process.cwd(), 'index.html');
-
-      // We load fs dynamically to check file and inject
-      const fsMod = await import('fs');
-      if (fsMod.existsSync(indexPath)) {
-        let htmlContents = fsMod.readFileSync(indexPath, 'utf8');
-
-        // Clean static tags fully to prevent duplicates and legacy tag leakage
-        htmlContents = htmlContents
-          .replace(/<title>.*?<\/title>/gi, "")
-          .replace(/<meta\s+[^>]*name=["']description["'][^>]*\/?>/gi, "")
-          .replace(/<meta\s+[^>]*property=["']og:.*?["'][^>]*\/?>/gi, "")
-          .replace(/<meta\s+[^>]*name=["']twitter:.*?["'][^>]*\/?>/gi, "");
-
-        const ogPayload = `
-  <!-- Dinamic Custom Soundrive OG Sharing Metadata -->
-  <title>Catálogo musical de ${formattedName} | Soundrive</title>
-  <meta name="description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
-  
-  <meta property="og:title" content="Catálogo musical de ${formattedName} | Soundrive" />
-  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
-  <meta property="og:image" content="${ogImageToUse}" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${ogUrlToUse}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Soundrive" />
-  
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | Soundrive" />
-  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
-  <meta name="twitter:image" content="${ogImageToUse}" />
-`;
-
-        // Direct injection of the metadata tags within the index head
-        if (htmlContents.includes("</head>")) {
-          htmlContents = htmlContents.replace("</head>", `${ogPayload}\n</head>`);
-        } else {
-          htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
-        }
-
-        return res.send(htmlContents);
-      }
-    } catch (criticalErr) {
+      const result = await generateArtistHtml(userId, req);
+      return res.send(result.html);
+    } catch (criticalErr: any) {
       console.error("Critical error inside HTML metadata tag injector:", criticalErr);
     }
     next();
