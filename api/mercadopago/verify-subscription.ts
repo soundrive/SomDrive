@@ -4,33 +4,39 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Firebase Admin securely
-let app;
-if (!getApps().length) {
-  const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (serviceAccountVar) {
-    try {
-      const serviceAccount = JSON.parse(serviceAccountVar);
-      app = initializeApp({
-        credential: cert(serviceAccount),
-        projectId: "gen-lang-client-0946896754"
-      });
-    } catch (e) {
-      console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
-      app = initializeApp({
-        projectId: "gen-lang-client-0946896754"
-      });
-    }
-  } else {
-    app = initializeApp({
-      projectId: "gen-lang-client-0946896754"
-    });
-  }
-} else {
-  app = getApp();
-}
+// Initialize Firebase Admin securely and lazily
+let dbInstance: any = null;
 
-const db = getFirestore(app, "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff");
+function getDb() {
+  if (!dbInstance) {
+    let app;
+    if (!getApps().length) {
+      const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
+      if (serviceAccountVar) {
+        try {
+          const serviceAccount = JSON.parse(serviceAccountVar);
+          app = initializeApp({
+            credential: cert(serviceAccount),
+            projectId: "gen-lang-client-0946896754"
+          });
+        } catch (e) {
+          console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
+          app = initializeApp({
+            projectId: "gen-lang-client-0946896754"
+          });
+        }
+      } else {
+        app = initializeApp({
+          projectId: "gen-lang-client-0946896754"
+        });
+      }
+    } else {
+      app = getApp();
+    }
+    dbInstance = getFirestore(app, "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff");
+  }
+  return dbInstance;
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -141,7 +147,7 @@ export default async function handler(req: any, res: any) {
 
     if (!userId) {
       // If we cannot connect to internal user, update the mp_subscription record only
-      const subRecordRef = db.collection("mp_subscriptions").doc(id);
+      const subRecordRef = getDb().collection("mp_subscriptions").doc(id);
       const updateData = {
         status: statusConsulted,
         updatedAt: FieldValue.serverTimestamp()
@@ -196,11 +202,11 @@ export default async function handler(req: any, res: any) {
     }
 
     // 5. Update user details in dual collection synchronizers
-    await db.collection("users").doc(userId).set(updatePayload, { merge: true });
-    await db.collection("artists").doc(userId).set(updatePayload, { merge: true });
+    await getDb().collection("users").doc(userId).set(updatePayload, { merge: true });
+    await getDb().collection("artists").doc(userId).set(updatePayload, { merge: true });
 
     // 6. Update local mp_subscriptions registry log
-    await db.collection("mp_subscriptions").doc(id).set({
+    await getDb().collection("mp_subscriptions").doc(id).set({
       userId,
       email: payerEmail || "unknown",
       plan: isNowActive ? finalPlan : "free",

@@ -2,33 +2,39 @@ import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 
-// Initialize Firebase Admin securely
-let app;
-if (!getApps().length) {
-  const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (serviceAccountVar) {
-    try {
-      const serviceAccount = JSON.parse(serviceAccountVar);
-      app = initializeApp({
-        credential: cert(serviceAccount),
-        projectId: "gen-lang-client-0946896754"
-      });
-    } catch (e) {
-      console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
-      app = initializeApp({
-        projectId: "gen-lang-client-0946896754"
-      });
-    }
-  } else {
-    app = initializeApp({
-      projectId: "gen-lang-client-0946896754"
-    });
-  }
-} else {
-  app = getApp();
-}
+// Initialize Firebase Admin securely and lazily
+let dbInstance: any = null;
 
-const db = getFirestore(app, "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff");
+function getDb() {
+  if (!dbInstance) {
+    let app;
+    if (!getApps().length) {
+      const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
+      if (serviceAccountVar) {
+        try {
+          const serviceAccount = JSON.parse(serviceAccountVar);
+          app = initializeApp({
+            credential: cert(serviceAccount),
+            projectId: "gen-lang-client-0946896754"
+          });
+        } catch (e) {
+          console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
+          app = initializeApp({
+            projectId: "gen-lang-client-0946896754"
+          });
+        }
+      } else {
+        app = initializeApp({
+          projectId: "gen-lang-client-0946896754"
+        });
+      }
+    } else {
+      app = getApp();
+    }
+    dbInstance = getFirestore(app, "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff");
+  }
+  return dbInstance;
+}
 
 // Helper to verify Mercado Pago webhook signatures safely
 function verifySignature(req: any, webhookSecret: string): boolean {
@@ -71,7 +77,7 @@ async function findUserByEmailInFirestore(email: string): Promise<string | null>
   const emailLower = email.toLowerCase().trim();
 
   // Search 'users' dual sync target
-  const usersSnap = await db.collection("users")
+  const usersSnap = await getDb().collection("users")
     .where("email", "==", emailLower)
     .limit(1)
     .get();
@@ -81,7 +87,7 @@ async function findUserByEmailInFirestore(email: string): Promise<string | null>
   }
 
   // Search 'artists' collection
-  const artistsSnap = await db.collection("artists")
+  const artistsSnap = await getDb().collection("artists")
     .where("email", "==", emailLower)
     .limit(1)
     .get();
@@ -349,7 +355,7 @@ export default async function handler(req: any, res: any) {
 
       console.warn(`[MercadoPago Webhook] Could not associate transaction ID ${resourceId} to any user system profile.`);
       // We still record the transaction in the database so admins can manually review or activate it
-      const transactionRef = db.collection("mp_subscriptions").doc(resourceId);
+      const transactionRef = getDb().collection("mp_subscriptions").doc(resourceId);
       await transactionRef.set({
         id: resourceId,
         userId: "unknown",
@@ -415,8 +421,8 @@ export default async function handler(req: any, res: any) {
     const updatedLimit = isNowActive ? musicLimit : 3;
 
     // 7. Update User profile in Firestore dual sync targets
-    const userRef = db.collection("users").doc(userId);
-    const artistRef = db.collection("artists").doc(userId);
+    const userRef = getDb().collection("users").doc(userId);
+    const artistRef = getDb().collection("artists").doc(userId);
 
     let updatePayload: any = {};
 
@@ -471,7 +477,7 @@ export default async function handler(req: any, res: any) {
     await artistRef.set(updatePayload, { merge: true });
 
     // 8. Register/Save subscription record for the admin area list
-    const subscriptionRecordRef = db.collection("mp_subscriptions").doc(resourceId);
+    const subscriptionRecordRef = getDb().collection("mp_subscriptions").doc(resourceId);
     await subscriptionRecordRef.set({
       id: resourceId,
       userId: userId,
