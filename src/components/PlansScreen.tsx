@@ -212,7 +212,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
         {/* Plan Header */}
         <div className="text-center space-y-4 max-w-2xl mx-auto relative z-10 w-full">
           <div className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-gradient-to-r from-orange-950 to-yellow-950 border border-orange-500/20 text-orange-400 rounded-full text-[10px] font-mono font-bold uppercase tracking-widest leading-none">
-            <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Planos de Assinatura SomDrive
+            <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Planos SomDrive
           </div>
           <h2 className="text-3xl md:text-5xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-400 tracking-tight leading-tight">
             Planos e Limites
@@ -232,11 +232,11 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               {profile.plan === 'pro' && 'SomDrive Pro ⭐'}
               {profile.plan === 'premium' && 'SomDrive Premium 🚀'}
             </span>
-            {profile.subscriptionDate && (
-              <span className="text-slate-500 font-mono text-[10px]">
-                Assinado em: {profile.subscriptionDate} ({profile.subscriptionStatus || 'ativo'})
-              </span>
-            )}
+              {profile.subscriptionDate && (
+                <span className="text-slate-500 font-mono text-[10px]">
+                  Ativado em: {profile.subscriptionDate} ({profile.subscriptionStatus || 'ativo'})
+                </span>
+              )}
           </div>
         </div>
 
@@ -571,7 +571,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                   onClick={handleProcessPaymentSimulated}
                   className="w-full py-4.5 bg-gradient-to-r from-orange-600 via-yellow-500 to-yellow-400 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10 flex items-center justify-center gap-2"
                 >
-                  <CreditCard className="w-4.5 h-4.5" /> Assinar {selectedPlan === 'pro' ? 'Pro' : 'Premium'} com Mercado Pago
+                  <CreditCard className="w-4.5 h-4.5" /> Pagar {selectedPlan === 'pro' ? 'Pro' : 'Premium'} com Mercado Pago
                 </button>
 
                 {/* Small security assurance label */}
@@ -590,7 +590,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-heading font-black text-base uppercase text-white animate-pulse">Estabelecendo Conexão Segura...</h4>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto font-mono">Processando transação recorrente de R$ {planDetails[selectedPlan].price.toFixed(2)} junto ao Mercado Pago API e registrando webhook de assinatura.</p>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto font-mono">Processando pagamento único de R$ {planDetails[selectedPlan].price.toFixed(2)} junto ao Mercado Pago API e registrando webhook de confirmação.</p>
                 </div>
               </div>
             )}
@@ -602,15 +602,15 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                   <CheckCircle2 className="w-9 h-9 fill-emerald-950" />
                 </div>
                 <div className="space-y-2">
-                  <h4 className="font-heading font-black text-xl uppercase text-white">Assinatura Concluída!</h4>
+                  <h4 className="font-heading font-black text-xl uppercase text-white">Pagamento Concluído!</h4>
                   <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
                     Parabéns! O seu plano do SomDrive foi alterado com sucesso para <strong className="text-orange-400 uppercase">{selectedPlan}</strong>. 
                   </p>
                   
                   {/* Webhook Status Display readback */}
                   <div className="p-3 bg-slate-950 rounded-xl border border-slate-900 inline-block text-left text-[10px] space-y-1 font-mono text-slate-400">
-                    <p><strong className="text-slate-500 uppercase">Gateway:</strong> Mercado Pago Recorrente</p>
-                    <p><strong className="text-slate-500 uppercase">Status Assinatura:</strong> <span className={simulatedStatus === 'ativo' ? 'text-emerald-400' : simulatedStatus === 'pendente' ? 'text-yellow-400' : 'text-red-400'}>{simulatedStatus.toUpperCase()}</span></p>
+                    <p><strong className="text-slate-500 uppercase">Gateway:</strong> Mercado Pago Checkout Pro</p>
+                    <p><strong className="text-slate-500 uppercase">Status Pagamento:</strong> <span className={simulatedStatus === 'ativo' ? 'text-emerald-400' : simulatedStatus === 'pendente' ? 'text-yellow-400' : 'text-red-400'}>{simulatedStatus.toUpperCase()}</span></p>
                     <p><strong className="text-slate-500 uppercase">Limite de Envio:</strong> {planDetails[selectedPlan].limitTracks} Músicas / {planDetails[selectedPlan].limitSize} MB</p>
                     <p><strong className="text-slate-500 uppercase">Data de Registro:</strong> {new Date().toLocaleDateString('pt-BR')}</p>
                   </div>

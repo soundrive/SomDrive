@@ -113,11 +113,12 @@ export default async function handler(req: any, res: any) {
       plan: 'pro' | 'premium';
       billingCycle: 'monthly' | 'annual';
       musicLimit: number;
+      durationDays: number;
     }> = {
-      pro_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15 },
-      premium_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50 },
-      pro_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15 },
-      premium_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50 }
+      pro_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15, durationDays: 30 },
+      premium_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50, durationDays: 30 },
+      pro_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15, durationDays: 365 },
+      premium_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50, durationDays: 365 }
     };
 
     let userId: string | null = null;
@@ -177,14 +178,20 @@ export default async function handler(req: any, res: any) {
     let updatePayload: any = {};
 
     if (isNowActive) {
+      const durationDays = PLANS_MAP[planCode]?.durationDays || 30;
+      const now = new Date();
+      const expires = new Date();
+      expires.setDate(now.getDate() + durationDays);
+
       updatePayload = {
         plan: finalPlan,
         billingCycle: billingCycle,
         musicLimit: musicLimit,
         subscriptionStatus: "active",
-        mercadoPagoSubscriptionId: subscriptionId || id,
-        mercadoPagoPlanCode: planCode,
+        paymentMethod: "mercado_pago_checkout_pro",
         planActivatedAt: FieldValue.serverTimestamp(),
+        planExpiresAt: expires,
+        mercadoPagoPaymentId: paymentId || subscriptionId || id,
         updatedAt: FieldValue.serverTimestamp()
       };
     } else {
