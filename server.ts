@@ -9,8 +9,6 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
 import createSubscriptionHandler from "./api/mercadopago/create-subscription";
 import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
-import createPixPaymentHandler from "./api/mercadopago/create-pix-payment";
-import verifyPixPaymentHandler from "./api/mercadopago/verify-pix-payment";
 import checkIntegrationsHandler from "./api/admin/check-integrations";
 import sharp from "sharp";
 
@@ -1277,30 +1275,6 @@ async function startServer() {
       await createSubscriptionHandler(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in local create-subscription wrapper:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: err.message || String(err) });
-      }
-    }
-  });
-
-  // API Route for Mercado Pago Pix payment creation
-  app.post("/api/mercadopago/create-pix-payment", async (req, res) => {
-    try {
-      await createPixPaymentHandler(req, res);
-    } catch (err: any) {
-      console.error("Local Dev - Error in local create-pix-payment wrapper:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: err.message || String(err) });
-      }
-    }
-  });
-
-  // API Route for Mercado Pago Pix payment status verification and sync
-  app.get("/api/mercadopago/verify-pix-payment", async (req, res) => {
-    try {
-      await verifyPixPaymentHandler(req, res);
-    } catch (err: any) {
-      console.error("Local Dev - Error in local verify-pix-payment wrapper:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: err.message || String(err) });
       }
