@@ -392,7 +392,7 @@ export default function Player({
           <div className="hidden sm:flex items-center justify-center gap-2 absolute left-1/2 -translate-x-1/2 select-none">
             <CarSilhouetteIcon className="w-9 h-4" />
             <span className="font-heading font-black tracking-[0.25em] text-sm text-zinc-100 uppercase pb-0.5">
-              SOUNDRIVE
+              SOMDRIVE
             </span>
           </div>
 

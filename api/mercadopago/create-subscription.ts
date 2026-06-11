@@ -81,7 +81,7 @@ export default async function handler(req: any, res: any) {
 
     // 3. Setup external_reference pattern matching
     const externalReference = `${uid}|${planCode}`;
-    const appBaseUrl = process.env.APP_BASE_URL ? process.env.APP_BASE_URL.replace(/\/$/, "") : "https://www.soundrive.com.br";
+    const appBaseUrl = process.env.APP_BASE_URL ? process.env.APP_BASE_URL.replace(/\/$/, "") : "https://www.somdrive.com.br";
     const backUrl = `${appBaseUrl}/pagamento/retorno`;
 
     // 4. Setup clean, compliant auto_recurring body configuration on Mercado Pago Preapproval API

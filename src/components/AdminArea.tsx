@@ -563,9 +563,9 @@ export default function AdminArea({
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white flex items-center">
-              SOUNDRIVE <span className="text-orange-500 text-xs ml-2 font-mono uppercase bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Painel Admin</span>
+              SOMDRIVE <span className="text-orange-500 text-xs ml-2 font-mono uppercase bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">Painel Admin</span>
             </h1>
-            <p className="text-slate-400 text-xs hidden md:block">Gerenciamento geral da plataforma Soundrive</p>
+            <p className="text-slate-400 text-xs hidden md:block">Gerenciamento geral da plataforma SomDrive</p>
           </div>
         </div>
 

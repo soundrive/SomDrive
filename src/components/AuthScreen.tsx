@@ -33,6 +33,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { BrandLogo } from './BrandLogo';
 
 interface AuthScreenProps {
   onNavigate: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
@@ -525,7 +526,7 @@ export default function AuthScreen({
                 Complete Seu Cadastro
               </h2>
               <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                Falta muito pouco! Preencha as informações obrigatórias abaixo para ativar sua conta e acessar seu Soundrive grátis:
+                Falta muito pouco! Preencha as informações obrigatórias abaixo para ativar sua conta e acessar seu SomDrive grátis:
               </p>
             </div>
 
@@ -911,8 +912,8 @@ export default function AuthScreen({
             
             {/* Header branding */}
             <div className="text-center">
-              <div className="inline-flex p-3 bg-orange-955/40 border border-orange-500/20 rounded-2xl mb-4 text-orange-400">
-                <Music className="w-7 h-7" />
+              <div className="mb-6 flex justify-center scale-102">
+                <BrandLogo size="lg" />
               </div>
               <h2 className="text-2xl md:text-3xl font-heading font-black tracking-tight uppercase">
                 {isRegister ? 'Criar Cadastro Artista' : 'Entrar na Plataforma'}
@@ -1135,7 +1136,7 @@ export default function AuthScreen({
                 type="submit"
                 className="w-full py-4 mt-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-sm font-heading font-extrabold uppercase tracking-widest cursor-pointer shadow-lg shadow-orange-500/10 transition-transform active:scale-98 select-none text-slate-950"
               >
-                {isRegister ? 'Criar Meu Soundrive Grátis' : 'Entrar no Painel'}
+                {isRegister ? 'Criar Meu SomDrive Grátis' : 'Entrar no Painel'}
               </button>
             </form>
 

@@ -1,5 +1,5 @@
 {
-  "name": "Soundrive",
+  "name": "SomDrive",
   "description": "Plataforma para compositores, artistas e produtores criarem um catálogo musical profissional e ágil para tocar no celular ou no carro via Bluetooth.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

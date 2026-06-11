@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics } from '../types';
 import { dbService } from '../lib/db';
+import { BrandLogo } from './BrandLogo';
 
 interface ArtistPublicProps {
   artistId: string;
@@ -62,12 +63,12 @@ export default function ArtistPublic({
   // Dynamic Browser Tab Meta Title
   useEffect(() => {
     if (artist) {
-      document.title = `Catálogo musical de ${artist.name} | Soundrive`;
+      document.title = `Catálogo musical de ${artist.name} | SomDrive`;
     } else {
-      document.title = `Soundrive - Catálogo Musical`;
+      document.title = `SomDrive - Catálogo Musical`;
     }
     return () => {
-      document.title = `Soundrive - Catálogo Musical`;
+      document.title = `SomDrive - Catálogo Musical`;
     };
   }, [artist]);
 
@@ -77,17 +78,25 @@ export default function ArtistPublic({
       setIsLoading(true);
       setErrorMsg(null);
       console.log("Iniciando carregamento do artista público:", artistId);
+      console.time("client-load-total");
+      console.time("client-local-cache-lookup");
 
       try {
         // 1. Tentar primeiro do cache local rápido
-        const cachedArtist = dbService.getArtist(artistId) || dbService.getArtist("gabriel-silva");
+        const cachedArtist = dbService.getArtist(artistId);
+        let hasCache = false;
         if (cachedArtist) {
           setArtist(cachedArtist);
           const cachedTracks = dbService.getArtistMusics(cachedArtist.userId).filter(t => t.status !== 'inactive');
           setTracks(cachedTracks);
+          setIsLoading(false); // Render immediately from cache!
+          hasCache = true;
+          console.log("Dados do catálogo público recuperados com sucesso do cache local para renderização ultra-rápida.");
         }
+        console.timeEnd("client-local-cache-lookup");
 
         // 2. Sempre fazer a busca e sincronização com o Firestore para carregar dados reais e frescos
+        console.time("client-sync-artist-firestore");
         try {
           console.log("Sincronizando dados públicos do Firestore do artista:", artistId);
           await dbService.syncArtistData(artistId);
@@ -104,16 +113,18 @@ export default function ArtistPublic({
             setArtist(syncedArtist);
             const syncedTracks = dbService.getArtistMusics(syncedArtist.userId).filter(t => t.status !== 'inactive');
             setTracks(syncedTracks);
-          } else if (!cachedArtist) {
+            setIsLoading(false); // Cache succeeded/updated!
+          } else if (!hasCache) {
             setErrorMsg("Catálogo não encontrado ou ainda sem músicas disponíveis.");
           }
         } catch (syncErr) {
           console.error("Erro ao sincronizar do Firestore: ", syncErr);
           // Se não havia nada em cache e o sync do Firebase falhou, mostramos erro
-          if (!cachedArtist) {
+          if (!hasCache) {
             setErrorMsg("Catálogo não encontrado ou ainda sem músicas disponíveis.");
           }
         }
+        console.timeEnd("client-sync-artist-firestore");
 
         // 3. Incrementar visualizações em segundo plano se o artista foi obtido
         const activeArtist = dbService.getArtist(artistId) || dbService.getArtist("gabriel-silva");
@@ -125,6 +136,7 @@ export default function ArtistPublic({
         setErrorMsg("Erro ao carregar o catálogo. Por favor, tente novamente.");
       } finally {
         setIsLoading(false);
+        console.timeEnd("client-load-total");
       }
     };
     loadData();
@@ -174,8 +186,9 @@ export default function ArtistPublic({
     // Increment WhatsApp clicks inside Analytics table
     dbService.incrementAnalyticsView(artist.userId, false, false);
     
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${artist.slug || artist.userId}`;
-    const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
+    const appBaseUrl = window.location.origin;
+    const pageUrl = `${appBaseUrl}/s/${artist.slug || artist.userId}`;
+    const messageText = `🎧 Ouça meu catálogo musical no SomDrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const text = encodeURIComponent(messageText);
     window.open(`https://wa.me/?text=${text}`, '_blank');
     
@@ -184,7 +197,8 @@ export default function ArtistPublic({
   };
 
   const handleCopyLinkDissemination = () => {
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${artist.slug || artist.userId}`;
+    const appBaseUrl = window.location.origin;
+    const pageUrl = `${appBaseUrl}/s/${artist.slug || artist.userId}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedLinkAlert(true);
     setTimeout(() => setCopiedLinkAlert(false), 2050);
@@ -202,7 +216,7 @@ export default function ArtistPublic({
     dbService.incrementAnalyticsView(artist.userId, false, false);
     
     const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
-    const greetingText = encodeURIComponent(`Olá ${artist.name}, encontrei suas composições no catálogo Soundrive e gostaria de conversar sobre contratações ou licenciamento de faixas autorais!`);
+    const greetingText = encodeURIComponent(`Olá ${artist.name}, encontrei suas composições no catálogo SomDrive e gostaria de conversar sobre contratações ou licenciamento de faixas autorais!`);
     window.open(`https://wa.me/${whatsappNum}?text=${greetingText}`, '_blank');
   };
 
@@ -211,7 +225,7 @@ export default function ArtistPublic({
     dbService.incrementAnalyticsView(artist.userId, false, true);
     
     const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
-    const greetingText = encodeURIComponent(`Olá ${artist.name}, encontrei sua composição "${track.title}" no catálogo Soundrive e tenho interesse em gravá-la / contratá-la!`);
+    const greetingText = encodeURIComponent(`Olá ${artist.name}, encontrei sua composição "${track.title}" no catálogo SomDrive e tenho interesse em gravá-la / contratá-la!`);
     window.open(`https://wa.me/${whatsappNum}?text=${greetingText}`, '_blank');
   };
 
@@ -221,16 +235,12 @@ export default function ArtistPublic({
       {/* LEFT SIDEBAR (Desktop only) */}
       <aside className="w-64 bg-[#050609] border-r border-zinc-900 h-screen sticky top-0 px-6 py-8 flex flex-col justify-between shrink-0 hidden md:flex z-30 select-none">
         <div className="space-y-10">
-          {/* Logo Brand with waveform animated visual */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-end gap-[3px] h-5 mb-1 select-none">
-              <span className="w-1 bg-[#d4af37] h-3.5 rounded-full animate-bar-1"></span>
-              <span className="w-1 bg-[#d4af37] h-5 rounded-full animate-bar-2"></span>
-              <span className="w-1 bg-[#d4af37] h-6 rounded-full animate-bar-3"></span>
-              <span className="w-1 bg-[#d4af37] h-4.5 rounded-full animate-bar-4"></span>
-              <span className="w-1 bg-[#d4af37] h-2.5 rounded-full animate-bar-1"></span>
-            </div>
-            <span className="font-heading font-black tracking-tight text-xl text-white select-none">Soundrive</span>
+          {/* Logo Brand with beautiful SomDrive logo */}
+          <div 
+            onClick={() => onNavigate('landing')}
+            className="cursor-pointer select-none group mt-1 mb-2"
+          >
+            <BrandLogo size="sm" className="scale-105 origin-left" />
           </div>
 
           {/* Nav Items stack with exact vertical visual indicators */}
@@ -272,7 +282,7 @@ export default function ArtistPublic({
 
         {/* Brand trademark footer line */}
         <div className="space-y-1 text-left">
-          <p className="text-[10px] text-zinc-650 font-mono">Soundrive © {new Date().getFullYear()}</p>
+          <p className="text-[10px] text-zinc-650 font-mono">SomDrive © {new Date().getFullYear()}</p>
           <p className="text-[9px] text-zinc-500 leading-normal font-sans">Conteúdo reservado e protegido por direitos autorais.</p>
         </div>
       </aside>
@@ -289,18 +299,13 @@ export default function ArtistPublic({
           
           {/* MOBILE NAVIGATION LAYOUT - EXACTLY REPLICATING THE ATTACHED SCREENSHOT */}
           <div className="flex md:hidden items-center justify-between w-full relative z-25">
-            {/* Left Brand: SOUNDRIVE with down chevron dropdown arrow */}
+            {/* Left Brand: Beautiful SomDrive logo */}
             <div 
               onClick={() => onNavigate('landing')}
-              className="flex items-center gap-1.5 cursor-pointer text-[#d4af37] active:scale-95 transition-all select-none"
+              className="flex items-center gap-1 cursor-pointer active:scale-95 transition-all select-none"
             >
-              <div className="w-5 h-5 rounded-full border border-amber-500/40 flex items-center justify-center bg-amber-500/10">
-                <span className="text-[#d4af37] text-[10px] font-black leading-none">S</span>
-              </div>
-              <span className="font-heading font-black tracking-[0.16em] text-sm text-white uppercase pb-0.5">
-                SOUNDRIVE
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+              <BrandLogo size="sm" className="scale-90 origin-left" />
+              <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-1 mt-0.5" />
             </div>
 
             {/* Right: PERFIL ••• Button with custom drop content */}
@@ -646,7 +651,7 @@ export default function ArtistPublic({
               <div className="space-y-2.5">
                 <h4 className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Histórico do compositor</h4>
                 <div className="text-zinc-350 text-xs sm:text-sm leading-relaxed whitespace-pre-line bg-zinc-955 p-4 rounded-xl border border-zinc-900/50 font-medium">
-                  {artist.bio ? artist.bio : `O compositor ${artist.name} possui um catálogo verificado no Soundrive com excelente acervo autoral, pronto para audição e captação comercial.`}
+                  {artist.bio ? artist.bio : `O compositor ${artist.name} possui um catálogo verificado no SomDrive com excelente acervo autoral, pronto para audição e captação comercial.`}
                 </div>
               </div>
 
@@ -913,7 +918,7 @@ export default function ArtistPublic({
 
         {/* Brand visual layout page footer */}
         <footer className="mt-16 border-t border-zinc-900/40 pt-4 text-center text-zinc-500 text-[10px] font-mono uppercase tracking-wider relative z-10 w-full select-none">
-          <p>Soundrive © {new Date().getFullYear()} — Plataforma de Catálogos Verificados para Compositores</p>
+          <p>SomDrive © {new Date().getFullYear()} — Plataforma de Catálogos Verificados para Compositores</p>
           <p className="text-[9px] text-zinc-650 mt-1 lowercase font-sans font-normal">compartilhe no whatsapp, envie propostas comerciais e garanta segurança jurídica.</p>
         </footer>
 

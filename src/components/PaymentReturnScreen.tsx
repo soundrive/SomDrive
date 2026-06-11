@@ -172,7 +172,7 @@ export default function PaymentReturnScreen({ currentUser, onNavigate, onRefresh
           </button>
 
           <div className="text-[10px] text-slate-500 font-mono text-center flex items-center justify-center gap-1 uppercase tracking-wider">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" /> Soundrive • Redirecionamento Seguro
+            <ShieldCheck className="w-4 h-4 text-emerald-500" /> SomDrive • Redirecionamento Seguro
           </div>
         </div>
 

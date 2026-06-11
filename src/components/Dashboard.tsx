@@ -382,7 +382,8 @@ export default function Dashboard({
       setProfile({ ...profile, slug });
     }
 
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
+    const appBaseUrl = window.location.origin;
+    const pageUrl = `${appBaseUrl}/s/${slug}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -410,8 +411,9 @@ export default function Dashboard({
       setProfile({ ...profile, slug });
     }
 
-    const pageUrl = `https://www.soundrive.com.br/catalogo/${slug}`;
-    const messageText = `🎧 Ouça meu catálogo musical no Soundrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
+    const appBaseUrl = window.location.origin;
+    const pageUrl = `${appBaseUrl}/s/${slug}`;
+    const messageText = `🎧 Ouça meu catálogo musical no SomDrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     
     // Increment WhatsApp counter
@@ -937,7 +939,7 @@ export default function Dashboard({
           </button>
           <div>
             <h2 className="font-heading font-black text-base uppercase leading-none tracking-tight">Painel Executivo</h2>
-            <p className="text-[10px] font-mono mt-0.5 text-yellow-400">Soundrive</p>
+            <p className="text-[10px] font-mono mt-0.5 text-yellow-400">SomDrive</p>
           </div>
         </div>
 
@@ -1129,9 +1131,9 @@ export default function Dashboard({
           <div className="space-y-1">
             <h4 className="font-heading font-black text-lg text-orange-400 uppercase tracking-wide flex items-center gap-1.5 group-hover:text-amber-300 transition">
               <Sparkles className="w-5 h-5 text-orange-400 animate-pulse" /> 
-              {profile.plan === 'free' && 'Você está no Soundrive Free (3 Músicas)'}
-              {profile.plan === 'pro' && 'Você está no Soundrive Pro (15 Músicas)'}
-              {profile.plan === 'premium' && 'Você está no Soundrive Premium (50 Músicas)'}
+              {profile.plan === 'free' && 'Você está no SomDrive Free (3 Músicas)'}
+              {profile.plan === 'pro' && 'Você está no SomDrive Pro (15 Músicas)'}
+              {profile.plan === 'premium' && 'Você está no SomDrive Premium (50 Músicas)'}
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
               {profile.plan === 'free' && 'Sua conta gratuita permite até 3 músicas em seu catálogo privado. Faça upgrade para expandir seu limite para até 50 faixas.'}
@@ -1274,7 +1276,7 @@ export default function Dashboard({
             </div>
             <div className="space-y-1">
               <h4 className="font-heading font-black text-lg uppercase text-slate-200">Nenhuma música cadastrada ainda.</h4>
-              <p className="text-slate-500 text-xs max-w-sm mx-auto">Adicione sua primeira composição para montar seu catálogo Soundrive.</p>
+              <p className="text-slate-500 text-xs max-w-sm mx-auto">Adicione sua primeira composição para montar seu catálogo SomDrive.</p>
             </div>
             <button 
               id="empty-add-btn"
@@ -1376,7 +1378,8 @@ export default function Dashboard({
                     .replace(/-+/g, '-');
                 };
                 const slugOrId = profile.slug || (profile.name ? slugifyStr(profile.name) : profile.userId);
-                const songUrl = `https://www.soundrive.com.br/catalogo/${slugOrId}?play=${trackVal.trackId}`;
+                const appBaseUrl = window.location.origin;
+                const songUrl = `${appBaseUrl}/catalogo/${slugOrId}?play=${trackVal.trackId}`;
                 navigator.clipboard.writeText(songUrl);
                 
                 setToastMessage("Link do catálogo com essa música copiado!");
@@ -1832,7 +1835,7 @@ export default function Dashboard({
                   type="submit"
                   className="px-6 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition-transform active:scale-98 font-bold"
                 >
-                  Salvar Música no Soundrive
+                  Salvar Música no SomDrive
                 </button>
               </div>
 
@@ -2111,7 +2114,7 @@ export default function Dashboard({
                 <div className="space-y-1">
                   <h4 className="text-sm font-heading font-black tracking-wide text-white uppercase">Sincronizando Perfil</h4>
                   <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
-                    Armazenando seus dados artísticos, endereço de contato e biografia no banco corporativo Soundrive...
+                    Armazenando seus dados artísticos, endereço de contato e biografia no banco corporativo SomDrive...
                   </p>
                 </div>
               </div>

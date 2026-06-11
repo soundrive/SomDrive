@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { Artist } from '../types';
 
+import { BrandLogo } from './BrandLogo';
+
 interface LandingPageProps {
   onNavigate: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
   currentUser: Artist | null;
@@ -115,7 +117,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
 
   const landingPlans = {
     free: {
-      name: 'Soundrive Free',
+      name: 'SomDrive Free',
       description: 'Para começar e testar seu catálogo privado.',
       price: 'Grátis',
       badge: 'Grátis',
@@ -133,7 +135,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
       ]
     },
     pro: {
-      name: 'Soundrive Pro',
+      name: 'SomDrive Pro',
       description: 'Para compositores que querem enviar mais repertório.',
       price: billingCycle === 'monthly' ? 'R$ 19,90' : 'R$ 199,90',
       period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
@@ -152,7 +154,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
       ]
     },
     premium: {
-      name: 'Soundrive Premium',
+      name: 'SomDrive Premium',
       description: 'Para quem trabalha com maior volume de composições.',
       price: billingCycle === 'monthly' ? 'R$ 39,90' : 'R$ 399,90',
       period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
@@ -181,124 +183,118 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
       <div className="absolute left-[-5%] top-[25%] w-[500px] h-[500px] bg-gradient-to-br from-yellow-500/5 via-emerald-600/5 to-transparent rounded-full filter blur-[140px] pointer-events-none z-0"></div>
 
       {/* Navigation Top Header */}
-      <header className="relative z-10 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md px-6 py-4 md:px-12 flex items-center justify-between">
-        <div 
-          onClick={() => onNavigate('landing')}
-          className="flex items-center gap-2.5 cursor-pointer select-none group"
-        >
-          <div className="p-2 bg-gradient-to-tr from-emerald-500 to-yellow-500 rounded-xl group-hover:scale-105 transition-transform shadow-lg shadow-emerald-500/25 flex items-center justify-center">
-            <Smartphone className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+      <header className="relative z-10 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md px-6 py-3.5 md:px-12">
+        <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
+          <div 
+            onClick={() => onNavigate('landing')}
+            className="cursor-pointer select-none group"
+          >
+            <BrandLogo size="sm" className="sm:scale-110 origin-left transition-transform group-hover:scale-[1.12]" />
           </div>
-          <div>
-            <h1 className="font-heading font-black text-lg md:text-xl tracking-tight text-white uppercase leading-none">
-              Soun<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-yellow-400">drive</span>
-            </h1>
-            <p className="text-[9px] font-mono tracking-widest text-yellow-400 uppercase font-bold mt-0.5">Catálogo Profissional</p>
-          </div>
-        </div>
 
-        <nav id="top-nav" className="flex items-center gap-4">
-          <a href="#planos" className="hidden sm:inline-block text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">
-            Planos
-          </a>
-          
-          {currentUser ? (
-            <div className="flex items-center gap-3">
-              {(currentUser.role === 'admin' || currentUser.email === 'videopremieroficial@gmail.com' || currentUser.email === 'sertanejopremier@gmail.com') && (
+          <nav id="top-nav" className="flex items-center gap-1.5 md:gap-4 shrink-0">
+            <a href="#planos" className="hidden md:inline-block text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">
+              Planos
+            </a>
+            
+            {currentUser ? (
+              <div className="flex items-center gap-1.5 md:gap-3">
+                {(currentUser.role === 'admin' || currentUser.email === 'videopremieroficial@gmail.com' || currentUser.email === 'sertanejopremier@gmail.com') && (
+                  <button 
+                    id="header-admin-btn"
+                    onClick={() => onNavigate('admin')}
+                    className="px-2 py-1.5 md:px-4 md:py-2 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 rounded-lg text-[10px] md:text-xs font-heading font-bold uppercase tracking-wider cursor-pointer shadow hover:border-slate-700 font-mono whitespace-nowrap"
+                  >
+                    Admin <span className="hidden sm:inline">🛡️</span>
+                  </button>
+                )}
                 <button 
-                  id="header-admin-btn"
-                  onClick={() => onNavigate('admin')}
-                  className="px-4 py-2 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 rounded-lg text-xs font-heading font-bold uppercase tracking-wider cursor-pointer shadow hover:border-slate-700 font-mono"
+                  id="header-dash-btn"
+                  onClick={() => onNavigate('dashboard')}
+                  className="px-2.5 py-1.5 md:px-4 md:py-1.5 bg-gradient-to-r from-emerald-600 to-yellow-500 rounded-lg text-[10px] md:text-xs font-heading font-bold uppercase tracking-widest sm:tracking-wider hover:from-emerald-500 hover:to-yellow-400 cursor-pointer shadow-md shadow-emerald-500/10 select-none text-slate-950 transition font-black sm:font-bold whitespace-nowrap"
                 >
-                  Área Admin 🛡️
+                  Painel<span className="hidden sm:inline"> do Artista</span>
                 </button>
-              )}
-              <button 
-                id="header-dash-btn"
-                onClick={() => onNavigate('dashboard')}
-                className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-yellow-500 rounded-lg text-xs font-heading font-bold uppercase tracking-wider hover:from-emerald-500 hover:to-yellow-400 cursor-pointer shadow-md shadow-emerald-500/10 select-none text-slate-950 transition"
-              >
-                Painel do Artista
-              </button>
-              <button 
-                id="header-logout-btn"
-                onClick={onLogout}
-                className="hidden md:block px-3 py-2 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900 transition rounded-lg text-xs uppercase tracking-wider cursor-pointer"
-              >
-                Sair
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <button 
-                id="header-login-btn"
-                onClick={() => onNavigate('auth', { isRegister: false })}
-                className="text-xs font-semibold uppercase tracking-wider text-slate-300 hover:text-orange-400 transition cursor-pointer"
-              >
-                Entrar
-              </button>
-              <button 
-                id="header-register-btn"
-                onClick={() => onNavigate('auth', { isRegister: true })}
-                className="px-4 py-2 bg-orange-600 border border-orange-500 rounded-lg text-xs font-heading font-bold uppercase tracking-wider hover:bg-orange-500 transition cursor-pointer shadow-lg shadow-orange-500/15 text-white"
-              >
-                Criar Conta
-              </button>
-            </div>
-          )}
-        </nav>
+                <button 
+                  id="header-logout-btn"
+                  onClick={onLogout}
+                  className="hidden md:block px-3 py-2 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900 transition rounded-lg text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Sair
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 md:gap-3">
+                <button 
+                  id="header-login-btn"
+                  onClick={() => onNavigate('auth', { isRegister: false })}
+                  className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-300 hover:text-orange-400 transition cursor-pointer px-2 py-1"
+                >
+                  Entrar
+                </button>
+                <button 
+                  id="header-register-btn"
+                  onClick={() => onNavigate('auth', { isRegister: true })}
+                  className="px-2.5 py-1.5 md:px-4 md:py-2 bg-orange-600 border border-orange-500 rounded-lg text-[10px] md:text-xs font-heading font-bold uppercase tracking-wider hover:bg-orange-500 transition cursor-pointer shadow-lg shadow-orange-500/15 text-white whitespace-nowrap"
+                >
+                  Criar Conta
+                </button>
+              </div>
+            )}
+          </nav>
+        </div>
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-16 md:pt-24 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-10 sm:pt-16 md:pt-20 lg:pt-24 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 xl:gap-16 items-center">
         
         {/* Left Hand: High impact text */}
-        <div id="hero-left" className="lg:col-span-7 space-y-7 text-left">
-          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 bg-slate-900/90 border border-white/[0.06] rounded-full shadow-lg shadow-orange-500/5 backdrop-blur-md">
+        <div id="hero-left" className="lg:col-span-7 space-y-5 sm:space-y-6 text-left">
+          <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-4 sm:py-1.5 bg-slate-900/90 border border-white/[0.06] rounded-full shadow-lg shadow-orange-500/5 backdrop-blur-md">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
             </span>
-            <span className="text-[10px] font-mono tracking-widest font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-300 to-yellow-300 uppercase">
+            <span className="text-[9px] sm:text-[10px] font-mono tracking-wider sm:tracking-widest font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-300 to-yellow-300 uppercase">
               Para Compositores, Artistas e Produtores
             </span>
           </div>
 
-          <h2 className="text-4xl sm:text-6xl lg:text-[70px] font-heading font-black tracking-tight leading-[0.95] uppercase">
+          <h2 className="text-3xl sm:text-5xl md:text-6xl lg:text-[52px] xl:text-[66px] 2xl:text-[70px] font-heading font-black tracking-tight leading-[1.1] sm:leading-[1.05] lg:leading-[0.98] uppercase">
             Seu repertório <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300 font-black relative">
               na mão do
-              <span className="absolute bottom-1 left-0 w-24 h-[3px] bg-gradient-to-r from-orange-500 to-yellow-400 rounded-full"></span>
+              <span className="absolute bottom-0.5 sm:bottom-1 left-0 w-16 sm:w-24 h-[3px] bg-gradient-to-r from-orange-500 to-yellow-400 rounded-full"></span>
             </span> <br />
             cantor certo.
           </h2>
 
-          <p className="text-slate-400 text-base md:text-lg max-w-xl font-normal leading-relaxed">
+          <p className="text-slate-400 text-xs sm:text-sm md:text-base max-w-xl font-normal leading-relaxed">
             Abandone os arquivos pesados de WhatsApp e pen drives de plástico. Crie seu catálogo profissional online e envie o link exclusivo para produtores ouvirem direto no celular ou pareado via Bluetooth no painel do carro.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4 shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2 sm:pt-4 shrink-0">
             <button 
               id="hero-create-btn"
               onClick={() => onNavigate('auth', { isRegister: true })}
-              className="px-8 py-4 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-xl font-heading font-extrabold text-sm uppercase lg:text-base tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-xl shadow-orange-500/20 text-center flex items-center justify-center gap-2 group transition-transform hover:scale-102 text-slate-950"
+              className="px-5 py-3.5 sm:px-8 sm:py-4 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-xl font-heading font-extrabold text-xs sm:text-sm uppercase lg:text-base tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-xl shadow-orange-500/20 text-center flex items-center justify-center gap-2 group transition-transform hover:scale-102 text-slate-950 font-black whitespace-nowrap"
             >
-              <Smartphone className="w-5 h-5 text-slate-950 group-hover:animate-bounce" /> Criar Meu Soundrive Grátis
+              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 group-hover:animate-bounce shrink-0" /> Criar Meu SomDrive Grátis
             </button>
             
             <a 
               href="#planos"
-              className="px-6 py-4 border border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 transition rounded-xl text-center font-heading font-bold text-sm uppercase tracking-wider text-slate-300 hover:text-white flex items-center justify-center gap-2"
+              className="px-5 py-3.5 sm:px-6 sm:py-4 border border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 transition rounded-xl text-center font-heading font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-300 hover:text-white flex items-center justify-center gap-2"
             >
               Conhecer Planos
             </a>
           </div>
 
           {/* Custom responsive feature showcases aligned with the screenshot */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-8 border-t border-slate-900/80">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-6 sm:pt-8 border-t border-slate-900/80">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)]">
-                <Lock className="w-5 h-5 fill-orange-400/5 animate-pulse" />
+              <div className="p-2 sm:p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)] shrink-0">
+                <Lock className="w-4 h-4 sm:w-5 sm:h-5 fill-orange-400/5 animate-pulse" />
               </div>
               <div>
                 <p className="text-xs font-heading font-black text-white uppercase tracking-wider">Catálogo Privado</p>
@@ -307,8 +303,8 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)]">
-                <Send className="w-5 h-5 transform -rotate-12" />
+              <div className="p-2 sm:p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)] shrink-0">
+                <Send className="w-4 h-4 sm:w-5 sm:h-5 transform -rotate-12" />
               </div>
               <div>
                 <p className="text-xs font-heading font-black text-white uppercase tracking-wider">Envie para selecionados</p>
@@ -317,8 +313,8 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)]">
-                <Car className="w-5 h-5" />
+              <div className="p-2 sm:p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)] shrink-0">
+                <Car className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div>
                 <p className="text-xs font-heading font-black text-white uppercase tracking-wider">Ouça no Carro</p>
@@ -329,27 +325,27 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
         </div>
 
         {/* Right Hand: High-Fidelity Tilted Smartphone, Spinning Vinyl, and Pro Studio Mixer Board */}
-        <div id="hero-right" className="lg:col-span-5 relative flex flex-col items-center justify-center z-10 w-full min-h-[500px] py-6 select-none">
+        <div id="hero-right" className="lg:col-span-5 relative flex flex-col items-center justify-center z-10 w-full min-h-[460px] sm:min-h-[500px] py-4 sm:py-6 select-none">
           <div className="absolute inset-x-0 top-0 bottom-0 bg-gradient-to-tr from-orange-500/10 via-yellow-500/5 to-transparent rounded-full filter blur-[110px] -z-20 pointer-events-none"></div>
           
           {/* High-Fidelity Retro-Modern Vinyl Record */}
-          <div className="absolute right-[-140px] top-[-50px] w-[360px] h-[360px] md:w-[480px] md:h-[480px] rounded-full -z-10 shadow-[0_20px_50px_rgba(0,0,0,0.9),inset_0_4px_20px_rgba(255,255,255,0.05)] overflow-hidden flex items-center justify-center animate-spin-slow pb-2 pointer-events-none"
+          <div className="absolute right-[-20px] min-[400px]:right-[-60px] sm:right-[-100px] md:right-[-140px] top-[-20px] sm:top-[-50px] w-[260px] h-[260px] sm:w-[360px] sm:h-[360px] md:w-[480px] md:h-[480px] rounded-full -z-10 shadow-[0_20px_50px_rgba(0,0,0,0.9),inset_0_4px_20px_rgba(255,255,255,0.05)] overflow-hidden flex items-center justify-center animate-spin-slow pb-2 pointer-events-none"
                style={{ background: 'repeating-radial-gradient(circle, #0e0f12 0px, #0e0f12 1.5px, #17181d 2px, #20212a 3.5px, #0e0f12 4px)' }}>
             
             {/* Golden Conic Reflection of a real Vinyl */}
             <div className="absolute inset-0 bg-[conic-gradient(from_45deg,transparent_25%,rgba(249,115,22,0.06)_40%,rgba(255,255,255,0.1)_45%,rgba(249,115,22,0.06)_50%,transparent_65%,transparent_115%,rgba(249,115,22,0.06)_130%,rgba(255,255,255,0.1)_135%,rgba(249,115,22,0.06)_140%,transparent_155%)] rounded-full"></div>
             
             {/* Center Sticker */}
-            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full border-[6px] md:border-[8px] border-[#0a0b0d] bg-gradient-to-tr from-orange-600 via-amber-500 to-yellow-400 flex items-center justify-center shadow-2xl relative">
+            <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-full border-[4px] sm:border-[6px] md:border-[8px] border-[#0a0b0d] bg-gradient-to-tr from-orange-600 via-amber-500 to-yellow-400 flex items-center justify-center shadow-2xl relative">
               {/* Sticker concentric circles */}
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-dashed border-black/20 flex flex-col items-center justify-center p-1 text-center font-heading">
-                <span className="text-[6.5px] md:text-[8px] text-slate-950 font-black tracking-widest uppercase leading-none">SOUNDRIVE</span>
-                <span className="text-[4px] md:text-[5px] text-slate-900/60 font-mono tracking-widest mt-0.5 leading-none">ORIGINAL CUT</span>
+              <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border border-dashed border-black/20 flex flex-col items-center justify-center p-0.5 sm:p-1 text-center font-heading">
+                <span className="text-[5px] sm:text-[6.5px] md:text-[8px] text-slate-950 font-black tracking-widest uppercase leading-none">SOMDRIVE</span>
+                <span className="text-[3px] sm:text-[4px] md:text-[5px] text-slate-900/60 font-mono tracking-widest mt-0.5 leading-none">ORIGINAL CUT</span>
               </div>
               
               {/* Spindle hole */}
-              <div className="absolute inset-x-0 w-5 h-5 rounded-full bg-slate-950 border border-white/10 flex items-center justify-center mx-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)]">
-                <div className="w-1 h-1 rounded-full bg-slate-800"></div>
+              <div className="absolute inset-x-0 w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-full bg-slate-950 border border-white/10 flex items-center justify-center mx-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)]">
+                <div className="w-0.5 sm:w-1 h-0.5 sm:h-1 rounded-full bg-slate-800"></div>
               </div>
             </div>
           </div>
@@ -440,64 +436,64 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           </div>
 
           {/* Aligned Smartphone Mock-up - Positioned higher and perfectly straight/upright */}
-          <div className="relative w-full max-w-[345px] md:max-w-[370px] aspect-[9/18.5] bg-[#0a0c10] rounded-[48px] p-2.5 border-4 border-slate-800 shadow-[0_35px_80px_rgba(0,0,0,0.95),0_0_1px_1px_rgba(249,115,22,0.15)] flex flex-col justify-between overflow-hidden -translate-y-8 md:-translate-y-16 lg:-translate-y-24 lg:scale-105 transition-all duration-700 hover:scale-107 group">
+          <div className="relative w-full max-w-[280px] sm:max-w-[320px] md:max-w-[350px] lg:max-w-[340px] xl:max-w-[370px] aspect-[9/18.5] bg-[#0a0c10] rounded-[36px] sm:rounded-[48px] p-2 sm:p-2.5 border-2 sm:border-4 border-slate-800 shadow-[0_35px_80px_rgba(0,0,0,0.95),0_0_1px_1px_rgba(249,115,22,0.15)] flex flex-col justify-between overflow-hidden translate-y-0 lg:-translate-y-16 xl:-translate-y-20 lg:scale-105 transition-all duration-700 hover:scale-107 group">
             
             {/* Edge Glare glossy line */}
             <div className="absolute inset-y-0 left-0 w-[1.5px] bg-gradient-to-b from-transparent via-white/10 to-transparent z-30"></div>
             
             {/* Dynamic Island / Notch */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-5.5 bg-[#08080a] rounded-full z-40 border border-white/[0.04] flex items-center justify-between px-3.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-sky-950/80 border border-blue-900/40"></div>
-              <div className="w-8 h-1 bg-[#101014] rounded-full"></div>
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-950"></div>
+            <div className="absolute top-3.5 sm:top-4 left-1/2 -translate-x-1/2 w-24 sm:w-28 h-5 sm:h-5.5 bg-[#08080a] rounded-full z-40 border border-white/[0.04] flex items-center justify-between px-3 sm:px-3.5">
+              <div className="w-1 sm:w-1.5 h-1 sm:h-1.5 rounded-full bg-sky-950/80 border border-blue-900/40"></div>
+              <div className="w-6 sm:w-8 h-1 bg-[#101014] rounded-full"></div>
+              <div className="w-1 sm:w-1.5 h-1 sm:h-1.5 rounded-full bg-slate-950"></div>
             </div>
 
             {/* Viewport viewport wrapper */}
-            <div className="flex-1 bg-[#06070a] rounded-[38px] p-4.5 pt-7 pb-4 overflow-hidden flex flex-col justify-between select-none relative">
+            <div className="flex-1 bg-[#06070a] rounded-[28px] sm:rounded-[38px] p-3 sm:p-4.5 pt-5 sm:pt-7 pb-3 sm:pb-4 overflow-hidden flex flex-col justify-between select-none relative">
               
               {/* Inner ambient mesh circles */}
               <div className="absolute inset-x-0 top-1/4 bottom-1/4 bg-[radial-gradient(ellipse_at_center,rgba(249,115,22,0.06),transparent_60%)] -z-10 pointer-events-none"></div>
               
               {/* Phone Header */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.04] mb-3.5 mt-1">
+              <div className="flex items-center justify-between pb-2.5 sm:pb-3.5 border-b border-white/[0.04] mb-2 sm:mb-3.5 mt-0.5 sm:mt-1">
                 <div className="flex items-center gap-1.5">
-                  <div className="flex items-end gap-0.5 h-3">
-                    <span className="w-0.5 h-1.5 bg-orange-500 animate-pulse rounded-full"></span>
-                    <span className="w-0.5 h-3 bg-orange-500 animate-pulse rounded-full" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-0.5 h-2 bg-orange-500 animate-pulse rounded-full" style={{ animationDelay: '300ms' }}></span>
+                  <div className="flex items-end gap-0.5 h-2.5 sm:h-3 shrink-0">
+                    <span className="w-0.5 h-1 bg-orange-500 animate-pulse rounded-full"></span>
+                    <span className="w-0.5 h-2 bg-orange-500 animate-pulse rounded-full" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-0.5 h-1.5 bg-orange-500 animate-pulse rounded-full" style={{ animationDelay: '300ms' }}></span>
                   </div>
-                  <span className="text-xs font-heading font-black tracking-widest text-white uppercase mt-0.5">SOUNDRIVE</span>
+                  <span className="text-[9.5px] sm:text-xs font-heading font-black tracking-widest text-white uppercase mt-0.5">SOMDRIVE</span>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <div className="relative">
-                    <Bell className="w-4 h-4 text-slate-400 hover:text-white transition cursor-pointer" />
-                    <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-orange-500 rounded-full animate-ping"></span>
-                    <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
+                    <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 hover:text-white transition cursor-pointer" />
+                    <span className="absolute top-0 right-0 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-orange-500 rounded-full animate-ping"></span>
+                    <span className="absolute top-0 right-0 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-orange-500 rounded-full"></span>
                   </div>
-                  <div className="w-7 h-7 rounded-full bg-[#121319] border border-orange-500/20 flex items-center justify-center text-[10px] font-heading font-black text-orange-400 shadow shadow-orange-500/10">
+                  <div className="w-5.5 h-5.5 sm:w-7 sm:h-7 rounded-full bg-[#121319] border border-orange-500/20 flex items-center justify-center text-[8.5px] sm:text-[10px] font-heading font-black text-orange-400 shadow shadow-orange-500/10">
                     GS
                   </div>
                 </div>
               </div>
 
               {/* Private Catalog Card */}
-              <div className="bg-[#121319]/90 border border-white/[0.05] p-3.5 rounded-2xl flex items-center gap-3.5 shadow-md shadow-black/30 mb-3 hover:border-orange-500/10 transition-colors">
-                <div className="p-2.5 bg-yellow-500/10 border border-yellow-550/20 text-yellow-550 rounded-xl relative shadow-[inset_0_1px_5px_rgba(234,179,8,0.1)]">
-                  <Lock className="w-4 h-4 fill-yellow-500/10" />
+              <div className="bg-[#121319]/90 border border-white/[0.05] p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-3.5 shadow-md shadow-black/30 mb-2 sm:mb-3 hover:border-orange-500/10 transition-colors">
+                <div className="p-2 sm:p-2.5 bg-yellow-500/10 border border-yellow-550/20 text-yellow-550 rounded-lg sm:rounded-xl relative shadow-[inset_0_1px_5px_rgba(234,179,8,0.1)] shrink-0">
+                  <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-yellow-500/10" />
                 </div>
-                <div>
-                  <h4 className="text-[11px] font-heading font-black text-white uppercase tracking-wider">Catálogo Privado</h4>
-                  <p className="text-[9.5px] font-mono text-slate-500 tracking-wide mt-0.5">Acesso por convite</p>
+                <div className="min-w-0">
+                  <h4 className="text-[10px] sm:text-[11px] font-heading font-black text-white uppercase tracking-wider">Catálogo Privado</h4>
+                  <p className="text-[8.5px] sm:text-[9.5px]/none font-mono text-slate-500 tracking-wide mt-0.5">Acesso por convite</p>
                 </div>
               </div>
 
               {/* Spectacular Circular Equalizer Spectrogram */}
-              <div className="flex-1 flex items-center justify-center relative min-h-[170px] my-3">
+              <div className="flex-1 flex items-center justify-center relative min-h-[140px] sm:min-h-[170px] my-2 sm:my-3">
                 {/* Concentric glowing rings */}
-                <div className="absolute rounded-full border border-orange-500/5 w-60 h-60 animate-pulse"></div>
-                <div className="absolute rounded-full border border-dashed border-orange-500/15 w-48 h-48 animate-spin-slow"></div>
-                <div className="absolute rounded-full border border-orange-500/25 bg-radial-gradient from-orange-950/2 w-36 h-36 flex items-center justify-center shadow-[inset_0_0_30px_rgba(249,115,22,0.15)]">
+                <div className="absolute rounded-full border border-orange-500/5 w-44 h-44 sm:w-60 sm:h-60 animate-pulse"></div>
+                <div className="absolute rounded-full border border-dashed border-orange-500/15 w-36 h-36 sm:w-48 sm:h-48 animate-spin-slow"></div>
+                <div className="absolute rounded-full border border-orange-500/25 bg-radial-gradient from-orange-950/2 w-28 h-28 sm:w-36 sm:h-36 flex items-center justify-center shadow-[inset_0_0_30px_rgba(249,115,22,0.15)]">
                   
                   {/* Decorative rotating dotted line circle */}
                   <svg className="w-full h-full absolute animate-spin-slow opacity-25" viewBox="0 0 100 100" style={{ animationDuration: '30s' }}>
@@ -505,17 +501,17 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
                   </svg>
                   
                   {/* Dynamic central soundwaves */}
-                  <div className="flex items-center gap-1 justify-center h-14 w-28 relative z-10">
-                    {[12, 28, 48, 60, 42, 24, 38, 55, 30, 16, 22].map((h, i) => {
+                  <div className="flex items-center gap-1 justify-center h-10 sm:h-14 w-20 sm:w-28 relative z-10">
+                    {[10, 24, 40, 50, 36, 20, 32, 46, 26, 14, 18].map((h, i) => {
                       const delay = (i % 4) * 120;
                       return (
                         <div
                           key={i}
                           style={{
-                            height: `${h}px`,
+                            height: `${h * 0.8}px`,
                             animationDelay: `${delay}ms`
                           }}
-                          className="w-[2.5px] bg-gradient-to-t from-orange-600 via-amber-400 to-yellow-300 rounded-full animate-pulse opacity-95 shadow-[0_0_8px_rgba(249,115,22,0.4)]"
+                          className="w-[1.5px] sm:w-[2.5px] bg-gradient-to-t from-orange-600 via-amber-400 to-yellow-300 rounded-full animate-pulse opacity-95 shadow-[0_0_8px_rgba(249,115,22,0.4)]"
                         />
                       );
                     })}
@@ -524,37 +520,37 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
               </div>
 
               {/* Three Grid Feature Buttons */}
-              <div className="grid grid-cols-3 gap-2 mt-2 mb-3.5">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-1 sm:mt-2 mb-2 sm:mb-3.5">
                 {/* Envio */}
-                <div className="bg-[#121319]/80 border border-white/[0.04] p-2.5 rounded-xl flex flex-col items-center justify-between text-center min-h-[85px] shadow-sm">
-                  <div className="p-1.5 bg-orange-950/50 border border-orange-500/20 text-orange-400 rounded-lg">
-                    <Send className="w-3.5 h-3.5 transform -rotate-45" />
+                <div className="bg-[#121319]/80 border border-white/[0.04] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex flex-col items-center justify-between text-center min-h-[75px] sm:min-h-[85px] shadow-sm">
+                  <div className="p-1 sm:p-1.5 bg-orange-950/50 border border-orange-500/20 text-orange-400 rounded-md sm:rounded-lg">
+                    <Send className="w-3 h-3 sm:w-3.5 sm:h-3.5 transform -rotate-45" />
                   </div>
-                  <span className="text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1.5">Envio por</span>
-                  <span className="text-[8px] font-mono font-bold text-orange-400 uppercase tracking-tight mt-1 flex items-center gap-0.5">
-                    <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span> Convite
+                  <span className="text-[8px] sm:text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1 sm:mt-1.5">Envio por</span>
+                  <span className="text-[7.5px] sm:text-[8px] font-mono font-bold text-orange-400 uppercase tracking-tight mt-0.5 sm:mt-1 flex items-center gap-0.5">
+                    <span className="w-1 h-1 bg-orange-500 rounded-full"></span> Convite
                   </span>
                 </div>
 
                 {/* Bluetooth */}
-                <div className="bg-[#121319]/80 border border-white/[0.04] p-2.5 rounded-xl flex flex-col items-center justify-between text-center min-h-[85px] shadow-sm">
-                  <div className="p-1.5 bg-blue-950/50 border border-blue-500/20 text-blue-400 rounded-lg">
-                    <Bluetooth className="w-3.5 h-3.5" />
+                <div className="bg-[#121319]/80 border border-white/[0.04] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex flex-col items-center justify-between text-center min-h-[75px] sm:min-h-[85px] shadow-sm">
+                  <div className="p-1 sm:p-1.5 bg-blue-950/50 border border-blue-500/20 text-blue-400 rounded-md sm:rounded-lg">
+                    <Bluetooth className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </div>
-                  <span className="text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1.5">Bluetooth</span>
-                  <span className="text-[8px] font-mono font-bold text-emerald-400 uppercase tracking-tight mt-1 flex items-center gap-0.5">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> Conectado
+                  <span className="text-[8px] sm:text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1 sm:mt-1.5">Bluetooth</span>
+                  <span className="text-[7.5px] sm:text-[8px] font-mono font-bold text-emerald-400 uppercase tracking-tight mt-0.5 sm:mt-1 flex items-center gap-0.5">
+                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></span> On
                   </span>
                 </div>
 
                 {/* Modo Carro */}
-                <div className="bg-[#121319]/80 border border-white/[0.04] p-2.5 rounded-xl flex flex-col items-center justify-between text-center min-h-[85px] shadow-sm">
-                  <div className="p-1.5 bg-yellow-950/50 border border-yellow-550/20 text-yellow-500 rounded-lg">
-                    <Car className="w-3.5 h-3.5" />
+                <div className="bg-[#121319]/80 border border-white/[0.04] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex flex-col items-center justify-between text-center min-h-[75px] sm:min-h-[85px] shadow-sm">
+                  <div className="p-1 sm:p-1.5 bg-yellow-950/50 border border-yellow-550/20 text-yellow-500 rounded-md sm:rounded-lg">
+                    <Car className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </div>
-                  <span className="text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1.5">Modo Carro</span>
-                  <span className="text-[8px] font-mono font-bold text-yellow-400 uppercase tracking-tight mt-1 flex items-center gap-0.5">
-                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span> Ativo
+                  <span className="text-[8px] sm:text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1 sm:mt-1.5">Modo Carro</span>
+                  <span className="text-[7.5px] sm:text-[8px] font-mono font-bold text-yellow-400 uppercase tracking-tight mt-0.5 sm:mt-1 flex items-center gap-0.5">
+                    <span className="w-1 h-1 bg-yellow-500 rounded-full"></span> Ativo
                   </span>
                 </div>
               </div>
@@ -562,14 +558,14 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
               {/* Wide Enviar por Link Button */}
               <button 
                 onClick={() => onNavigate('auth', { isRegister: true })}
-                className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 rounded-xl font-heading font-black tracking-widest text-[10.5px] uppercase cursor-pointer flex items-center justify-center gap-2 group transition-all duration-300 shadow-md shadow-orange-500/10 hover:shadow-orange-550/20 transform hover:-translate-y-0.5 select-none"
+                className="w-full py-2.5 sm:py-3.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 rounded-xl font-heading font-black tracking-widest text-[9.5px] sm:text-[10.5px] uppercase cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 group transition-all duration-300 shadow-md shadow-orange-500/10 hover:shadow-orange-550/20 transform hover:-translate-y-0.5 select-none"
               >
-                <Link className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" /> Enviar por Link
+                <Link className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-950 stroke-[2.5]" /> Enviar por Link
               </button>
 
               {/* Footer text */}
-              <div className="flex items-center justify-center gap-1 mt-3.5 text-slate-500 text-[8.5px] font-mono uppercase tracking-widest">
-                <Users className="w-3.5 h-3.5 text-slate-600" />
+              <div className="flex items-center justify-center gap-1 mt-2.5 sm:mt-3.5 text-slate-500 text-[8px] sm:text-[8.5px] font-mono uppercase tracking-widest">
+                <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600" />
                 <span>Compartilhe com selecionados</span>
               </div>
 
@@ -582,7 +578,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
       {/* Premium Advantages Bento-like Grid */}
       <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
         <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Por que Criar Seu Soundrive?</h3>
+          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Por que Criar Seu SomDrive?</h3>
           <h2 className="text-3xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
             A forma inteligente de <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-400">compartilhar suas produções</span>
@@ -841,7 +837,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
           <ShieldCheck className="w-4 h-4 text-orange-500" /> Servidor Cloud Run Seguro • Firebase Realtime DB • SSL Ativo
         </div>
         <p className="text-slate-600 text-xs">
-          © {new Date().getFullYear()} Soundrive. Desenvolvido para a indústria musical do Brasil.
+          © {new Date().getFullYear()} SomDrive. Desenvolvido para a indústria musical do Brasil.
         </p>
       </footer>
 

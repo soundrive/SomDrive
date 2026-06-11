@@ -9,6 +9,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
 import createSubscriptionHandler from "./api/mercadopago/create-subscription";
 import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
+import createPixPaymentHandler from "./api/mercadopago/create-pix-payment";
+import verifyPixPaymentHandler from "./api/mercadopago/verify-pix-payment";
 import checkIntegrationsHandler from "./api/admin/check-integrations";
 import sharp from "sharp";
 
@@ -871,7 +873,10 @@ async function startServer() {
 
   // Helper to dynamically build/inject the Open Graph metadata for any artist URI/slug
   const generateArtistHtml = async (slugOrId: string, req: any) => {
+    console.time("catalogo-total");
+    console.time("buscar-artista");
     const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
+    console.timeEnd("buscar-artista");
     const formattedName = name.trim();
 
     const slugifyStr = (text: string) => {
@@ -888,9 +893,12 @@ async function startServer() {
 
     const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
 
-    // Default Soundrive image background fallback, never show/crowd/plateia/unsplash
-    let ogImageToUse = "https://www.soundrive.com.br/favicon.svg"; 
+    const appBaseUrl = (process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "");
+
+    // Default SomDrive image background fallback, never show/crowd/plateia/unsplash
+    let ogImageToUse = `${appBaseUrl}/favicon.svg`; 
     let baseImageUrl = "";
+    console.time("carregar-config-share-card");
     try {
       const shareCard = await fetchGlobalShareCardRest();
       if (shareCard && shareCard.ogImageUrl) {
@@ -909,8 +917,9 @@ async function startServer() {
     } catch (fErr) {
       console.warn("Could not fetch global share card settings:", fErr);
     }
+    console.timeEnd("carregar-config-share-card");
 
-    let ogUrlToUse = `https://www.soundrive.com.br/catalogo/${cleanSlug}`;
+    let ogUrlToUse = `${appBaseUrl}/catalogo/${cleanSlug}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
@@ -952,6 +961,7 @@ async function startServer() {
         htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
       }
 
+      console.timeEnd("catalogo-total");
       return {
         html: htmlContents,
         artistName: formattedName,
@@ -961,8 +971,92 @@ async function startServer() {
         artistFound: true
       };
     } else {
+      console.timeEnd("catalogo-total");
       throw new Error(`index.html not found`);
     }
+  };
+
+  // Helper to dynamically build/inject the Open Graph metadata for the clean WhatsApp short share route
+  const generateShareHtml = async (slugOrId: string) => {
+    const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
+    const formattedName = name.trim();
+
+    const slugifyStr = (text: string) => {
+      return text
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-');
+    };
+
+    const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
+
+    const appBaseUrl = (process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "");
+
+    // Fetch the global share card image or fallback
+    let ogImageToUse = `${appBaseUrl}/favicon.svg`; 
+    let baseImageUrl = "";
+    let version = "1.0.0";
+    try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl) {
+        baseImageUrl = shareCard.ogImageUrl;
+        if (shareCard.updatedAt) {
+          const parsedTime = new Date(shareCard.updatedAt).getTime();
+          if (!isNaN(parsedTime)) {
+            version = String(parsedTime);
+          } else {
+            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+          }
+        }
+        ogImageToUse = baseImageUrl.includes("?") ? `${baseImageUrl}&v=${version}` : `${baseImageUrl}?v=${version}`;
+      }
+    } catch (fErr) {
+      console.warn("Could not fetch global share card settings:", fErr);
+    }
+
+    const htmlContents = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Catálogo musical de ${formattedName} | SomDrive</title>
+  <meta property="og:title" content="Catálogo musical de ${formattedName} | SomDrive" />
+  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta property="og:image" content="${ogImageToUse}" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="${appBaseUrl}/s/${cleanSlug}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SomDrive" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | SomDrive" />
+  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta name="twitter:image" content="${ogImageToUse}" />
+  <script>
+    window.location.replace("/catalogo/${cleanSlug}");
+  </script>
+</head>
+<body style="background: #09090b; color: #a1a1aa; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+  <div style="text-align: center;">
+    <p>Redirecionando para o catálogo de <strong>${formattedName}</strong>...</p>
+    <p style="font-size: 13px; color: #52525b;">Se não for redirecionado, <a href="/catalogo/${cleanSlug}" style="color: #10b981; text-decoration: none; font-weight: bold;">clique aqui</a>.</p>
+  </div>
+</body>
+</html>`;
+
+    return {
+      html: htmlContents,
+      artistName: formattedName,
+      ogImageUrl: baseImageUrl,
+      finalOgImageUrl: ogImageToUse,
+      cleanSlug,
+      artistFound: true
+    };
   };
 
   app.get("/api/global-share-card", serveGlobalShareCard);
@@ -996,7 +1090,7 @@ async function startServer() {
         artistName: "",
         ogImageUrl: "",
         finalOgImageUrl: "",
-        ogUrl: `https://www.soundrive.com.br/catalogo/${slug}`,
+        ogUrl: `${(process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "")}/catalogo/${slug}`,
         htmlHasOldImage: false,
         htmlOgImageCount: 0,
         htmlTwitterImageCount: 0,
@@ -1019,6 +1113,152 @@ async function startServer() {
     }
   });
 
+  // Speed, latency, and structure diagnostics endpoint for public catalog URLs
+  app.get("/api/debug/catalog-speed", async (req: any, res: any) => {
+    const slug = String(req.query.slug || "ze-quirino").trim();
+    const projectId = "gen-lang-client-0946896754";
+    const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
+    
+    let totalStart = Date.now();
+    let artistFound = false;
+    let artistLookupMs = 0;
+    let songsFound = 0;
+    let songsLookupMs = 0;
+    let shareCardLookupMs = 0;
+    let redirectsDetected = false;
+    let errors: string | null = null;
+    let resolvedUserId = "";
+
+    try {
+      // 1. Measure Artist Lookup Time
+      const artistStart = Date.now();
+      try {
+        const artist = await fetchArtistRest(slug);
+        artistLookupMs = Date.now() - artistStart;
+        if (artist && artist.userId) {
+          artistFound = true;
+          resolvedUserId = artist.userId;
+        }
+      } catch (err: any) {
+        artistLookupMs = Date.now() - artistStart;
+        errors = (errors ? errors + "; " : "") + "Artist lookup failed: " + err.message;
+      }
+
+      // 2. Measure Songs Lookup Time (if artist exists)
+      if (artistFound && resolvedUserId) {
+        const songsStart = Date.now();
+        try {
+          // Query 'songs' root collection via Firestore RunQuery REST API
+          const runQueryUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery`;
+          const runQueryBody = {
+            structuredQuery: {
+              from: [{ collectionId: "songs" }],
+              where: {
+                fieldFilter: {
+                  field: { fieldPath: "ownerId" },
+                  op: "EQUAL",
+                  value: { stringValue: resolvedUserId }
+                }
+              }
+            }
+          };
+
+          const runQueryRes = await fetch(runQueryUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(runQueryBody)
+          });
+
+          if (runQueryRes.ok) {
+            const queryResults = await runQueryRes.json();
+            if (Array.isArray(queryResults)) {
+              songsFound = queryResults.filter(q => q.document).length;
+            }
+          }
+
+          // If no songs found in root, check legacy subcollection as well
+          if (songsFound === 0) {
+            const subColUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${resolvedUserId}/musics?pageSize=100`;
+            const subColRes = await fetch(subColUrl);
+            if (subColRes.ok) {
+              const subColData = await subColRes.json();
+              const docs = subColData.documents || [];
+              songsFound = docs.length;
+            }
+          }
+        } catch (songErr: any) {
+          errors = (errors ? errors + "; " : "") + "Songs lookup failed: " + songErr.message;
+        }
+        songsLookupMs = Date.now() - songsStart;
+      }
+
+      // 3. Measure Global Share Card Lookup Time
+      const shareCardStart = Date.now();
+      try {
+        await fetchGlobalShareCardRest();
+      } catch (scErr: any) {
+        errors = (errors ? errors + "; " : "") + "Share card lookup failed: " + scErr.message;
+      }
+      shareCardLookupMs = Date.now() - shareCardStart;
+
+    } catch (criticalErr: any) {
+      errors = (errors ? errors + "; " : "") + "Critical diagnostics exception: " + criticalErr.message;
+    }
+
+    const totalMs = Date.now() - totalStart;
+
+    return res.status(200).json({
+      slug,
+      artistFound,
+      artistLookupMs,
+      songsFound,
+      songsLookupMs,
+      shareCardLookupMs,
+      totalMs,
+      redirectsDetected,
+      errors
+    });
+  });
+
+  // Diagnostic endpoint for social sharing behavior
+  app.get("/api/debug/share", async (req: any, res: any) => {
+    const slug = String(req.query.slug || "ze-quirino").trim();
+    try {
+      const result = await generateShareHtml(slug);
+      const html = result.html;
+      const oldImageFound = /unsplash|show|concert|crowd|plateia/i.test(html);
+      const ogImageCount = (html.match(/<meta[^>]*property=["']og:image["']/gi) || []).length;
+      const twitterImageCount = (html.match(/<meta[^>]*name=["']twitter:image["']/gi) || []).length;
+
+      const appBaseUrl = (process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "");
+      return res.status(200).json({
+        shareUrl: `${appBaseUrl}/s/${result.cleanSlug}`,
+        catalogUrl: `${appBaseUrl}/catalogo/${result.cleanSlug}`,
+        artistFound: result.artistFound,
+        artistName: result.artistName,
+        ogImageUrl: result.ogImageUrl,
+        finalOgImageUrl: result.finalOgImageUrl,
+        oldImageFound,
+        ogImageCount,
+        twitterImageCount
+      });
+    } catch (err: any) {
+      const appBaseUrl = (process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "");
+      return res.status(200).json({
+        shareUrl: `${appBaseUrl}/s/${slug}`,
+        catalogUrl: `${appBaseUrl}/catalogo/${slug}`,
+        artistFound: false,
+        artistName: "",
+        ogImageUrl: "",
+        finalOgImageUrl: "",
+        oldImageFound: false,
+        ogImageCount: 0,
+        twitterImageCount: 0,
+        error: err.message
+      });
+    }
+  });
+
   // API Route for Mercado Pago webhook integrations
   app.post("/api/mercadopago-webhook", async (req, res) => {
     try {
@@ -1037,6 +1277,30 @@ async function startServer() {
       await createSubscriptionHandler(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in local create-subscription wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  // API Route for Mercado Pago Pix payment creation
+  app.post("/api/mercadopago/create-pix-payment", async (req, res) => {
+    try {
+      await createPixPaymentHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in local create-pix-payment wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  // API Route for Mercado Pago Pix payment status verification and sync
+  app.get("/api/mercadopago/verify-pix-payment", async (req, res) => {
+    try {
+      await verifyPixPaymentHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in local verify-pix-payment wrapper:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: err.message || String(err) });
       }
@@ -1499,10 +1763,10 @@ async function startServer() {
     </g>
   </g>
 
-  <!-- Elegant soundrive.com.br footer section -->
+  <!-- Elegant somdrive.com.br footer section -->
   <g transform="translate(100, 545)">
     <line x1="0" y1="0" x2="350" y2="0" stroke="#2a1459" stroke-width="1.5" />
-    <text x="0" y="26" class="footer-text" font-size="13">soundrive.com.br</text>
+    <text x="0" y="26" class="footer-text" font-size="13">somdrive.com.br</text>
   </g>
 </svg>`;
 
@@ -1563,6 +1827,20 @@ async function startServer() {
         res.setHeader("Content-Type", "image/svg+xml");
         return res.status(200).send(errorSvg);
       }
+    }
+  });
+
+  // WhatsApp short/clean sharing and redirection route
+  app.get("/s/:slug", async (req, res, next) => {
+    try {
+      const slug = req.params.slug;
+      const result = await generateShareHtml(slug);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(result.html);
+    } catch (err) {
+      console.error("Error generating share html for slug:", req.params.slug, err);
+      // Fallback redirect directly to the normal catalogue screen
+      return res.redirect(`/catalogo/${req.params.slug}`);
     }
   });
 
