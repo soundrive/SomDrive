@@ -388,7 +388,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </button>
 
               <div className="text-[11px] text-slate-400 font-medium text-center">
-                Pagamento único. Para renovar, basta pagar novamente.
+                Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.
               </div>
             </div>
           </div>
@@ -447,7 +447,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </button>
 
               <div className="text-[11px] text-slate-400 font-medium text-center">
-                Pagamento único. Para renovar, basta pagar novamente.
+                Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.
               </div>
             </div>
           </div>

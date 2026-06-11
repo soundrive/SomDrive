@@ -71,6 +71,11 @@ export default async function handler(req: any, res: any) {
       payer: {
         email: email.trim().toLowerCase()
       },
+      payment_methods: {
+        excluded_payment_types: [
+          { id: "ticket" }
+        ]
+      },
       external_reference: externalReference,
       notification_url: "https://www.somdrive.com.br/api/mercadopago-webhook",
       back_urls: {
