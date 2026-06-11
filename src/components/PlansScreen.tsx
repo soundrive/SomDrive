@@ -139,7 +139,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     setCheckoutError(null);
 
     try {
-      const response = await fetch('/api/mercadopago/create-subscription', {
+      const response = await fetch('/api/mercadopago/create-checkout-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,15 +154,15 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
       const data = await response.json();
 
       if (!response.ok || !data.success || !data.checkoutUrl) {
-        throw new Error(data.error || "Não foi possível gerar a assinatura com o Mercado Pago.");
+        throw new Error(data.error || "Não foi possível gerar o link de pagamento do Mercado Pago.");
       }
 
       // Secure redirection to standard payments checkout
       window.location.href = data.checkoutUrl;
 
     } catch (err: any) {
-      console.error("Error creating Mercado Pago preapproval:", err);
-      setCheckoutError(err.message || "Oops! Ocorreu um erro ao processar a requisição de assinatura junto ao Mercado Pago. Se persistir, contate o suporte.");
+      console.error("Error creating Mercado Pago Checkout Preference:", err);
+      setCheckoutError(err.message || "Oops! Ocorreu um erro ao processar a requisição de pagamento junto ao Mercado Pago. Se persistir, contate o suporte.");
     } finally {
       setLoadingPlan(null);
     }
@@ -372,38 +372,23 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </ul>
             </div>
 
-            <div className="mt-8 space-y-4">
+            <div className="mt-8 space-y-3">
               {profile.plan === 'pro' && (
                 <div className="w-full text-center py-2 border border-orange-500/30 text-orange-400 text-xs uppercase font-mono tracking-widest bg-orange-950/40 rounded-xl font-extrabold mb-1.5 flex items-center justify-center gap-1">
                   Seu Plano Atual ⭐
                 </div>
               )}
               
-              <div className="space-y-2">
-                <span className="text-[9px] font-mono uppercase bg-slate-950 text-slate-400 px-2 py-0.5 rounded border border-slate-850/60 font-bold block w-max">Cartão de Crédito (Recorrente)</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    onClick={() => handlePlanCheckout('pro_mensal')}
-                    disabled={loadingPlan !== null}
-                    className="py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-[10px] uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold disabled:opacity-50"
-                  >
-                    {loadingPlan === 'pro' ? 'Carregando...' : 'Mensal (19,90)'}
-                  </button>
-                  <button 
-                    onClick={() => handlePlanCheckout('pro_anual')}
-                    disabled={loadingPlan !== null}
-                    className="py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-orange-400 text-[10px] uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold disabled:opacity-50"
-                  >
-                    {loadingPlan === 'pro' ? 'Carregando...' : 'Anual (199,00)'}
-                  </button>
-                </div>
-              </div>
+              <button 
+                onClick={() => handlePlanCheckout(billingCycle === 'monthly' ? 'pro_mensal' : 'pro_anual')}
+                disabled={loadingPlan !== null}
+                className="w-full py-3.5 bg-gradient-to-r from-orange-600 via-yellow-500 to-yellow-400 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loadingPlan === 'pro' ? 'Carregando...' : 'Pagar agora'}
+              </button>
 
-              <div className="space-y-2 pt-2 border-t border-slate-850/50">
-                <span className="text-[9px] font-mono uppercase bg-slate-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-950/60 font-bold block w-max">Pagar com Pix (Avulso)</span>
-                <div className="text-center py-2 bg-slate-950/40 rounded-xl border border-slate-850 text-slate-500 text-xs font-mono font-medium">
-                  Pix em breve
-                </div>
+              <div className="text-[11px] text-slate-400 font-medium text-center">
+                Pagamento único. Para renovar, basta pagar novamente.
               </div>
             </div>
           </div>
@@ -446,38 +431,23 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
               </ul>
             </div>
 
-            <div className="mt-8 space-y-4">
+            <div className="mt-8 space-y-3">
               {profile.plan === 'premium' && (
                 <div className="w-full text-center py-2 border border-orange-500/30 text-orange-400 text-xs uppercase font-mono tracking-widest bg-orange-950/40 rounded-xl font-extrabold mb-1.5 flex items-center justify-center gap-1">
                   Seu Plano Atual 🚀
                 </div>
               )}
 
-              <div className="space-y-2">
-                <span className="text-[9px] font-mono uppercase bg-slate-950 text-slate-400 px-2 py-0.5 rounded border border-slate-850/60 font-bold block w-max">Cartão de Crédito (Recorrente)</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    onClick={() => handlePlanCheckout('premium_mensal')}
-                    disabled={loadingPlan !== null}
-                    className="py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-[10px] uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold disabled:opacity-50"
-                  >
-                    {loadingPlan === 'premium' ? 'Carregando...' : 'Mensal (39,90)'}
-                  </button>
-                  <button 
-                    onClick={() => handlePlanCheckout('premium_anual')}
-                    disabled={loadingPlan !== null}
-                    className="py-2.5 bg-slate-955 hover:bg-slate-900 border border-slate-850 text-orange-400 text-[10px] uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold disabled:opacity-50"
-                  >
-                    {loadingPlan === 'premium' ? 'Carregando...' : 'Anual (399,00)'}
-                  </button>
-                </div>
-              </div>
+              <button 
+                onClick={() => handlePlanCheckout(billingCycle === 'monthly' ? 'premium_mensal' : 'premium_anual')}
+                disabled={loadingPlan !== null}
+                className="w-full py-3.5 bg-gradient-to-r from-orange-600 via-yellow-500 to-yellow-400 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loadingPlan === 'premium' ? 'Carregando...' : 'Pagar agora'}
+              </button>
 
-              <div className="space-y-2 pt-2 border-t border-slate-850/50">
-                <span className="text-[9px] font-mono uppercase bg-slate-950 text-emerald-400 px-2 py-0.5 rounded border border-emerald-950/60 font-bold block w-max">Pagar com Pix (Avulso)</span>
-                <div className="text-center py-2 bg-slate-950/40 rounded-xl border border-slate-850 text-slate-500 text-xs font-mono font-medium">
-                  Pix em breve
-                </div>
+              <div className="text-[11px] text-slate-400 font-medium text-center">
+                Pagamento único. Para renovar, basta pagar novamente.
               </div>
             </div>
           </div>
@@ -485,20 +455,33 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
         </div>
 
         {/* 3. Interactive comparison notes / help */}
-        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-850 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-sans max-w-4xl mx-auto text-slate-400 relative z-10">
+        <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-850 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-sans max-w-4xl mx-auto text-slate-400 relative z-10 w-full">
           <div className="flex items-center gap-2.5">
             <ShieldCheck className="w-6 h-6 text-orange-500 fill-orange-950/20 shrink-0" />
-            <p leading-relaxed="true">
-              <strong>Garantia SomDrive Compilada:</strong> Nossas cobranças recorrentes são processadas de forma 100% segura. Cancele ou altere sua assinatura a qualquer momento com apenas 1 clique diretamente neste painel.
+            <p className="leading-relaxed">
+              <strong>Garantia SomDrive:</strong> Seus pagamentos são processados de forma 100% segura via Mercado Pago Checkout Pro. O processamento é instantâneo e seu plano é renovado ou ativado de forma 150% automática em nossa plataforma.
             </p>
           </div>
-          <button 
-            type="button" 
-            onClick={() => alert("Central de suporte prioritário: envie um e-mail para suporte@somdrive.com.br")}
-            className="px-3.5 py-1.5 bg-slate-950 rounded-lg hover:text-white border border-slate-800 transition uppercase tracking-wider font-mono text-[10px] shrink-0 cursor-pointer text-orange-400 font-bold"
-          >
-            Falar com Suporte
-          </button>
+          <div className="flex gap-2 shrink-0">
+            <button 
+              type="button" 
+              onClick={() => {
+                setSelectedPlan('pro');
+                setIsCheckoutOpen(true);
+                setCheckoutStep('payment');
+              }}
+              className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-white rounded-lg transition uppercase tracking-wider font-mono text-[9px] cursor-pointer font-bold"
+            >
+              Simulador Sandbox (Dev)
+            </button>
+            <button 
+              type="button" 
+              onClick={() => alert("Central de suporte prioritário: envie um e-mail para suporte@somdrive.com.br")}
+              className="px-3.5 py-1.5 bg-slate-950 rounded-lg hover:text-white border border-slate-800 transition uppercase tracking-wider font-mono text-[9px] shrink-0 cursor-pointer text-orange-400 font-bold"
+            >
+              Falar com Suporte
+            </button>
+          </div>
         </div>
 
       </div>

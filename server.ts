@@ -8,6 +8,7 @@ import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
 import createSubscriptionHandler from "./api/mercadopago/create-subscription";
+import createCheckoutPaymentHandler from "./api/mercadopago/create-checkout-payment";
 import verifySubscriptionHandler from "./api/mercadopago/verify-subscription";
 import checkIntegrationsHandler from "./api/admin/check-integrations";
 import sharp from "sharp";
@@ -1275,6 +1276,18 @@ async function startServer() {
       await createSubscriptionHandler(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in local create-subscription wrapper:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message || String(err) });
+      }
+    }
+  });
+
+  // API Route for Mercado Pago Checkout Pro preference creation
+  app.post("/api/mercadopago/create-checkout-payment", async (req, res) => {
+    try {
+      await createCheckoutPaymentHandler(req, res);
+    } catch (err: any) {
+      console.error("Local Dev - Error in local create-checkout-payment wrapper:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: err.message || String(err) });
       }

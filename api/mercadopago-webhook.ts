@@ -291,18 +291,12 @@ export default async function handler(req: any, res: any) {
       plan: 'pro' | 'premium';
       billingCycle: 'monthly' | 'annual';
       musicLimit: number;
-      durationDays?: number;
-      isPix?: boolean;
+      durationDays: number;
     }> = {
-      pro_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15 },
-      premium_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50 },
-      pro_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15 },
-      premium_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50 },
-      // Pix Plans
-      pro_pix_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15, durationDays: 30, isPix: true },
-      premium_pix_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50, durationDays: 30, isPix: true },
-      pro_pix_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15, durationDays: 365, isPix: true },
-      premium_pix_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50, durationDays: 365, isPix: true }
+      pro_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15, durationDays: 30 },
+      premium_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50, durationDays: 30 },
+      pro_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15, durationDays: 365 },
+      premium_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50, durationDays: 365 }
     };
 
     // Attempt to find the specific user to update
@@ -427,36 +421,22 @@ export default async function handler(req: any, res: any) {
     let updatePayload: any = {};
 
     if (isNowActive) {
-      const isPix = PLANS_MAP[planCode]?.isPix || (externalReference && externalReference.endsWith('|pix'));
-      if (isPix) {
-        const durationDays = PLANS_MAP[planCode]?.durationDays || 30;
-        const now = new Date();
-        const expires = new Date();
-        expires.setDate(now.getDate() + durationDays);
+      const now = new Date();
+      const durationDays = PLANS_MAP[planCode]?.durationDays || 30;
+      const expires = new Date();
+      expires.setDate(now.getDate() + durationDays);
 
-        updatePayload = {
-          plan: finalPlan,
-          billingCycle: billingCycle,
-          musicLimit: musicLimit,
-          subscriptionStatus: "active",
-          paymentMethod: "pix",
-          planActivatedAt: now,
-          planExpiresAt: expires,
-          mercadoPagoPaymentId: mercadoPagoPaymentId || resourceId,
-          updatedAt: FieldValue.serverTimestamp()
-        };
-      } else {
-        updatePayload = {
-          plan: finalPlan,
-          billingCycle: billingCycle,
-          musicLimit: musicLimit,
-          subscriptionStatus: "active",
-          mercadoPagoSubscriptionId: mercadoPagoSubscriptionId || resourceId,
-          mercadoPagoPlanCode: planCode,
-          planActivatedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        };
-      }
+      updatePayload = {
+        plan: finalPlan,
+        billingCycle: billingCycle,
+        musicLimit: musicLimit,
+        subscriptionStatus: "active",
+        paymentMethod: "mercado_pago_checkout_pro",
+        planActivatedAt: FieldValue.serverTimestamp(),
+        planExpiresAt: expires,
+        mercadoPagoPaymentId: mercadoPagoPaymentId || resourceId,
+        updatedAt: FieldValue.serverTimestamp()
+      };
     } else {
       updatePayload = {
         plan: "free",
