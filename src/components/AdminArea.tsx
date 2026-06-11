@@ -266,27 +266,7 @@ export default function AdminArea({
   };
 
   const handleVerifySubscription = async (id: string) => {
-    setVerifyingId(id);
-    try {
-      const response = await fetch('/api/mercadopago/verify-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id })
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Falha ao verificar status.");
-      }
-      triggerNotification(data.message || "Status sincronizado atualizado com sucesso!");
-      loadSubscriptions();
-    } catch (err: any) {
-      console.error("[Verify Action Error]:", err);
-      triggerNotification("Erro ao reconsultar Mercado Pago: " + (err.message || String(err)), true);
-    } finally {
-      setVerifyingId(null);
-    }
+    triggerNotification("Este pagamento utiliza Checkout Pro de pagamento único. A sincronização e o vencimento são controlados automaticamente por Webhooks.");
   };
 
   const handleSaveSubEdit = async (e: React.FormEvent) => {
