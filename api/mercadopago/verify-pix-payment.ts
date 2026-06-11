@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getApps, initializeApp, getApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 dotenv.config();
@@ -7,7 +7,31 @@ dotenv.config();
 // Firestore reference initializer helper (compatible with server.ts setup)
 function getDbRef() {
   const dbId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
-  return getFirestore();
+  let app;
+  if (!getApps().length) {
+    const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (serviceAccountVar) {
+      try {
+        const serviceAccount = JSON.parse(serviceAccountVar);
+        app = initializeApp({
+          credential: cert(serviceAccount),
+          projectId: "gen-lang-client-0946896754"
+        });
+      } catch (e) {
+        console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
+        app = initializeApp({
+          projectId: "gen-lang-client-0946896754"
+        });
+      }
+    } else {
+      app = initializeApp({
+        projectId: "gen-lang-client-0946896754"
+      });
+    }
+  } else {
+    app = getApp();
+  }
+  return getFirestore(app, dbId);
 }
 
 export default async function handler(req: any, res: any) {
