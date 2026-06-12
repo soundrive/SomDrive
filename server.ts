@@ -974,16 +974,15 @@ async function startServer() {
     try {
       const shareCard = await fetchGlobalShareCardRest();
       if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
-        const version = shareCard.ogImageVersion || String(Date.now());
-        // Proxy through our public/reliable URL on our domain to avoid R2 .dev bot challenges
-        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
+        // Direct public R2 URL from settings/shareCard.ogImageUrl as required
+        ogImageToUse = shareCard.ogImageUrl.trim();
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for artist profile ogg tag:", fErr);
     }
 
     if (!ogImageToUse) {
-      ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=default`;
+      ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
     }
 
     const ogUrlToUse = `${appBaseUrl}/s/${slugOrId}`;
@@ -1079,16 +1078,15 @@ async function startServer() {
     try {
       const shareCard = await fetchGlobalShareCardRest();
       if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
-        const version = shareCard.ogImageVersion || String(Date.now());
-        // Proxy through our public/reliable URL on our domain to avoid R2 .dev bot challenges
-        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
+        // Direct public R2 URL from settings/shareCard.ogImageUrl as required
+        ogImageToUse = shareCard.ogImageUrl.trim();
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for share redirect:", fErr);
     }
 
     if (!ogImageToUse) {
-      ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=default`;
+      ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
     }
 
     const htmlContents = `<!DOCTYPE html>
@@ -2036,7 +2034,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }

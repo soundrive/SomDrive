@@ -378,6 +378,23 @@ export const dbService = {
     };
     
     const saved: Artist = { ...existing, ...updated, updatedAt: new Date().toISOString() };
+    
+    if (updated.name) {
+      const slugifyStr = (text: string) => {
+        return text
+          .toString()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/[\s_]+/g, '-')
+          .replace(/-+/g, '-');
+      };
+      saved.artistName = updated.name;
+      saved.slug = slugifyStr(updated.name);
+    }
+
     artists[id] = saved;
     localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
     
