@@ -890,8 +890,8 @@ async function startServer() {
             version = String(parsedTime);
           }
         }
-        const separator = shareCard.ogImageUrl.includes("?") ? "&" : "?";
-        ogImageToUse = `${shareCard.ogImageUrl}${separator}v=${version}`;
+        // Proxy through our public/reliable URL on our domain to avoid R2 .dev bot challenges
+        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for home:", fErr);
@@ -975,8 +975,8 @@ async function startServer() {
       const shareCard = await fetchGlobalShareCardRest();
       if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
         const version = shareCard.ogImageVersion || String(Date.now());
-        const separator = shareCard.ogImageUrl.includes("?") ? "&" : "?";
-        ogImageToUse = `${shareCard.ogImageUrl}${separator}v=${version}`;
+        // Proxy through our public/reliable URL on our domain to avoid R2 .dev bot challenges
+        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for artist profile ogg tag:", fErr);
@@ -1003,6 +1003,11 @@ async function startServer() {
         .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
         .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
 
+      let ogImageSecureToUse = ogImageToUse;
+      if (ogImageSecureToUse.startsWith("http://")) {
+        ogImageSecureToUse = ogImageSecureToUse.replace("http://", "https://");
+      }
+
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
   <title>Catálogo musical de ${formattedName} | SomDrive</title>
@@ -1011,6 +1016,8 @@ async function startServer() {
   <meta property="og:title" content="SomDrive - Catálogo Musical" />
   <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta property="og:image" content="${ogImageToUse}" />
+  <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${ogUrlToUse}" />
@@ -1073,8 +1080,8 @@ async function startServer() {
       const shareCard = await fetchGlobalShareCardRest();
       if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
         const version = shareCard.ogImageVersion || String(Date.now());
-        const separator = shareCard.ogImageUrl.includes("?") ? "&" : "?";
-        ogImageToUse = `${shareCard.ogImageUrl}${separator}v=${version}`;
+        // Proxy through our public/reliable URL on our domain to avoid R2 .dev bot challenges
+        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for share redirect:", fErr);
@@ -2000,23 +2007,8 @@ async function startServer() {
     }
   });
 
-  // WhatsApp short/clean sharing and redirection route
-  app.get("/s/:slug", async (req, res, next) => {
-    try {
-      const slug = req.params.slug;
-      const result = await generateShareHtml(slug, req);
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
-      return res.send(result.html);
-    } catch (err) {
-      console.error("Error generating share html for slug:", req.params.slug, err);
-      // Fallback redirect directly to the normal catalogue screen
-      return res.redirect(`/catalogo/${req.params.slug}`);
-    }
-  });
-
-  // Intercept artist public profile requests to dynamically inject Open Graph sharing headers
-  app.get(["/artista/:userId", "/catalogo/:userId"], async (req, res, next) => {
+  // Intercept artist public profile requests to dynamically inject Open Graph sharing headers (including the official clean share URL /s/:userId)
+  app.get(["/artista/:userId", "/catalogo/:userId", "/s/:userId"], async (req, res, next) => {
     try {
       const userId = req.params.userId;
       const result = await generateArtistHtml(userId, req);
