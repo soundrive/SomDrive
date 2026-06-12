@@ -1669,8 +1669,14 @@ export const dbService = {
   async deleteShareCardSettings(updatedBy: string): Promise<void> {
     try {
       const docRef = doc(db, 'settings', 'shareCard');
-      await deleteDoc(docRef).catch(err => {
-        handleFirestoreError(err, OperationType.DELETE, 'settings/shareCard');
+      const dataToSave = {
+        ogImageUrl: "",
+        ogImageVersion: String(Date.now()),
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/shareCard');
         throw err;
       });
     } catch (e) {
@@ -1684,6 +1690,7 @@ export const dbService = {
       const docRef = doc(db, 'settings', 'shareCard');
       const dataToSave = {
         ogImageUrl,
+        ogImageVersion: String(Date.now()),
         updatedAt: new Date().toISOString(),
         updatedBy: updatedBy
       };

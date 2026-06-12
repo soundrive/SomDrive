@@ -771,10 +771,12 @@ async function startServer() {
 
       // 8. Salvar URL no Firestore em settings/shareCard
       let dbWriteSucceeded = false;
+      const currentVersion = String(Date.now());
       try {
         await db.collection("settings").doc("shareCard").set({
           ogImageUrl: publicImageUrl,
-          updatedAt: FieldValue.serverTimestamp(),
+          ogImageVersion: currentVersion,
+          updatedAt: new Date().toISOString(),
           updatedBy: userId
         }, { merge: true });
         dbWriteSucceeded = true;
@@ -785,13 +787,15 @@ async function startServer() {
       console.log("Global Share Card Upload - Concluido com sucesso:", {
         storagePath,
         publicImageUrl,
-        dbWriteSucceeded
+        dbWriteSucceeded,
+        currentVersion
       });
 
       return res.status(200).json({
         storagePath,
         publicImageUrl,
-        dbWriteSucceeded
+        dbWriteSucceeded,
+        ogImageVersion: currentVersion
       });
 
     } catch (e: any) {
@@ -803,7 +807,7 @@ async function startServer() {
   });
 
   // REST API helper to fetch the global share card settings, bypassing any missing server-side service-account privileges on the named database
-  const fetchGlobalShareCardRest = async (): Promise<{ ogImageUrl: string; updatedAt: string } | null> => {
+  const fetchGlobalShareCardRest = async (): Promise<{ ogImageUrl: string; ogImageVersion: string; updatedAt: string } | null> => {
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     try {
@@ -812,14 +816,14 @@ async function startServer() {
       if (res.ok) {
         const doc = await res.json();
         const f = doc.fields || {};
-        const ogImageUrl = f.ogImageUrl?.stringValue;
-        if (ogImageUrl) {
-          const updatedAtStr = f.updatedAt?.timestampValue || doc.updateTime || new Date().toISOString();
-          return {
-            ogImageUrl,
-            updatedAt: updatedAtStr
-          };
-        }
+        const ogImageUrl = f.ogImageUrl?.stringValue || "";
+        const ogImageVersion = f.ogImageVersion?.stringValue || "";
+        const updatedAtStr = f.updatedAt?.stringValue || f.updatedAt?.timestampValue || doc.updateTime || new Date().toISOString();
+        return {
+          ogImageUrl,
+          ogImageVersion,
+          updatedAt: updatedAtStr
+        };
       } else {
         console.warn("REST global share card fetch status not OK:", res.status);
       }
@@ -832,6 +836,22 @@ async function startServer() {
   // Proxy endpoint to load global sharing image across any browser, CORS free and crawler-friendly
   const serveGlobalShareCard = async (req: any, res: any) => {
     try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
+        console.log("Serving custom global share card proxy from:", shareCard.ogImageUrl);
+        const imgRes = await fetch(shareCard.ogImageUrl);
+        if (imgRes.ok) {
+          const arrayBuffer = await imgRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const contentType = imgRes.headers.get("Content-Type") || "image/png";
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour browser cache
+          return res.send(buffer);
+        } else {
+          console.warn("Failed to proxy direct image, status:", imgRes.status);
+        }
+      }
+
       const { buffer, contentType } = await generateArtistPngBuffer("default");
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour browser cache
@@ -841,7 +861,7 @@ async function startServer() {
       // Fallback: redirect dynamically to make it load even in case of fetch errors
       try {
         const shareCard = await fetchGlobalShareCardRest();
-        if (shareCard && shareCard.ogImageUrl) {
+        if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
           return res.redirect(shareCard.ogImageUrl);
         }
       } catch (e) {}
@@ -857,22 +877,21 @@ async function startServer() {
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
-    let ogImageToUse = `${appBaseUrl}/favicon.svg`;
+    let ogImageToUse = `${appBaseUrl}/api/global-share-card.png`;
     let baseImageUrl = "";
     try {
       const shareCard = await fetchGlobalShareCardRest();
       if (shareCard && shareCard.ogImageUrl) {
         baseImageUrl = shareCard.ogImageUrl;
-        let version = "1.0.0";
+        let version = String(Date.now());
         if (shareCard.updatedAt) {
           const parsedTime = new Date(shareCard.updatedAt).getTime();
           if (!isNaN(parsedTime)) {
             version = String(parsedTime);
-          } else {
-            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
           }
         }
-        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
+        const separator = shareCard.ogImageUrl.includes("?") ? "&" : "?";
+        ogImageToUse = `${shareCard.ogImageUrl}${separator}v=${version}`;
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for home:", fErr);
@@ -896,19 +915,18 @@ async function startServer() {
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Home Metadata -->
   <title>SomDrive | Divulgue seu Repertório Musical</title>
-  <meta name="description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais e compartilharem repertórios com segurança." />
-  <meta property="og:title" content="SomDrive | Divulgue seu Repertório Musical" />
-  <meta property="og:description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais e compartilharem repertórios com segurança." />
+  <meta name="description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="SomDrive - Catálogo Musical" />
+  <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta property="og:image" content="${ogImageToUse}" />
-  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${appBaseUrl}/" />
-  <meta property="og:type" content="website" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SomDrive | Divulgue seu Repertório Musical" />
-  <meta name="twitter:description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais e compartilharem repertórios com segurança." />
+  <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
+  <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
 `;
 
@@ -951,16 +969,24 @@ async function startServer() {
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
-    // Generate specific customized executive sharing card URL as OG image with dynamic cache bust
-    let version = "1.0.0";
-    if (customCardImageUrl) {
-      const cleanImgName = customCardImageUrl.split("/").pop() || "custom";
-      version = encodeURIComponent(cleanImgName);
+    // Priority: 1. Global site share card configured by admin. 2. Fallback standard SomDrive image.
+    let ogImageToUse = "";
+    try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
+        const version = shareCard.ogImageVersion || String(Date.now());
+        const separator = shareCard.ogImageUrl.includes("?") ? "&" : "?";
+        ogImageToUse = `${shareCard.ogImageUrl}${separator}v=${version}`;
+      }
+    } catch (fErr) {
+      console.warn("Could not fetch global share card settings for artist profile ogg tag:", fErr);
     }
-    const ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}?v=${version}`;
-    let baseImageUrl = customCardImageUrl || "";
 
-    let ogUrlToUse = `${appBaseUrl}/catalogo/${cleanSlug}`;
+    if (!ogImageToUse) {
+      ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=default`;
+    }
+
+    const ogUrlToUse = `${appBaseUrl}/catalogo/${cleanSlug}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
@@ -980,19 +1006,18 @@ async function startServer() {
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
   <title>Catálogo musical de ${formattedName} | SomDrive</title>
-  <meta name="description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
-  <meta property="og:title" content="Catálogo musical de ${formattedName} | SomDrive" />
-  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta name="description" content="Ouça músicas e composições compartilhadas pelo artista." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="SomDrive - Catálogo Musical" />
+  <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta property="og:image" content="${ogImageToUse}" />
-  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${ogUrlToUse}" />
-  <meta property="og:type" content="website" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | SomDrive" />
-  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
+  <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
 `;
 
@@ -1006,7 +1031,7 @@ async function startServer() {
       return {
         html: htmlContents,
         artistName: formattedName,
-        ogImageUrl: baseImageUrl,
+        ogImageUrl: ogImageToUse,
         finalOgImageUrl: ogImageToUse,
         ogUrl: ogUrlToUse,
         artistFound: true
@@ -1041,32 +1066,39 @@ async function startServer() {
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
-    // Generate specific customized executive sharing card URL as OG image with dynamic cache bust
-    let version = "1.0.0";
-    if (customCardImageUrl) {
-      const cleanImgName = customCardImageUrl.split("/").pop() || "custom";
-      version = encodeURIComponent(cleanImgName);
+    // Priority: 1. Global site share card configured by admin. 2. Fallback standard SomDrive image.
+    let ogImageToUse = "";
+    try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
+        const version = shareCard.ogImageVersion || String(Date.now());
+        const separator = shareCard.ogImageUrl.includes("?") ? "&" : "?";
+        ogImageToUse = `${shareCard.ogImageUrl}${separator}v=${version}`;
+      }
+    } catch (fErr) {
+      console.warn("Could not fetch global share card settings for share redirect:", fErr);
     }
-    const ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}?v=${version}`;
-    let baseImageUrl = customCardImageUrl || "";
+
+    if (!ogImageToUse) {
+      ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=default`;
+    }
 
     const htmlContents = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <title>Catálogo musical de ${formattedName} | SomDrive</title>
-  <meta property="og:title" content="Catálogo musical de ${formattedName} | SomDrive" />
-  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="SomDrive - Catálogo Musical" />
+  <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta property="og:image" content="${ogImageToUse}" />
-  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${appBaseUrl}/s/${cleanSlug}" />
-  <meta property="og:type" content="website" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | SomDrive" />
-  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
+  <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <script>
     window.location.replace("/catalogo/${cleanSlug}");
@@ -1083,7 +1115,7 @@ async function startServer() {
     return {
       html: htmlContents,
       artistName: formattedName,
-      ogImageUrl: baseImageUrl,
+      ogImageUrl: ogImageToUse,
       finalOgImageUrl: ogImageToUse,
       cleanSlug,
       artistFound: true
@@ -1253,6 +1285,90 @@ async function startServer() {
 
   // Diagnostic endpoint for social sharing behavior
   app.get("/api/debug/share", async (req: any, res: any) => {
+    const targetUrl = req.query.url;
+
+    if (targetUrl) {
+      try {
+        // 1. Fetch the target page HTML
+        const response = await fetch(targetUrl);
+        if (!response.ok) {
+          return res.status(200).json({
+            url: targetUrl,
+            success: false,
+            httpStatus: response.status,
+            error: `Falha ao acessar a URL. Status: ${response.status}`,
+          });
+        }
+
+        const html = await response.text();
+
+        // 2. Extract meta tags using regex
+        const getMeta = (propertyOrName: string) => {
+          const regex = new RegExp(
+            `<meta[^>]*(?:property|name)=["']${propertyOrName}["'][^>]*content=["']([^"']*)["']`,
+            "i"
+          );
+          const match = html.match(regex);
+          if (match) return match[1];
+
+          // Alternative order
+          const revRegex = new RegExp(
+            `<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name)=["']${propertyOrName}["']`,
+            "i"
+          );
+          const revMatch = html.match(revRegex);
+          return revMatch ? revMatch[1] : null;
+        };
+
+        const title = getMeta("og:title") || getMeta("twitter:title");
+        const description = getMeta("og:description") || getMeta("twitter:description");
+        const image = getMeta("og:image") || getMeta("twitter:image");
+
+        let imageAccessible = false;
+        let imageSize = null;
+        let imageHttpStatus = null;
+
+        if (image) {
+          try {
+            let resolvedImageUrl = image;
+            if (image.startsWith("/")) {
+              const parsedTarget = new URL(targetUrl);
+              resolvedImageUrl = `${parsedTarget.origin}${image}`;
+            }
+
+            const imgResponse = await fetch(resolvedImageUrl, { method: "GET" });
+            imageHttpStatus = imgResponse.status;
+            imageAccessible = imgResponse.ok;
+            if (imgResponse.ok) {
+              const contentLength = imgResponse.headers.get("content-length");
+              imageSize = contentLength ? parseInt(contentLength) : null;
+              if (!imageSize) {
+                const buffer = await imgResponse.arrayBuffer();
+                imageSize = buffer.byteLength;
+              }
+            }
+          } catch (imgErr: any) {
+            console.warn("Error debugging image accessibility:", imgErr);
+          }
+        }
+
+        return res.status(200).json({
+          "og:title encontrado": title || "Não encontrado",
+          "og:description encontrado": description || "Não encontrado",
+          "og:image encontrado": image || "Não encontrado",
+          "se a imagem está acessível publicamente": imageAccessible,
+          "status HTTP da imagem": imageHttpStatus,
+          "tamanho da imagem": imageSize !== null ? `${(imageSize / 1024).toFixed(2)} KB (${imageSize} bytes)` : "Desconhecido",
+          "URL final usada": image || "Não encontrado"
+        });
+      } catch (err: any) {
+        return res.status(500).json({
+          error: "Erro ao debugar compartilhamento por URL",
+          details: err.message || String(err)
+        });
+      }
+    }
+
     const slug = String(req.query.slug || "ze-quirino").trim();
     try {
       const result = await generateShareHtml(slug, req);
@@ -1634,14 +1750,15 @@ async function startServer() {
     ]]></style>
     
     <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#05070a" />
-      <stop offset="60%" stop-color="#0b1016" />
-      <stop offset="100%" stop-color="#111821" />
+      <stop offset="0%" stop-color="#07111F" />
+      <stop offset="60%" stop-color="#0B1628" />
+      <stop offset="100%" stop-color="#101C2F" />
     </linearGradient>
     
     <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffd350" />
-      <stop offset="100%" stop-color="#f7c948" />
+      <stop offset="0%" stop-color="#79D32E" />
+      <stop offset="45%" stop-color="#1DB954" />
+      <stop offset="100%" stop-color="#118F35" />
     </linearGradient>
 
     <linearGradient id="button-grad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -1655,15 +1772,15 @@ async function startServer() {
 
     <!-- Sleeve cover gradient (SomDrive Premium Charcoal/Slate) -->
     <linearGradient id="sleeve-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#111821" />
-      <stop offset="50%" stop-color="#0b1016" />
-      <stop offset="100%" stop-color="#05070a" />
+      <stop offset="0%" stop-color="#101C2F" />
+      <stop offset="50%" stop-color="#0B1628" />
+      <stop offset="100%" stop-color="#07111F" />
     </linearGradient>
 
     <!-- Inner vinyl label: elegant dark forest green/black -->
     <linearGradient id="vinyl-label-grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0fa958" />
-      <stop offset="100%" stop-color="#05070a" />
+      <stop offset="100%" stop-color="#07111F" />
     </linearGradient>
     
     <linearGradient id="vinyl-gold-shine" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1689,26 +1806,26 @@ async function startServer() {
   <!-- Atmospheric neon / green ambient glows -->
   <circle cx="200" cy="150" r="450" fill="#1ed760" opacity="0.06" filter="blur(70px)" />
   <circle cx="1000" cy="315" r="500" fill="#00e676" opacity="0.08" filter="blur(90px)" />
-  <circle cx="600" cy="500" r="300" fill="#ffd350" opacity="0.03" filter="blur(60px)" />
+  <circle cx="600" cy="500" r="300" fill="#79D32E" opacity="0.03" filter="blur(60px)" />
 
   <!-- Fully customized Vinyl & Sleeve combination on right side -->
   <!-- 1. Vinyl Body (Tucked behind/peek out) -->
   <g filter="url(#shadow)">
     <!-- Vinyl record centered at cx=930, cy=315, radius r=192 -->
-    <circle cx="930" cy="315" r="192" fill="#05070a" stroke="#1D2A35" stroke-width="2.5" />
+    <circle cx="930" cy="315" r="192" fill="#07111F" stroke="#22344A" stroke-width="2.5" />
     
     <!-- Fine concentric grooves -->
-    <circle cx="930" cy="315" r="182" stroke="#1D2A35" stroke-width="0.75" fill="none" opacity="0.75" />
-    <circle cx="930" cy="315" r="172" stroke="#05070a" stroke-width="1.25" fill="none" opacity="0.5" />
-    <circle cx="930" cy="315" r="162" stroke="#1D2A35" stroke-width="0.5" fill="none" opacity="0.7" />
-    <circle cx="930" cy="315" r="152" stroke="#1D2A35" stroke-width="1" fill="none" opacity="0.45" />
-    <circle cx="930" cy="315" r="142" stroke="#1D2A35" stroke-width="0.5" fill="none" opacity="0.6" />
-    <circle cx="930" cy="315" r="132" stroke="#05070a" stroke-width="1.25" fill="none" opacity="0.4" />
-    <circle cx="930" cy="315" r="122" stroke="#1D2A35" stroke-width="0.8" fill="none" opacity="0.6" />
-    <circle cx="930" cy="315" r="112" stroke="#1D2A35" stroke-width="1.5" fill="none" opacity="0.4" />
-    <circle cx="930" cy="315" r="102" stroke="#05070a" stroke-width="0.5" fill="none" opacity="0.5" />
-    <circle cx="930" cy="315" r="92" stroke="#05070a" stroke-width="0.75" fill="none" opacity="0.5" />
-    <circle cx="930" cy="315" r="82" stroke="#1D2A35" stroke-width="1" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="182" stroke="#22344A" stroke-width="0.75" fill="none" opacity="0.75" />
+    <circle cx="930" cy="315" r="172" stroke="#07111F" stroke-width="1.25" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="162" stroke="#22344A" stroke-width="0.5" fill="none" opacity="0.7" />
+    <circle cx="930" cy="315" r="152" stroke="#22344A" stroke-width="1" fill="none" opacity="0.45" />
+    <circle cx="930" cy="315" r="142" stroke="#22344A" stroke-width="0.5" fill="none" opacity="0.6" />
+    <circle cx="930" cy="315" r="132" stroke="#07111F" stroke-width="1.25" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="122" stroke="#22344A" stroke-width="0.8" fill="none" opacity="0.6" />
+    <circle cx="930" cy="315" r="112" stroke="#22344A" stroke-width="1.5" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="102" stroke="#07111F" stroke-width="0.5" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="92" stroke="#07111F" stroke-width="0.75" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="82" stroke="#22344A" stroke-width="1" fill="none" opacity="0.4" />
 
     <!-- Specular light reflections simulating model shine -->
     <path d="M 930 315 L 1115 440 A 192 192 0 0 0 1122 315 Z" fill="url(#vinyl-gold-shine)" opacity="0.35" />
@@ -1779,9 +1896,9 @@ async function startServer() {
     </g>
 
     <g transform="translate(195, 0)">
-      <rect width="125" height="30" rx="15" fill="#ffd350" fill-opacity="0.12" stroke="#ffd350" stroke-width="1.2" />
-      <path d="M 12 14 L 15 17 L 21 11" stroke="#ffd350" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
-      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#ffd350" letter-spacing="1">VERIFICADO</text>
+      <rect width="125" height="30" rx="15" fill="#79D32E" fill-opacity="0.12" stroke="#79D32E" stroke-width="1.2" />
+      <path d="M 12 14 L 15 17 L 21 11" stroke="#79D32E" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
+      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#79D32E" letter-spacing="1">VERIFICADO</text>
     </g>
 
     <!-- Main Title: Ouça meu repertório -->

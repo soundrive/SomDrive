@@ -19,27 +19,38 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   customLogoUrl = '',
   showLogo = true
 }) => {
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   if (!showLogo) return null;
 
-  // Size mappings
+  // Responsive size mappings - smaller on mobile, standard on PC
   const sizeMap = {
     sm: {
-      icon: 'w-6 h-6',
-      text: 'text-base',
-      dWidth: 'w-4 h-4.5',
-      imgMaxHeight: 'max-h-6 sm:max-h-7',
+      icon: 'w-5 h-5 sm:w-6 sm:h-6',
+      text: 'text-sm sm:text-base',
+      dWidth: 'w-3 h-3.5 sm:w-4 sm:h-4.5',
+      imgMaxHeight: 'max-h-5 sm:max-h-7',
     },
     md: {
-      icon: 'w-10 h-10',
-      text: 'text-xl sm:text-2xl',
-      dWidth: 'w-5.5 h-6',
-      imgMaxHeight: 'max-h-10 sm:max-h-11',
+      icon: 'w-7.5 h-7.5 sm:w-10 sm:h-10',
+      text: 'text-base sm:text-2xl',
+      dWidth: 'w-4 h-4.5 sm:w-5.5 sm:h-6',
+      imgMaxHeight: 'max-h-7.5 sm:max-h-11',
     },
     lg: {
-      icon: 'w-14 h-14',
-      text: 'text-3xl sm:text-4xl',
-      dWidth: 'w-8 h-8.5',
-      imgMaxHeight: 'max-h-14 sm:max-h-16',
+      icon: 'w-9 h-9 sm:w-14 sm:h-14',
+      text: 'text-xl sm:text-4xl',
+      dWidth: 'w-5 h-5.5 sm:w-8 sm:h-8.5',
+      imgMaxHeight: 'max-h-9 sm:max-h-16',
     }
   };
 
@@ -48,9 +59,16 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   if (customLogoUrl && customLogoUrl.trim() !== '') {
     // Elegant base heights for custom logo, giving a robust and well-proportioned visual
     const baseHeight = size === 'sm' ? 38 : (size === 'md' ? 56 : 76);
-    const computedHeight = scale ? Math.round(baseHeight * scale) : baseHeight;
+    
+    // Scale down height on mobile ("modo inteligente se é um celular a logo tem que ser menos"):
+    const mobileReduction = size === 'lg' ? 0.6 : (size === 'md' ? 0.72 : 0.85);
+    const activeBaseHeight = isMobile ? Math.round(baseHeight * mobileReduction) : baseHeight;
+    const computedHeight = scale ? Math.round(activeBaseHeight * scale) : activeBaseHeight;
+
     // Scale maximum width ceilings dynamically as well so landscape/wide logos are never cut off
-    const computedMaxW = scale ? Math.round(480 * scale) : 480;
+    const activeMaxW = isMobile ? Math.round(480 * 0.75) : 480;
+    const computedMaxW = scale ? Math.round(activeMaxW * scale) : activeMaxW;
+
     return (
       <div 
         className={`flex items-center ${className}`}
@@ -71,19 +89,28 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
     );
   }
 
+  // Apply a smart responsive scale modification for non-custom logo
+  const activeScale = scale 
+    ? (isMobile ? scale * 0.75 : scale) 
+    : (isMobile ? 0.8 : undefined);
+
+  const styleObj = activeScale 
+    ? { transform: `scale(${activeScale})`, transformOrigin: 'left center', display: 'inline-flex' } 
+    : undefined;
+
   return (
     <div 
       className={`flex items-center gap-2.5 ${className}`}
-      style={scale ? { transform: `scale(${scale})`, transformOrigin: 'left center', display: 'inline-flex' } : undefined}
+      style={styleObj}
     >
       {/* Brand Golden Logo Icon */}
       <svg className={`${currentSize.icon} select-none shrink-0 rounded-xl overflow-hidden`} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           {/* Seamless premium green gradient matching the new logo */}
           <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#54d92e" />
-            <stop offset="50%" stopColor="#12c149" />
-            <stop offset="100%" stopColor="#049a3c" />
+            <stop offset="0%" stopColor="#79D32E" />
+            <stop offset="45%" stopColor="#1DB954" />
+            <stop offset="100%" stopColor="#118F35" />
           </linearGradient>
 
           {/* Glowing bright ambient reflection filter */}

@@ -107,6 +107,7 @@ export interface PaymentSettings {
 
 export interface ShareCardSettings {
   ogImageUrl: string;
+  ogImageVersion: string;
   updatedAt?: any;
   updatedBy?: string;
 }
