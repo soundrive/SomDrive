@@ -986,7 +986,7 @@ async function startServer() {
       ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=default`;
     }
 
-    const ogUrlToUse = `${appBaseUrl}/catalogo/${cleanSlug}`;
+    const ogUrlToUse = `${appBaseUrl}${req?.path || ('/catalogo/' + slugOrId)}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
@@ -1044,6 +1044,7 @@ async function startServer() {
 
   // Helper to dynamically build/inject the Open Graph metadata for the clean WhatsApp short share route
   const generateShareHtml = async (slugOrId: string, req?: any) => {
+    const originalSlug = slugOrId;
     const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
     const formattedName = name.trim();
 
@@ -1059,7 +1060,7 @@ async function startServer() {
         .replace(/-+/g, '-');
     };
 
-    const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
+    const cleanSlug = originalSlug;
 
     const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host || process.env.APP_BASE_URL || "www.somdrive.com.br";
     const protocol = req?.headers?.['x-forwarded-proto'] || "https";
@@ -1094,20 +1095,20 @@ async function startServer() {
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${appBaseUrl}/s/${cleanSlug}" />
+  <meta property="og:url" content="${appBaseUrl}/s/${originalSlug}" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
   <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <script>
-    window.location.replace("/catalogo/${cleanSlug}");
+    window.location.replace("/catalogo/${originalSlug}");
   </script>
 </head>
 <body style="background: #09090b; color: #a1a1aa; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
   <div style="text-align: center;">
     <p>Redirecionando para o catálogo de <strong>${formattedName}</strong>...</p>
-    <p style="font-size: 13px; color: #52525b;">Se não for redirecionado, <a href="/catalogo/${cleanSlug}" style="color: #10b981; text-decoration: none; font-weight: bold;">clique aqui</a>.</p>
+    <p style="font-size: 13px; color: #52525b;">Se não for redirecionado, <a href="/catalogo/${originalSlug}" style="color: #10b981; text-decoration: none; font-weight: bold;">clique aqui</a>.</p>
   </div>
 </body>
 </html>`;
@@ -1991,6 +1992,7 @@ async function startServer() {
     try {
       const html = await generateHomeHtml(req);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
       return res.status(200).send(html);
     } catch (err) {
       console.warn("Error injecting custom OG headers on home page, falling back:", err);
@@ -2004,6 +2006,7 @@ async function startServer() {
       const slug = req.params.slug;
       const result = await generateShareHtml(slug, req);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
       return res.send(result.html);
     } catch (err) {
       console.error("Error generating share html for slug:", req.params.slug, err);
@@ -2017,6 +2020,8 @@ async function startServer() {
     try {
       const userId = req.params.userId;
       const result = await generateArtistHtml(userId, req);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
       return res.send(result.html);
     } catch (criticalErr: any) {
       console.error("Critical error inside HTML metadata tag injector:", criticalErr);
