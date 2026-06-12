@@ -110,3 +110,11 @@ export interface ShareCardSettings {
   updatedAt?: any;
   updatedBy?: string;
 }
+
+export interface AppearanceSettings {
+  logoScale: number;
+  showLogo?: boolean;
+  customLogoUrl?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}

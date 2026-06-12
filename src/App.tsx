@@ -25,6 +25,28 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackList, setTrackList] = useState<Track[]>([]);
   const [isCarMode, setCarMode] = useState(false);
+  const [logoScale, setLogoScale] = useState<number>(1.0);
+  const [showLogo, setShowLogo] = useState<boolean>(true);
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>('');
+
+  // Load general appearance configurations on initialization
+  useEffect(() => {
+    dbService.getAppearanceSettings().then((appearance) => {
+      if (appearance) {
+        if (typeof appearance.logoScale === 'number') {
+          setLogoScale(appearance.logoScale);
+        }
+        if (typeof appearance.showLogo === 'boolean') {
+          setShowLogo(appearance.showLogo);
+        }
+        if (typeof appearance.customLogoUrl === 'string') {
+          setCustomLogoUrl(appearance.customLogoUrl);
+        }
+      }
+    }).catch(err => {
+      console.error("Error fetching appearance settings on mount", err);
+    });
+  }, []);
 
   // Handle routing deep link and session boot
   useEffect(() => {
@@ -267,6 +289,9 @@ export default function App() {
           onNavigate={handleNavigate} 
           currentUser={currentUser} 
           onLogout={handleLogout} 
+          logoScale={logoScale}
+          showLogo={showLogo}
+          customLogoUrl={customLogoUrl}
         />
       )}
 
@@ -310,6 +335,9 @@ export default function App() {
           onPlayPause={handlePlayPause}
           setCarMode={setCarMode}
           autoCarMode={routePayload?.autoCar || false}
+          logoScale={logoScale}
+          showLogo={showLogo}
+          customLogoUrl={customLogoUrl}
         />
       )}
 
@@ -318,6 +346,12 @@ export default function App() {
           currentUser={currentUser}
           onLogout={handleLogout}
           onNavigate={handleNavigate}
+          logoScale={logoScale}
+          onLogoScaleChange={setLogoScale}
+          showLogo={showLogo}
+          onShowLogoChange={setShowLogo}
+          customLogoUrl={customLogoUrl}
+          onCustomLogoUrlChange={setCustomLogoUrl}
         />
       )}
 
@@ -364,6 +398,7 @@ export default function App() {
         isCarMode={isCarMode}
         setCarMode={setCarMode}
         onNavigate={handleNavigate}
+        onSelectTrack={(track) => handleSelectTrack(track, trackList)}
       />
 
     </div>

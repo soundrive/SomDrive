@@ -28,6 +28,7 @@ import {
 import { Artist, ShareCardSettings } from '../types';
 import { dbService } from '../lib/db';
 import { motion } from 'motion/react';
+import { BrandLogo } from './BrandLogo';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
@@ -35,15 +36,52 @@ interface AdminAreaProps {
   currentUser: Artist;
   onLogout: () => void;
   onNavigate: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
+  logoScale: number;
+  onLogoScaleChange: (scale: number) => void;
+  showLogo: boolean;
+  onShowLogoChange: (show: boolean) => void;
+  customLogoUrl: string;
+  onCustomLogoUrlChange: (url: string) => void;
 }
 
 export default function AdminArea({
   currentUser,
   onLogout,
-  onNavigate
+  onNavigate,
+  logoScale,
+  onLogoScaleChange,
+  showLogo,
+  onShowLogoChange,
+  customLogoUrl,
+  onCustomLogoUrlChange
 }: AdminAreaProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago'>('dashboard');
   const [users, setUsers] = useState<Artist[]>([]);
+  
+  // Appearance logo configurations (scale, visibility, and custom upload URL)
+  const [localLogoScale, setLocalLogoScale] = useState<number>(logoScale || 1.0);
+  const [localShowLogo, setLocalShowLogo] = useState<boolean>(showLogo !== false);
+  const [localCustomLogoUrl, setLocalCustomLogoUrl] = useState<string>(customLogoUrl || '');
+  const [isSavingLogoScale, setIsSavingLogoScale] = useState(false);
+  const [logoSuccessMsg, setLogoSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (logoScale !== undefined) {
+      setLocalLogoScale(logoScale);
+    }
+  }, [logoScale]);
+
+  useEffect(() => {
+    if (showLogo !== undefined) {
+      setLocalShowLogo(showLogo);
+    }
+  }, [showLogo]);
+
+  useEffect(() => {
+    if (customLogoUrl !== undefined) {
+      setLocalCustomLogoUrl(customLogoUrl);
+    }
+  }, [customLogoUrl]);
   
   // Mercado Pago automatic subscriptions list states
   const [mpSubscriptions, setMpSubscriptions] = useState<any[]>([]);
@@ -93,6 +131,41 @@ export default function AdminArea({
   const [shareCardUploadProgress, setShareCardUploadProgress] = useState(0);
   const [shareCardError, setShareCardError] = useState<string | null>(null);
   const shareCardFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Custom logo local upload states
+  const logoFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLogoUploadError(null);
+
+    // Limit to 600KB to make sure it easily fits in Firestore's 1MB document limit
+    if (file.size > 600 * 1024) {
+      setLogoUploadError("A imagem do logotipo excede o limite recomendado de 600 KB para salvamento direto no banco de dados.");
+      return;
+    }
+
+    const acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+    if (!acceptedTypes.includes(file.type)) {
+      setLogoUploadError("Formato de imagem inválido. Use PNG, JPG, SVG, WEBP ou GIF.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      if (base64String) {
+        setLocalCustomLogoUrl(base64String);
+      }
+    };
+    reader.onerror = () => {
+      setLogoUploadError("Erro ao ler o arquivo de imagem do computador.");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const loadShareCardSettings = async () => {
     try {
@@ -191,9 +264,22 @@ export default function AdminArea({
       if (res.ok) {
         const data = await res.json();
         setIntegrationStatus(data);
+      } else {
+        setIntegrationStatus({
+          mercadoPagoAccessToken: false,
+          mercadoPagoPublicKey: false,
+          mercadoPagoWebhookSecret: false,
+          appBaseUrl: false
+        });
       }
     } catch (e) {
-      console.error("Error loading integration status:", e);
+      console.warn("Gracefully handled error loading integration status:", e);
+      setIntegrationStatus({
+        mercadoPagoAccessToken: false,
+        mercadoPagoPublicKey: false,
+        mercadoPagoWebhookSecret: false,
+        appBaseUrl: false
+      });
     }
   };
 
@@ -228,6 +314,29 @@ export default function AdminArea({
       console.error(e);
     } finally {
       setLoadingPayments(false);
+    }
+  };
+
+  const handleSaveLogoScale = async () => {
+    setIsSavingLogoScale(true);
+    setLogoSuccessMsg('');
+    try {
+      await dbService.updateAppearanceSettings({
+        logoScale: localLogoScale,
+        showLogo: localShowLogo,
+        customLogoUrl: localCustomLogoUrl
+      }, currentUser.email || 'admin');
+      
+      onLogoScaleChange(localLogoScale);
+      onShowLogoChange(localShowLogo);
+      onCustomLogoUrlChange(localCustomLogoUrl);
+      
+      setLogoSuccessMsg('Configurações de identidade visual salvas com sucesso em todo o site!');
+      setTimeout(() => setLogoSuccessMsg(''), 4500);
+    } catch (e) {
+      console.error("Erro ao salvar configurações de identidade visual:", e);
+    } finally {
+      setIsSavingLogoScale(false);
     }
   };
 
@@ -1393,7 +1502,7 @@ export default function AdminArea({
                 <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                 <div className="text-xs text-emerald-255 leading-relaxed">
                   <span className="font-bold block text-white mb-0.5">Integração Automática Ativa:</span>
-                  O Soundrive agora conta com liberação instantânea e automática de assinaturas via webhooks do Mercado Pago! Configure seus links de pagamento abaixo e o sistema atualizará os planos de forma 100% automatizada. Use a aba <strong>Assinaturas Mercado Pago</strong> na barra lateral para acompanhar o histórico e efetuar ações manuais se necessário.
+                  O SomDrive agora conta com liberação instantânea e automática de assinaturas via webhooks do Mercado Pago! Configure seus links de pagamento abaixo e o sistema atualizará os planos de forma 100% automatizada. Use a aba <strong>Assinaturas Mercado Pago</strong> na barra lateral para acompanhar o histórico e efetuar ações manuais se necessário.
                 </div>
               </div>
 
@@ -1409,7 +1518,7 @@ export default function AdminArea({
                     {/* SECTION 1: PRO MONTHLY */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">1. Soundrive Pro Mensal</span>
+                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">1. SomDrive Pro Mensal</span>
                         <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 19,90/mês</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
@@ -1431,7 +1540,7 @@ export default function AdminArea({
                     {/* SECTION 2: PRO ANNUAL */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">2. Soundrive Pro Anual</span>
+                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">2. SomDrive Pro Anual</span>
                         <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 199,00/ano</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
@@ -1453,7 +1562,7 @@ export default function AdminArea({
                     {/* SECTION 3: PREMIUM MONTHLY */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">3. Soundrive Premium Mensal</span>
+                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">3. SomDrive Premium Mensal</span>
                         <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 39,90/mês</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
@@ -1475,7 +1584,7 @@ export default function AdminArea({
                     {/* SECTION 4: PREMIUM ANNUAL */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">4. Soundrive Premium Anual</span>
+                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">4. SomDrive Premium Anual</span>
                         <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 399,00/ano</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
@@ -1654,7 +1763,7 @@ export default function AdminArea({
                     Imagem de Compartilhamento do Site (Global)
                   </h4>
                   <p className="text-slate-400 text-xs mt-1">
-                    Esta imagem será usada em todo o site como miniatura de rede social no WhatsApp, Facebook e Instagram ao compartilhar catálogos ou links do Soundrive.
+                    Esta imagem será usada em todo o site como miniatura de rede social no WhatsApp, Facebook e Instagram ao compartilhar catálogos ou links do SomDrive.
                   </p>
                 </div>
 
@@ -1750,6 +1859,231 @@ export default function AdminArea({
                   <p className="text-[10px] text-slate-500 leading-relaxed italic font-sans">
                     **Aviso:** Use uma imagem horizontal 1200x630 px para aparecer bonita no WhatsApp.
                   </p>
+                </div>
+              </div>
+
+              {/* SEÇÃO: CONFIGURAÇÃO DE IDENTIDADE VISUAL - LOGO SIZING */}
+              <div className="mt-8 pt-6 border-t border-slate-800 space-y-4">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center col-span-full">
+                    <Sparkles className="h-4 w-4 text-amber-500 mr-2 animate-pulse" />
+                    Identidade Visual (Exibir / Trocar Logomarca)
+                  </h4>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Gerencie a visibilidade do logotipo (opção de tirar/ocultar) ou substitua (trocar) a imagem do SomDrive por seu próprio arquivo de logomarca personalizado.
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-850 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                  <div className="space-y-5">
+                    {/* Switch: Show / Hide Logo */}
+                    <div className="bg-slate-905/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="text-xs text-slate-300 font-bold block">Exibir Logomarca no Cabeçalho</label>
+                          <span className="text-[10px] text-slate-500 block">Ative para mostrar ou desative para tirar completamente a logo do topo de todo o site.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setLocalShowLogo(!localShowLogo)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${localShowLogo ? 'bg-orange-500' : 'bg-slate-800'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${localShowLogo ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                      <div className="text-[11px] font-sans">
+                        {localShowLogo ? (
+                          <span className="text-emerald-450 font-semibold flex items-center">● Logotipo ATIVADO e visível</span>
+                        ) : (
+                          <span className="text-red-450 font-semibold flex items-center">○ Logotipo INATIVO (ocultado do site)</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {localShowLogo && (
+                      <>
+                        {/* URL and File upload input to Swap / Change Logo */}
+                        <div className="space-y-3">
+                          <label className="text-xs text-slate-300 font-semibold flex justify-between items-center block">
+                            <span>Imagem do Logotipo Customizado</span>
+                            {localCustomLogoUrl ? (
+                              <span className="text-[10px] text-orange-400 font-semibold flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+                                Usando logo customizada
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500">Usando padrão do sistema</span>
+                            )}
+                          </label>
+
+                          {/* PC File Upload Section */}
+                          <div className="bg-slate-900/60 p-4 rounded-xl border border-dashed border-slate-800 flex flex-col items-center justify-center text-center gap-3 hover:bg-slate-900 hover:border-orange-500/50 transition-all duration-200">
+                            <input
+                              type="file"
+                              ref={logoFileInputRef}
+                              onChange={handleLogoFileChange}
+                              accept="image/png, image/jpeg, image/jpg, image/gif, image/webp, image/svg+xml"
+                              className="hidden"
+                              id="logo_file_picker"
+                            />
+                            
+                            {localCustomLogoUrl ? (
+                              <div className="flex flex-col items-center gap-2.5 w-full">
+                                <div className="p-2 bg-slate-950/65 rounded-lg border border-slate-800 flex items-center justify-center max-w-[220px] h-16 overflow-hidden">
+                                  <img 
+                                    src={localCustomLogoUrl} 
+                                    alt="Pré-visualização do seu Logo" 
+                                    className="max-w-full max-h-full object-contain"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                                <div className="text-center">
+                                  <span className="text-[10.5px] text-emerald-400 font-semibold block">✓ Logotipo carregado e pronto para salvar</span>
+                                  {localCustomLogoUrl.startsWith('data:') ? (
+                                    <span className="text-[9px] text-slate-500 block">Salvo diretamente como imagem incorporada no banco de dados</span>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-500 block">Endereço de imagem externa ativo</span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center py-2">
+                                <Plus className="h-6 w-6 text-slate-500 mb-1" />
+                                <span className="text-xs text-slate-300 font-medium">Nenhum logotipo enviado do computador</span>
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-2 justify-center mt-1">
+                              <button
+                                type="button"
+                                onClick={() => logoFileInputRef.current?.click()}
+                                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-semibold transition cursor-pointer select-none"
+                              >
+                                {localCustomLogoUrl ? "Substituir arquivo (Trocar)" : "Selecionar arquivo do PC"}
+                              </button>
+                              
+                              {localCustomLogoUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLocalCustomLogoUrl('');
+                                    if (logoFileInputRef.current) logoFileInputRef.current.value = '';
+                                  }}
+                                  className="px-3.5 py-1.5 bg-red-950/40 hover:bg-red-900/40 text-red-400 rounded-lg text-[11px] font-semibold transition cursor-pointer select-none"
+                                >
+                                  Remover e usar padrão
+                                </button>
+                              )}
+                            </div>
+                            
+                            <p className="text-[9.5px] text-slate-500 max-w-xs leading-normal">
+                              Formatos aceitos: PNG transparente (recomendado), JPG, SVG ou WEBP. Limite de tamanho: 600 KB.
+                            </p>
+                          </div>
+
+                          {/* Fallback Manual Link input field */}
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-slate-400 font-semibold block uppercase tracking-wider">Ou insira uma URL de imagem externa:</span>
+                            <input
+                              type="text"
+                              value={localCustomLogoUrl}
+                              onChange={(e) => setLocalCustomLogoUrl(e.target.value)}
+                              placeholder="https://sua-hospedagem.com/logo-transparente.png"
+                              className="w-full text-xs bg-slate-900 border border-slate-800 text-white placeholder-slate-600 px-3.5 py-2 rounded-xl focus:outline-none focus:border-orange-500"
+                            />
+                          </div>
+
+                          {logoUploadError && (
+                            <p className="text-[11px] text-red-400 font-semibold bg-red-950/20 p-2.5 rounded-lg border border-red-900/40">
+                              ⚠️ {logoUploadError}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Logo scale Slider config */}
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-300 font-semibold flex justify-between">
+                            <span>Ajuste fino da Escala (Tamanho)</span>
+                            <span className="font-mono text-xs text-yellow-500 font-bold">{Math.round(localLogoScale * 100)}%</span>
+                          </label>
+                          <p className="text-[11px] text-slate-500">Arraste para adequar os limites horizontais e preencher harmoniosamente o menu.</p>
+                        </div>
+
+                        <div className="flex items-center space-x-3 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800/30">
+                          <button
+                            type="button"
+                            onClick={() => setLocalLogoScale(Math.max(0.5, parseFloat((localLogoScale - 0.05).toFixed(2))))}
+                            className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-sm font-bold transition-colors select-none cursor-pointer"
+                            title="Diminuir"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="4.5"
+                            step="0.05"
+                            value={localLogoScale}
+                            onChange={(e) => setLocalLogoScale(parseFloat(e.target.value))}
+                            className="flex-grow accent-orange-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setLocalLogoScale(Math.min(4.5, parseFloat((localLogoScale + 0.05).toFixed(2))))}
+                            className="p-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-sm font-bold transition-colors select-none cursor-pointer"
+                            title="Aumentar"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveLogoScale}
+                        disabled={isSavingLogoScale}
+                        className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-slate-950 font-bold transition rounded-xl text-xs flex items-center uppercase tracking-wider cursor-pointer font-heading shadow-md shadow-orange-950/20"
+                      >
+                        {isSavingLogoScale ? 'Salvando...' : 'Salvar Identidade'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalLogoScale(1.0);
+                          setLocalShowLogo(true);
+                          setLocalCustomLogoUrl('');
+                        }}
+                        className="px-3.5 py-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-300 rounded-xl transition text-xs select-none cursor-pointer"
+                      >
+                        Restaurar Padrão
+                      </button>
+                    </div>
+
+                    {logoSuccessMsg && (
+                      <div className="p-3 bg-emerald-950/40 border border-emerald-900/30 font-sans text-xs text-emerald-400 rounded-xl animate-fade-in">
+                        {logoSuccessMsg}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Side: mock header template */}
+                  <div className="p-4 bg-slate-900/40 rounded-2xl border border-slate-850 space-y-3 w-full lg:sticky lg:top-4">
+                    <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest leading-none">Visualização Simulada do Cabeçalho</p>
+                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex items-center justify-between h-24 overflow-hidden relative">
+                      <div className="overflow-visible pr-6 min-w-[80px]">
+                        <BrandLogo size="sm" scale={localLogoScale} showLogo={localShowLogo} customLogoUrl={localCustomLogoUrl} className="origin-left" />
+                        {!localShowLogo && (
+                          <span className="text-[11px] text-slate-650 italic leading-none font-sans">Sem logo (espaço livre)</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 pr-1 select-none pointer-events-none shrink-0">
+                        <span className="text-[8px] sm:text-[9px] font-mono bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800">Início</span>
+                        <span className="text-[8px] sm:text-[9px] font-mono bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800 font-bold text-orange-450/80">Painel</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

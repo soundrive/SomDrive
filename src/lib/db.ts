@@ -1,4 +1,4 @@
-import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings } from '../types';
 
 // Static Royalty-Free MP3 links that are reliable and beautiful
 export const DEMO_SONGS = [
@@ -172,7 +172,7 @@ export const LS_CURR_USER = "pendrive_curr_user";
 if (localStorage.getItem(LS_CURR_USER)) {
   try {
     const user = JSON.parse(localStorage.getItem(LS_CURR_USER) || "{}");
-    if (user.userId === 'gabriel-silva' || user.email === 'gabriel.silva@soundrive.com' || user.name === 'Gabriel Silva') {
+    if (user.userId === 'gabriel-silva' || user.email === 'gabriel.silva@somdrive.com' || user.name === 'Gabriel Silva') {
       localStorage.removeItem(LS_CURR_USER);
     }
   } catch (e) {
@@ -1693,6 +1693,45 @@ export const dbService = {
       });
     } catch (e) {
       console.error("Error updating share card settings:", e);
+      throw e;
+    }
+  },
+
+  async getAppearanceSettings(): Promise<AppearanceSettings> {
+    try {
+      const docRef = doc(db, 'settings', 'appearance');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          logoScale: typeof data.logoScale === 'number' ? data.logoScale : 1.0,
+          showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
+          customLogoUrl: typeof data.customLogoUrl === 'string' ? data.customLogoUrl : '',
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy
+        };
+      }
+      return { logoScale: 1.0, showLogo: true, customLogoUrl: '' };
+    } catch (e) {
+      console.error("Error fetching appearance settings:", e);
+      return { logoScale: 1.0, showLogo: true, customLogoUrl: '' };
+    }
+  },
+
+  async updateAppearanceSettings(settings: { logoScale?: number; showLogo?: boolean; customLogoUrl?: string }, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'appearance');
+      const dataToSave = {
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/appearance');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating appearance settings:", e);
       throw e;
     }
   }

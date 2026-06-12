@@ -35,6 +35,9 @@ interface LandingPageProps {
   onNavigate: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
   currentUser: Artist | null;
   onLogout: () => void;
+  logoScale?: number;
+  showLogo?: boolean;
+  customLogoUrl?: string;
 }
 
 const TEST_ARTISTS = [
@@ -109,7 +112,7 @@ const TEST_ARTISTS = [
   }
 ];
 
-export default function LandingPage({ onNavigate, currentUser, onLogout }: LandingPageProps) {
+export default function LandingPage({ onNavigate, currentUser, onLogout, logoScale, showLogo, customLogoUrl }: LandingPageProps) {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0);
@@ -189,7 +192,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout }: Landi
             onClick={() => onNavigate('landing')}
             className="cursor-pointer select-none group"
           >
-            <BrandLogo size="sm" className="sm:scale-110 origin-left transition-transform group-hover:scale-[1.12]" />
+            <BrandLogo size="sm" scale={logoScale} showLogo={showLogo} customLogoUrl={customLogoUrl} className="origin-left" />
           </div>
 
           <nav id="top-nav" className="flex items-center gap-1.5 md:gap-4 shrink-0">

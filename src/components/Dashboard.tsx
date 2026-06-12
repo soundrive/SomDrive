@@ -1172,7 +1172,7 @@ export default function Dashboard({
             <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
               <img 
                 src={shareCardPreviewUrl}
-                alt="Cartão Soundrive" 
+                alt="Cartão SomDrive" 
                 className="w-full h-full object-cover select-none"
                 referrerPolicy="no-referrer"
               />

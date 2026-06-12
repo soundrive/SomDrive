@@ -19,7 +19,9 @@ import {
   FileText,
   Bluetooth,
   Zap,
-  Wifi
+  Wifi,
+  MoreVertical,
+  List
 } from 'lucide-react';
 import { Music } from '../types';
 
@@ -223,6 +225,7 @@ interface PlayerProps {
   isCarMode: boolean;
   setCarMode: (active: boolean) => void;
   onNavigate?: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
+  onSelectTrack?: (track: Music) => void;
 }
 
 export default function Player({
@@ -234,7 +237,8 @@ export default function Player({
   trackList,
   isCarMode,
   setCarMode,
-  onNavigate
+  onNavigate,
+  onSelectTrack
 }: PlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -370,44 +374,71 @@ export default function Player({
   // 1. IMMERSIVE CAR MODE (FULL SCREEN VIEW)
   if (isCarMode) {
     return (
-      <div id="car-player-fullscreen" onContextMenu={(e) => e.preventDefault()} className="fixed inset-0 bg-[#04060a] text-[#f8fafc] z-50 flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-hidden select-none">
-        
-        {/* Specular Ambient Glow effects in Mint-Emerald and Gold-Amber */}
-        <div className="absolute right-[-10%] top-[10%] w-[350px] h-[350px] sm:w-[500px] sm:h-[500px] bg-emerald-500/5 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none"></div>
-        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] sm:w-[450px] sm:h-[450px] bg-yellow-500/5 rounded-full blur-[90px] sm:blur-[130px] pointer-events-none"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(#ffffff01_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none"></div>
+      <div id="car-player-fullscreen" className="fixed inset-0 bg-[#04060a] text-[#f8fafc] z-50 flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-hidden select-none">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes eq-bounce-1 {
+            0% { transform: scaleY(0.25); }
+            100% { transform: scaleY(1); }
+          }
+          @keyframes eq-bounce-2 {
+            0% { transform: scaleY(0.4); }
+            100% { transform: scaleY(1.1); }
+          }
+          @keyframes eq-bounce-3 {
+            0% { transform: scaleY(0.15); }
+            100% { transform: scaleY(0.85); }
+          }
+          .animate-eq-1 {
+            animation: eq-bounce-1 0.45s ease-in-out infinite alternate;
+            transform-origin: bottom;
+          }
+          .animate-eq-2 {
+            animation: eq-bounce-2 0.65s ease-in-out infinite alternate;
+            transform-origin: bottom;
+          }
+          .animate-eq-3 {
+            animation: eq-bounce-3 0.55s ease-in-out infinite alternate;
+            transform-origin: bottom;
+          }
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #1f2937;
+            border-radius: 9999px;
+          }
+        `}} />
 
-        {/* Dynamic Header Row - Replicated precisely from Image 3 */}
+        {/* Specular Ambient Glow effects in Mint-Emerald and Gold-Amber */}
+        <div className="absolute right-[-10%] top-[10%] w-[350px] h-[350px] bg-[#10b981]/5 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] bg-[#eab308]/5 rounded-full blur-[90px] pointer-events-none"></div>
+
+        {/* Dynamic Header Row - Replicated precisely from Image */}
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-3 z-10 w-full shrink-0 relative">
           
           {/* Left Block: TRANSMISSÃO BLUETOOTH */}
           <div className="flex items-center gap-2 select-none">
-            <Bluetooth className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 stroke-[2] animate-pulse" />
-            <span className="text-[10px] sm:text-xs font-mono tracking-[0.2em] text-emerald-450 font-extrabold uppercase">
+            <Bluetooth className="w-4 h-4 text-emerald-400 stroke-[2] animate-pulse" />
+            <span className="text-[10px] sm:text-xs font-mono tracking-[0.2em] text-emerald-400 font-extrabold uppercase">
               TRANSMISSÃO BLUETOOTH
             </span>
           </div>
 
-          {/* Center Block: SOUNDRIVE Sports Car Logo Brand (Image 3) */}
-          <div className="hidden sm:flex items-center justify-center gap-2 absolute left-1/2 -translate-x-1/2 select-none">
-            <CarSilhouetteIcon className="w-9 h-4" />
-            <span className="font-heading font-black tracking-[0.25em] text-sm text-zinc-100 uppercase pb-0.5">
-              SOMDRIVE
-            </span>
-          </div>
-
           {/* Right Block: LETRAS / CELULAR action pills */}
-          <div className="flex items-center gap-2.5 select-none">
+          <div className="flex items-center gap-2 select-none">
             <button 
               onClick={() => setCarLyricsActive(!carLyricsActive)}
-              className={`flex items-center gap-1.5 px-4.5 py-1.5 transition rounded-full border text-[9px] sm:text-xs font-mono font-bold uppercase tracking-wider cursor-pointer select-none ${
+              className={`flex items-center gap-1.5 px-3 py-1 transition rounded-lg border text-[9px] sm:text-xs font-sans font-bold uppercase tracking-wider cursor-pointer select-none ${
                 carLyricsActive 
                   ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.25)]' 
-                  : 'bg-transparent border-zinc-700 text-zinc-300 hover:border-emerald-500/50 hover:text-white'
+                  : 'bg-transparent border-zinc-800 text-zinc-350 hover:border-emerald-500/50 hover:text-white'
               }`}
             >
               <AlignLeft className="w-3.5 h-3.5" /> 
-              <span>Letras</span>
+              <span>LETRAS</span>
             </button>
 
             <button 
@@ -416,140 +447,172 @@ export default function Player({
                 setCarMode(false);
                 setCarLyricsActive(false);
               }}
-              className="flex items-center gap-1.5 px-4.5 py-1.5 bg-transparent border border-zinc-700 hover:border-emerald-500/50 rounded-full transition cursor-pointer text-[9px] sm:text-xs font-mono font-bold uppercase tracking-wider text-zinc-300 hover:text-white"
+              className="flex items-center gap-1.5 px-3 py-1 bg-transparent border border-zinc-800 hover:border-emerald-500/50 rounded-lg transition cursor-pointer text-[9px] sm:text-xs font-sans font-bold uppercase tracking-wider text-zinc-350 hover:text-white"
             >
               <Smartphone className="w-3.5 h-3.5 text-[#84cc16]" /> 
-              <span>Celular</span>
+              <span>CELULAR</span>
             </button>
           </div>
         </div>
 
-        {/* Adaptive Dynamic Splitting Canvas - Guaranteed never to cut off! */}
-        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-8 lg:gap-14 my-4 max-w-6xl mx-auto w-full z-10 overflow-y-auto lg:overflow-hidden min-h-0">
-          
-          {/* Cover Art containing equalizer waves left & right */}
-          <div className={`flex flex-col items-center justify-center gap-3 sm:gap-5 transition-all duration-505 ${carLyricsActive ? 'lg:w-[45%] lg:items-start text-center lg:text-left' : 'w-full'}`}>
-            
-            <div className={`flex items-center justify-center w-full transition-all duration-300 ${carLyricsActive ? 'gap-0 lg:justify-start' : 'gap-6 md:gap-12'}`}>
-              
-              {/* Left Equalizer Wave - Only shown when lyrics drawer is hidden */}
-              {!carLyricsActive && (
-                <div className="hidden lg:flex items-end gap-[3.5px] h-12 select-none text-emerald-500 opacity-60">
-                  {[...Array(18)].map((_, i) => {
-                    const progress = (i + 1) / 18;
-                    const h = 4 + progress * 28; // height between 4px and 32px
-                    return (
-                      <span 
-                        key={i} 
-                        style={{ 
-                          height: `${h}px`,
-                          animation: isPlaying && !isDataSaver ? `bar-${(i % 4) + 1} 0.8s ease-in-out infinite alternate` : 'none'
-                        }}
-                        className="w-[2.5px] bg-gradient-to-t from-emerald-500 to-yellow-500 rounded-full transition-all duration-300 opacity-40 hover:opacity-100"
-                      />
-                    );
-                  })}
-                </div>
-              )}
+        {/* Central Playback visualizer area with flanking equalizers */}
+        <div className="flex-1 flex flex-col justify-center items-center my-2 max-w-lg mx-auto w-full z-10 min-h-0">
+          <div className="flex items-center justify-center gap-6 w-full shrink-0">
+            {/* Left audio equalizer wave block */}
+            <div className="flex items-end gap-[3px] h-10 select-none text-emerald-500 shrink-0">
+              {[...Array(5)].map((_, i) => (
+                <span 
+                  key={i} 
+                  style={{ height: `${8 + i * 4}px` }}
+                  className={`w-[2.5px] bg-emerald-500 rounded-full ${isPlaying ? `animate-eq-${(i % 3) + 1}` : 'opacity-40'}`} 
+                />
+              ))}
+            </div>
 
-              {/* Central premium disc structure (Image 3 but with high-fidelity visualization) */}
-              <div className="relative flex-shrink-0">
-                <div 
-                  id="car-track-cover-notes"
-                  className={`transition-all duration-505 shrink-0 ${
-                    carLyricsActive 
-                      ? 'w-24 h-24 min-[380px]:w-32 min-[380px]:h-32 sm:w-40 sm:h-40 lg:w-44 lg:h-44' 
-                      : 'w-36 h-36 min-[380px]:w-44 min-[380px]:h-44 sm:w-60 sm:h-60 md:w-64 md:h-64'
-                  }`}
-                >
-                  <SoundriveCarVisualizer isPlaying={isPlaying} isDataSaver={isDataSaver} />
+            {/* Central big circular orb logo with glowing green arrow */}
+            <button 
+              onClick={onPlayPause}
+              className="relative flex-shrink-0 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-b from-zinc-800 to-zinc-950 flex items-center justify-center border-2 border-zinc-900 shadow-2xl relative cursor-pointer active:scale-95 transition-all outline-none"
+            >
+              <div className="absolute inset-1.5 rounded-full bg-zinc-950 flex items-center justify-center border border-zinc-900/60 shadow-inner">
+                <div className="relative flex items-center justify-center">
+                  {isPlaying ? (
+                    <Pause className="w-8 h-8 fill-emerald-500 text-emerald-500" />
+                  ) : (
+                    <Play className="w-8 h-8 fill-emerald-500 text-emerald-500 ml-1.5" />
+                  )}
                 </div>
               </div>
+            </button>
 
-              {/* Right Equalizer Wave - Only shown when lyrics drawer is hidden */}
-              {!carLyricsActive && (
-                <div className="hidden lg:flex items-end gap-[3.5px] h-12 select-none text-emerald-500 opacity-60">
-                  {[...Array(18)].map((_, i) => {
-                    const progress = (18 - i) / 18; // Opposing symmetry: shorter as we go from left to right
-                    const h = 4 + progress * 28;
-                    return (
-                      <span 
-                        key={i} 
-                        style={{ 
-                          height: `${h}px`,
-                          animation: isPlaying && !isDataSaver ? `bar-${(i % 4) + 1} 1s ease-in-out infinite alternate` : 'none'
-                        }}
-                        className="w-[2.5px] bg-gradient-to-t from-emerald-500 to-yellow-500 rounded-full transition-all duration-300 opacity-40 hover:opacity-100"
-                      />
-                    );
-                  })}
-                </div>
-              )}
-
-            </div>
-            
-            {/* Metadata layout with responsive formatting (Left-aligned on active lyrics, Centered on default) */}
-            <div className={`transition-all duration-505 shrink-0 ${carLyricsActive ? 'lg:max-w-md w-full' : 'max-w-2xl text-center w-full'}`}>
-              <h1 id="car-track-title" className={`font-heading font-black tracking-tight leading-tight uppercase text-white px-2 truncate transition-all duration-505 ${
-                carLyricsActive 
-                  ? 'text-lg sm:text-2xl lg:text-3xl lg:text-left' 
-                  : 'text-xl sm:text-3xl md:text-3xl lg:text-4xl text-center'
-              }`}>
-                {currentTrack.title}
-              </h1>
-              
-              <p id="car-track-artist" className={`text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-lime-400 to-yellow-400 mt-1 font-black tracking-wide transition-all duration-505 uppercase font-mono ${
-                carLyricsActive 
-                  ? 'text-xs sm:text-base lg:text-left' 
-                  : 'text-sm sm:text-lg md:text-xl text-center'
-              }`}>
-                {currentTrack.singer || "STARNEJO"}
-              </p>
-              
-              {currentTrack.composer && (
-                <p className={`text-zinc-500 text-[10px] sm:text-xs mt-1.5 uppercase font-mono tracking-widest leading-normal font-bold transition-all duration-505 ${
-                  carLyricsActive ? 'lg:text-left' : 'text-center'
-                }`}>
-                  Compositor: <span className="text-zinc-300 font-extrabold">{currentTrack.composer}</span>
-                </p>
-              )}
+            {/* Right audio equalizer wave block */}
+            <div className="flex items-end gap-[3px] h-10 select-none text-emerald-500 shrink-0">
+              {[...Array(5)].map((_, i) => (
+                <span 
+                  key={i} 
+                  style={{ height: `${20 - i * 4}px` }}
+                  className={`w-[2.5px] bg-emerald-500 rounded-full ${isPlaying ? `animate-eq-${((4 - i) % 3) + 1}` : 'opacity-40'}`} 
+                />
+              ))}
             </div>
           </div>
 
-          {/* Expanded scrolling lyrics inside Car Modal */}
-          {carLyricsActive && (
-            <div className="flex-1 lg:w-[50%] h-[250px] lg:h-[400px] w-full bg-[#050609]/60 border border-zinc-805/40 p-6 sm:p-8 rounded-3xl overflow-y-auto scrollbar-none flex flex-col justify-start relative select-text transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.5)]">
-              <div className="space-y-4 text-left py-4 my-auto w-full">
+          <div className="text-center mt-3 shrink-0">
+            <h1 className="font-heading font-black tracking-widest text-[#f8fafc] text-sm sm:text-base uppercase truncate max-w-sm px-2">
+              {currentTrack.title}
+            </h1>
+            <p className="text-[10px] sm:text-xs text-zinc-400 font-mono tracking-wide mt-0.5">
+              Auto: <span className="font-bold text-zinc-300">{currentTrack.singer || currentTrack.composer || "STARNEJO"}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Scrollable Content: MÚSICAS or LYRICS */}
+        <div className="flex-[2] min-h-[140px] max-h-[280px] bg-[#070b12]/95 border border-zinc-900/80 rounded-2xl flex flex-col overflow-hidden max-w-md mx-auto w-full z-10 relative shadow-inner mb-3">
+          {/* Header row */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-900 shrink-0 select-none">
+            {carLyricsActive ? (
+              <>
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-bold tracking-wider text-emerald-400 uppercase">LETRA</span>
+              </>
+            ) : (
+              <>
+                <List className="w-4 h-4 text-amber-500" />
+                <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">MÚSICAS</span>
+              </>
+            )}
+          </div>
+
+          {/* Core scrollable content */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-zinc-902/30">
+            {carLyricsActive ? (
+              <div className="p-4 space-y-3.5 text-center font-sans tracking-wide">
                 {currentTrack.lyrics ? (
                   currentTrack.lyrics.split('\n').map((line, idx) => {
                     const isHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
                     if (isHeader) {
                       return (
-                        <p key={idx} className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-400 font-extrabold pt-2 pb-0.5">
+                        <p key={idx} className="text-[10px] font-mono uppercase tracking-[0.15em] text-emerald-400 font-extrabold pt-2 pb-0.5">
                           {line}
                         </p>
                       );
                     }
                     return (
-                      <p key={idx} className="text-sm sm:text-base font-extrabold tracking-tight text-zinc-300 hover:text-white leading-relaxed">
+                      <p key={idx} className="text-xs sm:text-sm font-extrabold text-zinc-300 hover:text-white leading-relaxed">
                         {line}
                       </p>
                     );
                   })
                 ) : (
-                  <div className="space-y-3.5 py-6 flex flex-col items-center justify-center">
-                    <p className="text-emerald-400 text-sm font-mono uppercase tracking-[0.2em] font-black">[ SEM LETRA CADASTRADA ]</p>
-                    <p className="text-zinc-500 text-xs leading-relaxed max-w-xs mx-auto">O compositor não arquivou as estrofes originais no painel.</p>
+                  <div className="space-y-2 py-6 flex flex-col items-center justify-center">
+                    <p className="text-emerald-400 text-xs font-mono uppercase tracking-[0.15em] font-bold">[ SEM LETRA CADASTRADA ]</p>
+                    <p className="text-zinc-500 text-[10px] leading-relaxed max-w-xs mx-auto">O compositor não arquivou as estrofes originais no painel.</p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ) : (
+              <div>
+                {trackList.map((track, idx) => {
+                  const isActive = track.trackId === currentTrack.trackId;
+                  return (
+                    <div 
+                      key={track.trackId}
+                      onClick={() => onSelectTrack?.(track)}
+                      className={`py-3 px-4 flex items-center justify-between cursor-pointer transition-colors duration-150 relative border-b border-zinc-950/20 hover:bg-[#111e30]/30 ${
+                        isActive ? 'border-l-[4px] border-emerald-500 bg-emerald-950/20' : ''
+                      }`}
+                    >
+                      {/* Left: Play icon status, Index number, Track metadata */}
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        {isActive ? (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onPlayPause(); }}
+                            className="w-8 h-8 rounded-full border border-emerald-500 flex items-center justify-center text-emerald-400 bg-emerald-950/40 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.3)] transition"
+                          >
+                            {isPlaying ? <Pause className="w-3.5 h-3.5 fill-emerald-400" /> : <Play className="w-3.5 h-3.5 fill-emerald-400 ml-0.5" />}
+                          </button>
+                        ) : (
+                          <button 
+                            className="w-8 h-8 rounded-full border border-zinc-850 hover:border-zinc-750 flex items-center justify-center text-zinc-400 hover:text-white shrink-0 transition"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-zinc-400 text-zinc-400 ml-0.5" />
+                          </button>
+                        )}
 
+                        <span className="text-[11px] font-mono text-zinc-500 font-bold w-4 text-center select-none shrink-0">{idx + 1}</span>
+
+                        <div className="min-w-0">
+                          <p className={`text-xs font-bold uppercase truncate ${isActive ? 'text-[#10b981]' : 'text-zinc-100'}`}>
+                            {track.title}
+                          </p>
+                          <p className="text-[9.5px] text-zinc-500 font-mono tracking-wide truncate mt-0.5">
+                            {track.singer || track.composer || "STARNEJO"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right: Wave anim / Ellipsis Option */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {isActive && isPlaying && (
+                          <div className="flex items-end gap-[1.5px] h-3 text-emerald-400 mr-1 select-none">
+                            <span className="w-[1.5px] h-2.5 bg-emerald-400 rounded-full animate-eq-1" />
+                            <span className="w-[1.5px] h-3.5 bg-emerald-400 rounded-full animate-eq-2" />
+                            <span className="w-[1.5px] h-2 bg-emerald-400 rounded-full animate-eq-3" />
+                          </div>
+                        )}
+                        <MoreVertical className="w-4 h-4 text-zinc-500 hover:text-zinc-300 transition" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Compact, elegant timeline slider */}
-        <div className="w-full max-w-2xl mx-auto px-4 space-y-1.5 z-10 shrink-0">
+        {/* Timeline seeker slider bar */}
+        <div className="w-full max-w-md mx-auto px-1 space-y-1 z-10 shrink-0">
           <div className="relative flex items-center">
             <input 
               id="car-track-seekbar"
@@ -558,58 +621,89 @@ export default function Player({
               max={duration || 100}
               value={currentTime}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500"
+              className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-[#10b981]"
               style={{
-                background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #111827 ${(currentTime / (duration || 1)) * 100}%, #111827 100%)`
+                background: `linear-gradient(to right, #10b981 0%, #10b981 ${(currentTime / (duration || 1)) * 100}%, #18181b ${(currentTime / (duration || 1)) * 100}%, #18181b 100%)`
               }}
             />
           </div>
-          <div className="flex justify-between text-[11px] font-mono text-zinc-500 font-bold select-none px-0.5">
+          <div className="flex justify-between text-[11px] font-mono text-zinc-450 font-bold select-none px-0.5">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
 
-        {/* Central Dashboard Controls Replicated Precisely from Image 3 */}
-        <div className="w-full max-w-xl mx-auto flex items-center justify-center gap-8 py-2 md:py-4 px-4 z-10 select-none shrink-0">
-          {/* Skip Back Button: outlined circle in emerald */}
+        {/* Music Control center knobs array (Shuffle, Prev, PlayOutlineGlow, Next, Repeat) */}
+        <div className="w-full max-w-md mx-auto flex items-center justify-between px-2 py-2.5 z-10 select-none shrink-0">
           <button 
-            id="car-prev-btn"
-            onClick={onPrev}
-            className="w-14 h-14 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md bg-[#0d0f14]/40"
-            title="Música anterior"
+            onClick={() => setIsShuffle(!isShuffle)}
+            className={`transition duration-155 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center p-2.5 ${isShuffle ? 'text-emerald-400 animate-pulse' : 'text-zinc-450 hover:text-white'}`}
+            title="Aleatório"
           >
-            <SkipBack className="w-5 h-5" />
+            <Shuffle className="w-5.25 h-5.25" />
           </button>
 
-          {/* Play/Pause Button: Large filled solid green circle */}
           <button 
-            id="car-play-pause-btn"
+            onClick={onPrev}
+            className="transition duration-155 hover:scale-105 active:scale-95 text-zinc-100 hover:text-emerald-450 cursor-pointer flex items-center justify-center p-2.5"
+            title="Música anterior"
+          >
+            <SkipBack className="w-5.5 h-5.5" />
+          </button>
+
+          <button 
             onClick={onPlayPause}
-            className="w-20 h-20 bg-gradient-to-tr from-[#10b981] via-[#84cc16] to-[#eab308] text-slate-950 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-lg shadow-emerald-500/20"
+            className="w-14 h-14 border-2 border-emerald-500 rounded-full flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.2)] bg-black/40"
             title={isPlaying ? "Pausar" : "Tocar"}
           >
             {isPlaying ? (
-              <Pause className="w-7 h-7 fill-slate-950 text-slate-950" />
+              <Pause className="w-6 h-6 text-emerald-400" />
             ) : (
-              <Play className="w-7 h-7 fill-slate-950 text-slate-955 ml-1" />
+              <Play className="w-6 h-6 text-emerald-400 ml-1" />
             )}
           </button>
 
-          {/* Skip Forward Button: outlined circle in emerald */}
           <button 
-            id="car-next-btn"
             onClick={onNext}
-            className="w-14 h-14 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-md bg-[#0d0f14]/40"
+            className="transition duration-155 hover:scale-105 active:scale-95 text-zinc-100 hover:text-emerald-450 cursor-pointer flex items-center justify-center p-2.5"
             title="Próxima música"
           >
-            <SkipForward className="w-5 h-5" />
+            <SkipForward className="w-5.5 h-5.5" />
+          </button>
+
+          <button 
+            onClick={() => setIsRepeat(!isRepeat)}
+            className={`transition duration-155 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center p-2.5 ${isRepeat ? 'text-emerald-400' : 'text-zinc-450 hover:text-white'}`}
+            title="Repetições"
+          >
+            <Repeat className="w-5.25 h-5.25" />
           </button>
         </div>
 
-        {/* Bottom guidance banner */}
-        <div className="text-center text-zinc-600 text-[10px] sm:text-xs font-mono py-1 flex items-center justify-center gap-1.5 z-10 select-none shrink-0 mb-1">
-          <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Toques ampliados ideais para centrais automotivas ou suporte de para-brisa.
+        {/* Double-pill main controllers at the very footer */}
+        <div className="w-full max-w-md mx-auto flex items-center gap-3.5 pt-2 z-10 select-none shrink-0 mb-1">
+          <button 
+            onClick={() => setCarLyricsActive(!carLyricsActive)}
+            className={`flex items-center justify-center gap-2 px-4 py-3 border rounded-xl text-xs font-mono font-bold tracking-widest w-1/2 cursor-pointer transition duration-200 outline-none ${
+              carLyricsActive 
+                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]' 
+                : 'border-emerald-500/80 hover:bg-emerald-500/5 text-[#10b981]'
+            }`}
+          >
+            <FileText className="w-4 h-4 stroke-[2.5]" />
+            <span>LETRA</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              setCarMode(false);
+              setCarLyricsActive(false);
+            }}
+            className="flex items-center justify-center gap-2 px-4 py-3 border border-amber-500/80 hover:bg-amber-500/5 text-amber-500 rounded-xl text-xs font-mono font-bold tracking-widest w-1/2 cursor-pointer transition duration-200 outline-none"
+          >
+            <Car className="w-4 h-4 stroke-[2.5]" />
+            <span>CARRO</span>
+          </button>
         </div>
       </div>
     );

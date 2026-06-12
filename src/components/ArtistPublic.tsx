@@ -37,6 +37,9 @@ interface ArtistPublicProps {
   onPlayPause: () => void;
   setCarMode: (active: boolean) => void;
   autoCarMode: boolean;
+  logoScale?: number;
+  showLogo?: boolean;
+  customLogoUrl?: string;
 }
 
 export default function ArtistPublic({
@@ -47,7 +50,10 @@ export default function ArtistPublic({
   isPlaying,
   onPlayPause,
   setCarMode,
-  autoCarMode
+  autoCarMode,
+  logoScale,
+  showLogo,
+  customLogoUrl
 }: ArtistPublicProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -240,7 +246,7 @@ export default function ArtistPublic({
             onClick={() => onNavigate('landing')}
             className="cursor-pointer select-none group mt-1 mb-2"
           >
-            <BrandLogo size="sm" className="scale-105 origin-left" />
+            <BrandLogo size="sm" scale={logoScale} showLogo={showLogo} customLogoUrl={customLogoUrl} className="origin-left" />
           </div>
 
           {/* Nav Items stack with exact vertical visual indicators */}
@@ -304,7 +310,7 @@ export default function ArtistPublic({
               onClick={() => onNavigate('landing')}
               className="flex items-center gap-1 cursor-pointer active:scale-95 transition-all select-none"
             >
-              <BrandLogo size="sm" className="scale-90 origin-left" />
+              <BrandLogo size="sm" scale={logoScale} showLogo={showLogo} customLogoUrl={customLogoUrl} className="origin-left" />
               <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-1 mt-0.5" />
             </div>
 

@@ -5,80 +5,117 @@ interface BrandLogoProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   classNameText?: string;
+  scale?: number;
+  customLogoUrl?: string;
+  showLogo?: boolean;
 }
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
   iconOnly = false,
   size = 'md',
   className = '',
-  classNameText = ''
+  classNameText = '',
+  scale,
+  customLogoUrl = '',
+  showLogo = true
 }) => {
+  if (!showLogo) return null;
+
   // Size mappings
   const sizeMap = {
     sm: {
       icon: 'w-6 h-6',
       text: 'text-base',
       dWidth: 'w-4 h-4.5',
+      imgMaxHeight: 'max-h-6 sm:max-h-7',
     },
     md: {
       icon: 'w-10 h-10',
       text: 'text-xl sm:text-2xl',
       dWidth: 'w-5.5 h-6',
+      imgMaxHeight: 'max-h-10 sm:max-h-11',
     },
     lg: {
       icon: 'w-14 h-14',
       text: 'text-3xl sm:text-4xl',
       dWidth: 'w-8 h-8.5',
+      imgMaxHeight: 'max-h-14 sm:max-h-16',
     }
   };
 
   const currentSize = sizeMap[size];
 
+  if (customLogoUrl && customLogoUrl.trim() !== '') {
+    // Elegant base heights for custom logo, giving a robust and well-proportioned visual
+    const baseHeight = size === 'sm' ? 38 : (size === 'md' ? 56 : 76);
+    const computedHeight = scale ? Math.round(baseHeight * scale) : baseHeight;
+    // Scale maximum width ceilings dynamically as well so landscape/wide logos are never cut off
+    const computedMaxW = scale ? Math.round(480 * scale) : 480;
+    return (
+      <div 
+        className={`flex items-center ${className}`}
+        style={{ display: 'inline-flex' }}
+      >
+        <img 
+          src={customLogoUrl} 
+          alt="SomDrive Logo" 
+          className="object-contain select-none transition-all duration-150"
+          style={{ 
+            height: `${computedHeight}px`, 
+            maxHeight: `${computedHeight}px`,
+            maxWidth: `${computedMaxW}px`
+          }}
+          referrerPolicy="no-referrer"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      {/* Soundwave + Play Button Logo Mark */}
-      <svg className={`${currentSize.icon} select-none shrink-0`} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Gradients */}
+    <div 
+      className={`flex items-center gap-2.5 ${className}`}
+      style={scale ? { transform: `scale(${scale})`, transformOrigin: 'left center', display: 'inline-flex' } : undefined}
+    >
+      {/* Brand Golden Logo Icon */}
+      <svg className={`${currentSize.icon} select-none shrink-0 rounded-xl overflow-hidden`} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <linearGradient id="waveGradient" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#f97316" />
-            <stop offset="50%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#eab308" />
+          {/* Seamless premium gold gradient */}
+          <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#FFDD00" />
+            <stop offset="45%" stopColor="#FFA800" />
+            <stop offset="100%" stopColor="#FF7F00" />
           </linearGradient>
-          <linearGradient id="playGradient" x1="30" y1="30" x2="90" y2="90" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#f97316" />
-            <stop offset="100%" stopColor="#fbbf24" />
-          </linearGradient>
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+
+          {/* Glowing bright ambient reflection filter */}
+          <filter id="glow-effect" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
         </defs>
-        
-        {/* Soundwave Bars (glowing) */}
-        <g filter="url(#glow)">
-          {/* Left Bars */}
-          <rect x="14" y="45" width="5" height="30" rx="2.5" fill="url(#waveGradient)" opacity="0.8" />
-          <rect x="25" y="35" width="5" height="50" rx="2.5" fill="url(#waveGradient)" opacity="0.9" />
-          <rect x="36" y="20" width="5" height="80" rx="2.5" fill="url(#waveGradient)" />
-          <rect x="47" y="10" width="5" height="100" rx="2.5" fill="url(#waveGradient)" />
-          
-          {/* Right Bars */}
-          <rect x="68" y="10" width="5" height="100" rx="2.5" fill="url(#waveGradient)" />
-          <rect x="79" y="20" width="5" height="80" rx="2.5" fill="url(#waveGradient)" />
-          <rect x="90" y="35" width="5" height="50" rx="2.5" fill="url(#waveGradient)" opacity="0.9" />
-          <rect x="101" y="45" width="5" height="30" rx="2.5" fill="url(#waveGradient)" opacity="0.8" />
+
+        {/* Squircle base */}
+        <rect width="512" height="512" rx="135" fill="url(#yellow-gold-grad)" />
+
+        {/* Three vertical soundwave bars (White) */}
+        <g fill="#FFFFFF">
+          <rect x="102" y="215" width="20" height="82" rx="10" />
+          <rect x="134" y="165" width="20" height="182" rx="10" />
+          <rect x="166" y="230" width="20" height="52" rx="10" />
         </g>
-        
-        {/* Play Button Overlay with clean borders */}
-        <polygon 
-          points="42,35 42,85 85,60" 
-          fill="url(#playGradient)" 
-          stroke="#090a0f" 
-          strokeWidth="3.5" 
-          strokeLinejoin="round" 
-          filter="url(#glow)"
-        />
+
+        {/* Neon light green dot indicator */}
+        <circle cx="166" cy="318" r="12" fill="#00E676" filter="url(#glow-effect)" />
+
+        {/* Curly elegant 'S' path stroke */}
+        <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+              fill="none" 
+              stroke="#FFFFFF" 
+              strokeWidth="44" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" />
       </svg>
       
       {/* SomDrive Text Logotype */}

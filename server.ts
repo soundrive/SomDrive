@@ -934,21 +934,21 @@ async function startServer() {
         .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
 
       const ogPayload = `
-  <!-- Dynamic Custom Soundrive OG Sharing Metadata -->
-  <title>Catálogo musical de ${formattedName} | Soundrive</title>
-  <meta name="description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
-  <meta property="og:title" content="Catálogo musical de ${formattedName} | Soundrive" />
-  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
+  <title>Catálogo musical de ${formattedName} | SomDrive</title>
+  <meta name="description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
+  <meta property="og:title" content="Catálogo musical de ${formattedName} | SomDrive" />
+  <meta property="og:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${ogUrlToUse}" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Soundrive" />
+  <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | Soundrive" />
-  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no Soundrive." />
+  <meta name="twitter:title" content="Catálogo musical de ${formattedName} | SomDrive" />
+  <meta name="twitter:description" content="Ouça o repertório autoral e as composições disponíveis no SomDrive." />
   <meta name="twitter:image" content="${ogImageToUse}" />
 `;
 
@@ -1259,7 +1259,10 @@ async function startServer() {
   // API Route for Mercado Pago webhook integrations
   app.post("/api/mercadopago-webhook", async (req, res) => {
     try {
-      await mercadopagoWebhookHandler(req, res);
+      const handlerFn = typeof mercadopagoWebhookHandler === "function" 
+        ? mercadopagoWebhookHandler 
+        : (mercadopagoWebhookHandler as any)?.default;
+      await handlerFn(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in local mercadopago-webhook wrapper:", err);
       if (!res.headersSent) {
@@ -1271,7 +1274,10 @@ async function startServer() {
   // API Route for Mercado Pago Checkout Pro preference creation
   app.post("/api/mercadopago/create-checkout-payment", async (req, res) => {
     try {
-      await createCheckoutPaymentHandler(req, res);
+      const handlerFn = typeof createCheckoutPaymentHandler === "function" 
+        ? createCheckoutPaymentHandler 
+        : (createCheckoutPaymentHandler as any)?.default;
+      await handlerFn(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in local create-checkout-payment wrapper:", err);
       if (!res.headersSent) {
@@ -1283,7 +1289,10 @@ async function startServer() {
   // API Route for admin integrations check
   app.get("/api/admin/check-integrations", async (req, res) => {
     try {
-      await checkIntegrationsHandler(req, res);
+      const handlerFn = typeof checkIntegrationsHandler === "function" 
+        ? checkIntegrationsHandler 
+        : (checkIntegrationsHandler as any)?.default;
+      await handlerFn(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in check-integrations wrapper:", err);
       if (!res.headersSent) {
@@ -1294,7 +1303,10 @@ async function startServer() {
 
   app.post("/api/admin/check-integrations", async (req, res) => {
     try {
-      await checkIntegrationsHandler(req, res);
+      const handlerFn = typeof checkIntegrationsHandler === "function" 
+        ? checkIntegrationsHandler 
+        : (checkIntegrationsHandler as any)?.default;
+      await handlerFn(req, res);
     } catch (err: any) {
       console.error("Local Dev - Error in check-integrations wrapper:", err);
       if (!res.headersSent) {
@@ -1679,16 +1691,16 @@ async function startServer() {
 
     <!-- Tiny text on bottom part of sleeve to make it look highly authentic and detailed -->
     <text x="680" y="455" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="800" font-size="9" fill="#94a3b8" letter-spacing="3px" opacity="0.5">EXCLUSIVE DIGITAL AUDIO</text>
-    <text x="680" y="468" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="600" font-size="8" fill="#d946ef" letter-spacing="1.5px" opacity="0.6">SOUNDRIVE COLLECTOR SERIES</text>
+    <text x="680" y="468" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="600" font-size="8" fill="#d946ef" letter-spacing="1.5px" opacity="0.6">SOMDRIVE COLLECTOR SERIES</text>
   </g>
 
-  <!-- Soundrive Discreet Brand Logo (Top Left) -->
+  <!-- SomDrive Discreet Brand Logo (Top Left) -->
   <g transform="translate(100, 85)">
     <!-- Graphic soundwave bar design -->
     <rect x="0" y="5" width="4" height="22" rx="2" fill="url(#gold-gradient)" />
     <rect x="8" y="0" width="4" height="32" rx="2" fill="url(#gold-gradient)" />
     <rect x="16" y="8" width="4" height="16" rx="2" fill="url(#gold-gradient)" />
-    <text x="32" y="22" class="logo-text" font-size="20">SOUNDRIVE</text>
+    <text x="32" y="22" class="logo-text" font-size="20">SOMDRIVE</text>
   </g>
 
   <!-- Core sharing info layout -->
