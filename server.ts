@@ -877,24 +877,18 @@ async function startServer() {
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
-    let ogImageToUse = `${appBaseUrl}/api/global-share-card.png`;
-    let baseImageUrl = "";
+    let ogImageToUse = "";
     try {
       const shareCard = await fetchGlobalShareCardRest();
-      if (shareCard && shareCard.ogImageUrl) {
-        baseImageUrl = shareCard.ogImageUrl;
-        let version = String(Date.now());
-        if (shareCard.updatedAt) {
-          const parsedTime = new Date(shareCard.updatedAt).getTime();
-          if (!isNaN(parsedTime)) {
-            version = String(parsedTime);
-          }
-        }
-        // Proxy through our public/reliable URL on our domain to avoid R2 .dev bot challenges
-        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
+      if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
+        ogImageToUse = shareCard.ogImageUrl.trim();
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings for home:", fErr);
+    }
+
+    if (!ogImageToUse) {
+      ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
     }
 
     const indexPath = process.env.NODE_ENV === "production"
@@ -912,6 +906,11 @@ async function startServer() {
         .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
         .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
 
+      let ogImageSecureToUse = ogImageToUse;
+      if (ogImageSecureToUse.startsWith("http://")) {
+        ogImageSecureToUse = ogImageSecureToUse.replace("http://", "https://");
+      }
+
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Home Metadata -->
   <title>SomDrive | Divulgue seu Repertório Musical</title>
@@ -920,6 +919,8 @@ async function startServer() {
   <meta property="og:title" content="SomDrive - Catálogo Musical" />
   <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta property="og:image" content="${ogImageToUse}" />
+  <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${appBaseUrl}/" />
@@ -928,6 +929,8 @@ async function startServer() {
   <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
   <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
+  <link rel="image_src" href="${ogImageToUse}" />
+  <meta itemprop="image" content="${ogImageToUse}" />
 `;
 
       if (htmlContents.includes("</head>")) {
@@ -985,7 +988,7 @@ async function startServer() {
       ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
     }
 
-    const ogUrlToUse = `${appBaseUrl}/s/${slugOrId}`;
+    const ogUrlToUse = slugOrId === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `${appBaseUrl}/s/${slugOrId}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
@@ -1025,6 +1028,8 @@ async function startServer() {
   <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
   <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
+  <link rel="image_src" href="${ogImageToUse}" />
+  <meta itemprop="image" content="${ogImageToUse}" />
 `;
 
       if (htmlContents.includes("</head>")) {
@@ -1089,6 +1094,13 @@ async function startServer() {
       ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
     }
 
+    const ogUrlToUse = originalSlug === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `${appBaseUrl}/s/${originalSlug}`;
+
+    let ogImageSecureToUse = ogImageToUse;
+    if (ogImageSecureToUse.startsWith("http://")) {
+      ogImageSecureToUse = ogImageSecureToUse.replace("http://", "https://");
+    }
+
     const htmlContents = `<!DOCTYPE html>
 <html>
 <head>
@@ -1098,14 +1110,18 @@ async function startServer() {
   <meta property="og:title" content="SomDrive - Catálogo Musical" />
   <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta property="og:image" content="${ogImageToUse}" />
+  <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${appBaseUrl}/s/${originalSlug}" />
+  <meta property="og:url" content="${ogUrlToUse}" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
   <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
   <meta name="twitter:image" content="${ogImageToUse}" />
+  <link rel="image_src" href="${ogImageToUse}" />
+  <meta itemprop="image" content="${ogImageToUse}" />
   <script>
     window.location.replace("/catalogo/${originalSlug}");
   </script>
