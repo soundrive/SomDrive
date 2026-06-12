@@ -5,6 +5,14 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/s/:slug",
+      "destination": "/api/metadata?slug=:slug"
+    },
+    {
+      "source": "/catalogo/:slug",
+      "destination": "/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
