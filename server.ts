@@ -986,7 +986,7 @@ async function startServer() {
       ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=default`;
     }
 
-    const ogUrlToUse = `${appBaseUrl}${req?.path || ('/catalogo/' + slugOrId)}`;
+    const ogUrlToUse = `${appBaseUrl}/s/${slugOrId}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
