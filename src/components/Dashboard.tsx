@@ -12,6 +12,7 @@ import {
   ShieldCheck, 
   Sparkles, 
   Music, 
+  Loader2, 
   ArrowLeft, 
   LogOut, 
   Calendar, 
@@ -58,18 +59,9 @@ export default function Dashboard({
   const [analytics, setAnalytics] = useState<Analytics>({ artistId: currentUser.userId, viewsCount: 0, whatsappClicks: 0 });
   const [copiedAlert, setCopiedAlert] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [globalShareCard, setGlobalShareCard] = useState<ShareCardSettings | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
   const [showLimitPrompt, setShowLimitPrompt] = useState(false);
-
-  // Sharing Card Dynamic Cache Busting calculations
-  const shareCardBustVal = globalShareCard?.updatedAt 
-    ? String(new Date(globalShareCard.updatedAt).getTime() || globalShareCard.updatedAt) 
-    : String(Date.now());
-  const shareCardPreviewUrl = globalShareCard?.ogImageUrl 
-    ? `${globalShareCard.ogImageUrl}${globalShareCard.ogImageUrl.includes('?') ? '&' : '?'}v=${shareCardBustVal}`
-    : `/api/global-share-card.png?v=${shareCardBustVal}`;
   
   // Editing state block
   const [showEditForm, setShowEditForm] = useState(false);
@@ -138,80 +130,7 @@ export default function Dashboard({
   const [profCustomSongsListTitle, setProfCustomSongsListTitle] = useState('');
   const [profCustomSongsListSubtitle, setProfCustomSongsListSubtitle] = useState('');
 
-  // Custom Executive Sharing Card Image upload states & actions
-  const [isUploadingCardImage, setIsUploadingCardImage] = useState(false);
-  const [cardImageUploadProgress, setCardImageUploadProgress] = useState(0);
-  const [cardImageError, setCardImageError] = useState('');
-  const cardImageInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate size (max 10MB)
-    const maxSizeBytes = 10 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      setCardImageError('A imagem excede o tamanho máximo de 10 MB.');
-      return;
-    }
-
-    // Validate format (only jpg/png/webp)
-    const mimeLower = file.type.toLowerCase();
-    const isImage = mimeLower.startsWith('image/');
-    if (!isImage) {
-      setCardImageError('Por favor, selecione um arquivo de imagem válido (PNG, JPG, JPEG ou WEBP).');
-      return;
-    }
-
-    setIsUploadingCardImage(true);
-    setCardImageUploadProgress(10);
-    setCardImageError('');
-
-    try {
-      setCardImageUploadProgress(30);
-      // Upload using Firebase storage
-      const uploadedUrl = await dbService.uploadFile(profile.userId, file, 'cover', (prog) => {
-        setCardImageUploadProgress(Math.min(90, 30 + Math.round(prog * 0.6)));
-      });
-
-      setCardImageUploadProgress(95);
-      
-      // Update the profile in local reference and remote Firestore database!
-      const updatedProfile = dbService.updateArtistProfile(profile.userId, {
-        customCardImageUrl: uploadedUrl
-      });
-
-      setProfile(updatedProfile);
-      setCardImageUploadProgress(100);
-      setToastMessage("Sua foto do Cartão Executivo foi atualizada com sucesso!");
-      
-      // Clear input value
-      if (cardImageInputRef.current) cardImageInputRef.current.value = '';
-    } catch (err: any) {
-      console.error("Error uploading custom card image:", err);
-      setCardImageError('Erro ao enviar imagem. Verifique sua conexão e tente novamente.');
-    } finally {
-      setIsUploadingCardImage(false);
-      setTimeout(() => setCardImageUploadProgress(0), 4000);
-    }
-  };
-
-  const handleRemoveCustomCardImage = async () => {
-    if (confirm("Deseja realmente remover sua imagem personalizada e voltar ao vinil de design padrão?")) {
-      setIsUploadingCardImage(true);
-      try {
-        const updatedProfile = dbService.updateArtistProfile(profile.userId, {
-          customCardImageUrl: "" // Empty string clears it
-        });
-        setProfile(updatedProfile);
-        setToastMessage("Cartão executivo redefinido para o padrão com sucesso!");
-      } catch (err) {
-        console.error("Error clearing custom card image:", err);
-      } finally {
-        setIsUploadingCardImage(false);
-      }
-    }
-  };
 
   const handleOpenProfileModal = () => {
     setProfName(profile.name || '');
@@ -307,11 +226,6 @@ export default function Dashboard({
     setProfile(artistData);
     setTracks(dbService.getArtistMusics(currentUser.userId));
     setAnalytics(dbService.getAnalytics(currentUser.userId));
-    
-    // Fetch global share card configuration
-    dbService.getShareCardSettings().then(settings => {
-      setGlobalShareCard(settings);
-    });
   };
 
   const handleMoveTrack = async (trackId: string, direction: 'up' | 'down', e: React.MouseEvent) => {
@@ -1146,53 +1060,7 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* PREMIUM SHARING CARD PREVIEW PANEL */}
-        <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-2xl space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-heading font-black text-lg md:text-xl uppercase tracking-tight text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" /> Cartão de Compartilhamento Executivo
-              </h3>
-              <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                Apresentação impecável parecida com Spotify, Apple Music e Linktree no WhatsApp, Facebook e Instagram de forma automática.
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 bg-emerald-950/50 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 self-start md:self-auto">
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Ativo no Link
-              </span>
-            </div>
-          </div>
 
-          <div className="w-full flex flex-col items-center justify-center bg-slate-950/50 border border-slate-850/80 p-6 rounded-xl relative group overflow-hidden">
-            <div className="absolute top-2 left-2 px-2 py-0.5 bg-slate-900 border border-slate-800 text-[9px] font-mono font-bold text-slate-450 rounded tracking-wider uppercase">
-              Prévia do Cartão de Divulgação
-            </div>
-            <div className="w-full max-w-xl aspect-[1.91/1] overflow-hidden rounded-lg border border-slate-800/80 shadow-2xl relative transition duration-305 group-hover:border-orange-500/20">
-              <img 
-                src={shareCardPreviewUrl}
-                alt="Cartão SomDrive" 
-                className="w-full h-full object-cover select-none"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <div className="mt-4 flex flex-col sm:flex-row items-center gap-4 text-[10px] font-mono text-slate-500">
-              <span>Resolução recomendada: 1200 x 630 px</span>
-              <span className="hidden sm:inline">•</span>
-              <span>Formato: Imagem de Compartilhamento</span>
-              <span className="hidden sm:inline">•</span>
-              <a 
-                href={shareCardPreviewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-orange-400 hover:text-orange-355 hover:underline transition font-bold"
-              >
-                Abrir imagem em nova aba ↗
-              </a>
-            </div>
-          </div>
-        </div>
 
         {/* SECTION HEADER: MUSIC CONTROL LIST & ACTIONS */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-4">

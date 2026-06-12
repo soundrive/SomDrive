@@ -1773,8 +1773,8 @@ export default function AdminArea({
                       <p className="text-[11px] font-mono text-slate-455">Prévia da imagem ativa (Proporção 1200x630px):</p>
                       <div className="max-w-md aspect-[1.91/1] overflow-hidden rounded-xl border border-slate-800 shadow-lg relative bg-slate-900 group">
                         <img 
-                          src={shareCardSettings.ogImageUrl} 
-                          alt="Imagem Global de Compartilhamento" 
+                          src={`/api/global-share-card.png?v=${shareCardSettings.updatedAt ? new Date(shareCardSettings.updatedAt).getTime() : Date.now()}`} 
+                          alt="Layout do Cartão Executivo com Disco de Vinil" 
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">

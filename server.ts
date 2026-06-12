@@ -832,28 +832,10 @@ async function startServer() {
   // Proxy endpoint to load global sharing image across any browser, CORS free and crawler-friendly
   const serveGlobalShareCard = async (req: any, res: any) => {
     try {
-      const shareCard = await fetchGlobalShareCardRest();
-      if (!shareCard || !shareCard.ogImageUrl) {
-        return res.status(404).json({ error: "Nenhum cartão de compartilhamento configurado." });
-      }
-
-      const imageUrl = shareCard.ogImageUrl;
-      console.log("Serving proxy global share card directly from R2 URL:", imageUrl);
-
-      // Fetch dynamic buffer
-      const imageRes = await fetch(imageUrl);
-      if (!imageRes.ok) {
-        throw new Error(`Cloudflare status error: ${imageRes.status}`);
-      }
-
-      const arrayBuffer = await imageRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const contentType = imageRes.headers.get("content-type") || "image/png";
-
+      const { buffer, contentType } = await generateArtistPngBuffer("default");
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour browser cache
       return res.send(buffer);
-
     } catch (err: any) {
       console.error("Error serving proxy global share card:", err);
       // Fallback: redirect dynamically to make it load even in case of fetch errors
@@ -946,7 +928,7 @@ async function startServer() {
   const generateArtistHtml = async (slugOrId: string, req: any) => {
     console.time("catalogo-total");
     console.time("buscar-artista");
-    const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
+    const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
     console.timeEnd("buscar-artista");
     const formattedName = name.trim();
 
@@ -969,29 +951,14 @@ async function startServer() {
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
-    // Default SomDrive image background fallback, never show/crowd/plateia/unsplash
-    let ogImageToUse = `${appBaseUrl}/favicon.svg`; 
-    let baseImageUrl = "";
-    console.time("carregar-config-share-card");
-    try {
-      const shareCard = await fetchGlobalShareCardRest();
-      if (shareCard && shareCard.ogImageUrl) {
-        baseImageUrl = shareCard.ogImageUrl;
-        let version = "1.0.0";
-        if (shareCard.updatedAt) {
-          const parsedTime = new Date(shareCard.updatedAt).getTime();
-          if (!isNaN(parsedTime)) {
-            version = String(parsedTime);
-          } else {
-            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
-          }
-        }
-        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
-      }
-    } catch (fErr) {
-      console.warn("Could not fetch global share card settings:", fErr);
+    // Generate specific customized executive sharing card URL as OG image with dynamic cache bust
+    let version = "1.0.0";
+    if (customCardImageUrl) {
+      const cleanImgName = customCardImageUrl.split("/").pop() || "custom";
+      version = encodeURIComponent(cleanImgName);
     }
-    console.timeEnd("carregar-config-share-card");
+    const ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}?v=${version}`;
+    let baseImageUrl = customCardImageUrl || "";
 
     let ogUrlToUse = `${appBaseUrl}/catalogo/${cleanSlug}`;
 
@@ -1052,7 +1019,7 @@ async function startServer() {
 
   // Helper to dynamically build/inject the Open Graph metadata for the clean WhatsApp short share route
   const generateShareHtml = async (slugOrId: string, req?: any) => {
-    const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
+    const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
     const formattedName = name.trim();
 
     const slugifyStr = (text: string) => {
@@ -1074,27 +1041,14 @@ async function startServer() {
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
-    // Fetch the global share card image or fallback
-    let ogImageToUse = `${appBaseUrl}/favicon.svg`; 
-    let baseImageUrl = "";
+    // Generate specific customized executive sharing card URL as OG image with dynamic cache bust
     let version = "1.0.0";
-    try {
-      const shareCard = await fetchGlobalShareCardRest();
-      if (shareCard && shareCard.ogImageUrl) {
-        baseImageUrl = shareCard.ogImageUrl;
-        if (shareCard.updatedAt) {
-          const parsedTime = new Date(shareCard.updatedAt).getTime();
-          if (!isNaN(parsedTime)) {
-            version = String(parsedTime);
-          } else {
-            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
-          }
-        }
-        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
-      }
-    } catch (fErr) {
-      console.warn("Could not fetch global share card settings:", fErr);
+    if (customCardImageUrl) {
+      const cleanImgName = customCardImageUrl.split("/").pop() || "custom";
+      version = encodeURIComponent(cleanImgName);
     }
+    const ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}?v=${version}`;
+    let baseImageUrl = customCardImageUrl || "";
 
     const htmlContents = `<!DOCTYPE html>
 <html>
@@ -1452,6 +1406,24 @@ async function startServer() {
     const cleanId = (idOrSlug || "").trim();
     const cleanIdLower = cleanId.toLowerCase();
 
+    if (cleanIdLower === "default" || cleanIdLower === "global") {
+      let globalCover = "";
+      try {
+        const globalCard = await fetchGlobalShareCardRest();
+        if (globalCard && globalCard.ogImageUrl) {
+          globalCover = globalCard.ogImageUrl;
+        }
+      } catch {}
+      return {
+        userId: "default",
+        name: "SOMDRIVE",
+        genre: "Divulgue seu Repertório",
+        city: "Brasil",
+        customCardImageUrl: globalCover,
+        slug: "somdrive"
+      };
+    }
+
     const slugifyStr = (text: string) => {
       return text
         .toString()
@@ -1601,11 +1573,24 @@ async function startServer() {
   const generateArtistPngBuffer = async (artistId: string): Promise<{ buffer: Buffer; contentType: string }> => {
     const { name, genre, city, customCardImageUrl } = await fetchArtistRest(artistId);
 
+    // Dynamic resolution of cover card fallback: use artist's own upload or fallback to the site's global image uploaded by Admin
+    let resolvedCoverUrl = customCardImageUrl || "";
+    if (!resolvedCoverUrl) {
+      try {
+        const globalCard = await fetchGlobalShareCardRest();
+        if (globalCard && globalCard.ogImageUrl) {
+          resolvedCoverUrl = globalCard.ogImageUrl;
+        }
+      } catch (err) {
+        console.warn("Could not retrieve global share card for artist cover artwork:", err);
+      }
+    }
+
     // Safe formatting with guaranteed string values
     const cleanName = escapeXml((name || "Compositor").trim().toUpperCase());
     const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
     const cleanCity = escapeXml((city || "Brasil").trim());
-    const cleanCardImageUrl = customCardImageUrl ? escapeXml(customCardImageUrl) : "";
+    const cleanCardImageUrl = resolvedCoverUrl ? escapeXml(resolvedCoverUrl) : "";
 
     let subtitle = "";
     if (cleanGenre && cleanCity) {
@@ -1620,76 +1605,77 @@ async function startServer() {
 
     const initialLetter = escapeXml((name || "S").trim().substring(0, 1).toUpperCase());
 
-    // Beautiful, non-AI-looking dark/purple premium card template (1200x630px)
+    // Beautiful, non-AI-looking dark/green premium card template (1200x630px)
     const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
     <style type="text/css"><![CDATA[
       .title-text {
         font-family: 'Space Grotesk', -apple-system, sans-serif;
         font-weight: 850;
-        fill: #ffffff;
+        fill: #F5F7FA;
       }
       .sub-text {
         font-family: -apple-system, sans-serif;
         font-weight: 600;
-        fill: #a5b4fc;
+        fill: #9AA6B2;
       }
       .logo-text {
         font-family: 'Space Grotesk', -apple-system, sans-serif;
         font-weight: 800;
-        fill: #ffffff;
+        fill: #F5F7FA;
         letter-spacing: 3px;
       }
       .footer-text {
         font-family: -apple-system, sans-serif;
         font-weight: 600;
-        fill: #7c3aed;
+        fill: #1ED760;
         letter-spacing: 1.5px;
       }
     ]]></style>
     
     <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#120424" />
-      <stop offset="60%" stop-color="#070210" />
-      <stop offset="100%" stop-color="#030107" />
+      <stop offset="0%" stop-color="#05070a" />
+      <stop offset="60%" stop-color="#0b1016" />
+      <stop offset="100%" stop-color="#111821" />
     </linearGradient>
     
     <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffd066" />
-      <stop offset="100%" stop-color="#f59e0b" />
+      <stop offset="0%" stop-color="#ffd350" />
+      <stop offset="100%" stop-color="#f7c948" />
     </linearGradient>
 
     <linearGradient id="button-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#7c3aed" />
-      <stop offset="100%" stop-color="#c084fc" />
+      <stop offset="0%" stop-color="#1ed760" />
+      <stop offset="100%" stop-color="#00e676" />
     </linearGradient>
 
     <clipPath id="card-rounded">
       <rect x="510" y="115" width="340" height="400" rx="16" ry="16" />
     </clipPath>
 
-    <!-- Sleeve cover gradient -->
+    <!-- Sleeve cover gradient (SomDrive Premium Charcoal/Slate) -->
     <linearGradient id="sleeve-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4c1d95" />
-      <stop offset="50%" stop-color="#1e1b4b" />
-      <stop offset="100%" stop-color="#0f172a" />
+      <stop offset="0%" stop-color="#111821" />
+      <stop offset="50%" stop-color="#0b1016" />
+      <stop offset="100%" stop-color="#05070a" />
     </linearGradient>
 
+    <!-- Inner vinyl label: elegant dark forest green/black -->
     <linearGradient id="vinyl-label-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#311042" />
-      <stop offset="100%" stop-color="#0f0515" />
+      <stop offset="0%" stop-color="#0fa958" />
+      <stop offset="100%" stop-color="#05070a" />
     </linearGradient>
     
     <linearGradient id="vinyl-gold-shine" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10" />
-      <stop offset="30%" stop-color="#8b5cf6" stop-opacity="0.05" />
-      <stop offset="70%" stop-color="#ffffff" stop-opacity="0.10" />
-      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.15" />
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="35%" stop-color="#1ed760" stop-opacity="0.03" />
+      <stop offset="65%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#1ed760" stop-opacity="0.12" />
     </linearGradient>
 
     <linearGradient id="glow-border" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c084fc" stop-opacity="0.6" />
-      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.2" />
+      <stop offset="0%" stop-color="#1ed760" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#0fa958" stop-opacity="0.2" />
     </linearGradient>
     
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -1700,29 +1686,29 @@ async function startServer() {
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#bg-gradient)" />
   
-  <!-- Atmospheric neon / purple ambient glows -->
-  <circle cx="200" cy="150" r="450" fill="#7c3aed" opacity="0.08" filter="blur(70px)" />
-  <circle cx="1000" cy="315" r="500" fill="#a855f7" opacity="0.12" filter="blur(90px)" />
-  <circle cx="600" cy="500" r="300" fill="#ec4899" opacity="0.05" filter="blur(60px)" />
+  <!-- Atmospheric neon / green ambient glows -->
+  <circle cx="200" cy="150" r="450" fill="#1ed760" opacity="0.06" filter="blur(70px)" />
+  <circle cx="1000" cy="315" r="500" fill="#00e676" opacity="0.08" filter="blur(90px)" />
+  <circle cx="600" cy="500" r="300" fill="#ffd350" opacity="0.03" filter="blur(60px)" />
 
   <!-- Fully customized Vinyl & Sleeve combination on right side -->
   <!-- 1. Vinyl Body (Tucked behind/peek out) -->
   <g filter="url(#shadow)">
     <!-- Vinyl record centered at cx=930, cy=315, radius r=192 -->
-    <circle cx="930" cy="315" r="192" fill="#090610" stroke="#1d122c" stroke-width="2.5" />
+    <circle cx="930" cy="315" r="192" fill="#05070a" stroke="#1D2A35" stroke-width="2.5" />
     
     <!-- Fine concentric grooves -->
-    <circle cx="930" cy="315" r="182" stroke="#1d1135" stroke-width="0.75" fill="none" opacity="0.75" />
-    <circle cx="930" cy="315" r="172" stroke="#150a28" stroke-width="1.25" fill="none" opacity="0.5" />
-    <circle cx="930" cy="315" r="162" stroke="#25143f" stroke-width="0.5" fill="none" opacity="0.7" />
-    <circle cx="930" cy="315" r="152" stroke="#1d1135" stroke-width="1" fill="none" opacity="0.45" />
-    <circle cx="930" cy="315" r="142" stroke="#1d1135" stroke-width="0.5" fill="none" opacity="0.6" />
-    <circle cx="930" cy="315" r="132" stroke="#150a28" stroke-width="1.25" fill="none" opacity="0.4" />
-    <circle cx="930" cy="315" r="122" stroke="#2e1456" stroke-width="0.8" fill="none" opacity="0.6" />
-    <circle cx="930" cy="315" r="112" stroke="#1d1135" stroke-width="1.5" fill="none" opacity="0.4" />
-    <circle cx="930" cy="315" r="102" stroke="#100524" stroke-width="0.5" fill="none" opacity="0.5" />
-    <circle cx="930" cy="315" r="92" stroke="#100524" stroke-width="0.75" fill="none" opacity="0.5" />
-    <circle cx="930" cy="315" r="82" stroke="#1d1135" stroke-width="1" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="182" stroke="#1D2A35" stroke-width="0.75" fill="none" opacity="0.75" />
+    <circle cx="930" cy="315" r="172" stroke="#05070a" stroke-width="1.25" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="162" stroke="#1D2A35" stroke-width="0.5" fill="none" opacity="0.7" />
+    <circle cx="930" cy="315" r="152" stroke="#1D2A35" stroke-width="1" fill="none" opacity="0.45" />
+    <circle cx="930" cy="315" r="142" stroke="#1D2A35" stroke-width="0.5" fill="none" opacity="0.6" />
+    <circle cx="930" cy="315" r="132" stroke="#05070a" stroke-width="1.25" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="122" stroke="#1D2A35" stroke-width="0.8" fill="none" opacity="0.6" />
+    <circle cx="930" cy="315" r="112" stroke="#1D2A35" stroke-width="1.5" fill="none" opacity="0.4" />
+    <circle cx="930" cy="315" r="102" stroke="#05070a" stroke-width="0.5" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="92" stroke="#05070a" stroke-width="0.75" fill="none" opacity="0.5" />
+    <circle cx="930" cy="315" r="82" stroke="#1D2A35" stroke-width="1" fill="none" opacity="0.4" />
 
     <!-- Specular light reflections simulating model shine -->
     <path d="M 930 315 L 1115 440 A 192 192 0 0 0 1122 315 Z" fill="url(#vinyl-gold-shine)" opacity="0.35" />
@@ -1730,7 +1716,7 @@ async function startServer() {
 
     <!-- Center Label element -->
     <circle cx="930" cy="315" r="66" fill="url(#vinyl-label-grad)" stroke="url(#gold-gradient)" stroke-width="2" />
-    <circle cx="930" cy="315" r="58" stroke="#311e4f" stroke-width="0.8" fill="none" />
+    <circle cx="930" cy="315" r="58" stroke="#1D2A35" stroke-width="0.8" fill="none" />
     <circle cx="930" cy="315" r="52" stroke="url(#gold-gradient)" stroke-width="1" fill="none" opacity="0.35" stroke-dasharray="3,3" />
     
     <!-- Central mini circle -->
@@ -1753,8 +1739,8 @@ async function startServer() {
     <rect x="510" y="115" width="340" height="400" rx="16" fill="none" stroke="url(#glow-border)" stroke-width="1.8" />
     ` : `
     <!-- Sleek inner design lines for the cover art -->
-    <rect x="532" y="137" width="296" height="356" rx="10" stroke="#c084fc" stroke-width="1" fill="none" opacity="0.15" />
-    <rect x="544" y="149" width="272" height="332" rx="6" stroke="#c084fc" stroke-width="1.2" fill="none" opacity="0.1" stroke-dasharray="8,4" />
+    <rect x="532" y="137" width="296" height="356" rx="10" stroke="#1ed760" stroke-width="1" fill="none" opacity="0.15" />
+    <rect x="544" y="149" width="272" height="332" rx="6" stroke="#1ed760" stroke-width="1.2" fill="none" opacity="0.1" stroke-dasharray="8,4" />
     
     <!-- Diagonal futuristic sound bars inside cover -->
     <g transform="translate(620, 240)" opacity="0.2">
@@ -1770,8 +1756,8 @@ async function startServer() {
     `}
 
     <!-- Tiny text on bottom part of sleeve to make it look highly authentic and detailed -->
-    <text x="680" y="455" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="800" font-size="9" fill="#94a3b8" letter-spacing="3px" opacity="0.5">EXCLUSIVE DIGITAL AUDIO</text>
-    <text x="680" y="468" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="600" font-size="8" fill="#d946ef" letter-spacing="1.5px" opacity="0.6">SOMDRIVE COLLECTOR SERIES</text>
+    <text x="680" y="455" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="800" font-size="9" fill="#9AA6B2" letter-spacing="3px" opacity="0.5">EXCLUSIVE DIGITAL AUDIO</text>
+    <text x="680" y="468" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="600" font-size="8" fill="#1ed760" letter-spacing="1.5px" opacity="0.6">SOMDRIVE COLLECTOR SERIES</text>
   </g>
 
   <!-- SomDrive Discreet Brand Logo (Top Left) -->
@@ -1787,38 +1773,38 @@ async function startServer() {
   <g transform="translate(100, 150)">
     <!-- Verified Catalog + Private Catalog pills -->
     <g transform="translate(0, 0)">
-      <rect width="180" height="30" rx="15" fill="#8b5cf6" fill-opacity="0.12" stroke="#a78bfa" stroke-width="1" />
-      <circle cx="18" cy="15" r="4.5" fill="#c084fc" />
-      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#c084fc" letter-spacing="1">CATÁLOGO PRIVADO</text>
+      <rect width="180" height="30" rx="15" fill="#1ed760" fill-opacity="0.12" stroke="#1ed760" stroke-width="1" />
+      <circle cx="18" cy="15" r="4.5" fill="#1ed760" />
+      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#1ed760" letter-spacing="1">CATÁLOGO PRIVADO</text>
     </g>
 
     <g transform="translate(195, 0)">
-      <rect width="125" height="30" rx="15" fill="#10b981" fill-opacity="0.12" stroke="#34d399" stroke-width="1" />
-      <path d="M 12 14 L 15 17 L 21 11" stroke="#34d399" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
-      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#34d399" letter-spacing="1">VERIFICADO</text>
+      <rect width="125" height="30" rx="15" fill="#ffd350" fill-opacity="0.12" stroke="#ffd350" stroke-width="1.2" />
+      <path d="M 12 14 L 15 17 L 21 11" stroke="#ffd350" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
+      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#ffd350" letter-spacing="1">VERIFICADO</text>
     </g>
 
     <!-- Main Title: Ouça meu repertório -->
     <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="44" fill="#ffffff" letter-spacing="-1px">Ouça meu repertório</text>
 
     <!-- Composer Name -->
-    <text x="0" y="165" class="title-text" font-size="52" font-weight="800" filter="url(#shadow)" letter-spacing="-1">${cleanName}</text>
+    <text x="0" y="165" class="title-text" font-size="52" font-weight="850" filter="url(#shadow)" letter-spacing="-1">${cleanName}</text>
 
     <!-- City and Music genre info -->
-    <text x="0" y="215" class="sub-text" font-size="20" fill="#a5b4fc">${subtitle}</text>
+    <text x="0" y="215" class="sub-text" font-size="20" fill="#9AA6B2">${subtitle}</text>
 
     <!-- Interstitial interactive button mock: ▶ ACESSE E ESCUTE -->
     <g transform="translate(0, 270)" filter="url(#shadow)">
       <rect width="250" height="52" rx="26" fill="url(#button-grad)" />
-      <!-- White contrast triangle play indicator -->
-      <polygon points="36,19 36,33 48,26" fill="#ffffff" />
-      <text x="60" y="31" font-family="-apple-system, sans-serif" font-weight="800" fill="#ffffff" font-size="13" letter-spacing="1">ACESSE E ESCUTE</text>
+      <!-- High contrast triangle play indicator in button text color -->
+      <polygon points="36,19 36,33 48,26" fill="#031108" />
+      <text x="60" y="31" font-family="-apple-system, sans-serif" font-weight="800" fill="#031108" font-size="13" letter-spacing="1">ACESSE E ESCUTE</text>
     </g>
   </g>
 
   <!-- Elegant somdrive.com.br footer section -->
   <g transform="translate(100, 545)">
-    <line x1="0" y1="0" x2="350" y2="0" stroke="#2a1459" stroke-width="1.5" />
+    <line x1="0" y1="0" x2="350" y2="0" stroke="#1D2A35" stroke-width="1.5" />
     <text x="0" y="26" class="footer-text" font-size="13">somdrive.com.br</text>
   </g>
 </svg>`;

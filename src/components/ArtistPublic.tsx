@@ -814,47 +814,75 @@ export default function ArtistPublic({
                               onSelectTrack(track, tracks);
                             }
                           }}
-                          className={`hidden sm:grid grid-cols-12 gap-4 px-6 py-4.5 items-center justify-between cursor-pointer transition-all select-none border-l-[3.5px] rounded-r-xl ${
+                          className={`hidden sm:grid grid-cols-12 gap-4 px-6 py-4.5 items-center justify-between cursor-pointer transition-all select-none border-l-[3.5px] rounded-r-xl group ${
                             isCurrentlyPlaying 
                               ? 'bg-gradient-to-r from-emerald-500/10 via-emerald-500/2 to-transparent border-l-[#10b981] shadow-[0_4px_15px_rgba(16,185,129,0.06)]' 
                               : 'border-l-transparent hover:border-l-zinc-750 hover:bg-[#0c0f18]/30'
                           }`}
                         >
-                          {/* Col L1: Numerical index indicator or custom audio bars */}
+                          {/* Col L1: Numerical index indicator or custom audio bars, showing Play/Pause on hover */}
                           <div className="col-span-1 flex items-center gap-3.5 select-none text-left">
                             {isActiveAndPlaying ? (
-                              <div className="hidden sm:flex items-end gap-[2px] h-3.5 w-4 shrink-0 select-none mr-2">
-                                <span className="w-[2px] bg-[#10b981] h-2.5 rounded-full animate-bar-1"></span>
-                                <span className="w-[2px] bg-[#10b981] h-3.5 rounded-full animate-bar-2"></span>
-                                <span className="w-[2px] bg-[#10b981] h-2.5 rounded-full animate-bar-3"></span>
-                                <span className="w-[2px] bg-[#10b981] h-1.5 rounded-full animate-bar-4"></span>
-                              </div>
+                              <>
+                                {/* Equalizer bars show by default when playing */}
+                                <div className="hidden sm:flex group-hover:hidden items-end gap-[2px] h-3.5 w-4 shrink-0 select-none mr-2">
+                                  <span className="w-[2px] bg-[#10b981] h-2.5 rounded-full animate-bar-1"></span>
+                                  <span className="w-[2px] bg-[#10b981] h-3.5 rounded-full animate-bar-2"></span>
+                                  <span className="w-[2px] bg-[#10b981] h-2.5 rounded-full animate-bar-3"></span>
+                                  <span className="w-[2px] bg-[#10b981] h-1.5 rounded-full animate-bar-4"></span>
+                                </div>
+                                {/* Pause icon shows on hover when playing */}
+                                <div className="hidden group-hover:flex items-center justify-center w-4 shrink-0 text-[#10b981]">
+                                  <Pause className="w-4 h-4 fill-current text-[#12d163]" />
+                                </div>
+                              </>
                             ) : (
-                              <span className={`font-mono text-xs sm:text-sm hidden sm:inline select-none ${
-                                isCurrentlyPlaying ? 'text-[#10b981] font-black' : 'text-zinc-550 font-bold'
-                              }`}>
-                                {(idx + 1).toString().padStart(2, '0')}
-                              </span>
+                              <>
+                                {/* Number index shows by default when inactive or paused */}
+                                <span className={`font-mono text-xs sm:text-sm hidden sm:inline select-none group-hover:hidden ${
+                                  isCurrentlyPlaying ? 'text-[#10b981] font-black' : 'text-zinc-550 font-bold'
+                                }`}>
+                                  {(idx + 1).toString().padStart(2, '0')}
+                                </span>
+                                {/* Play icon shows on hover when inactive or paused */}
+                                <div className="hidden group-hover:flex items-center justify-center w-4 shrink-0 text-[#12d163]">
+                                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                                </div>
+                              </>
                             )}
                           </div>
 
                           {/* Col L2: Cover art, Name, Guia info metadata and plays/lyrics links */}
                           <div className="col-span-9 pr-2">
                             <div className="flex items-center gap-4 min-w-0">
-                              {/* Square Track Thumbnail Cover Art */}
-                              <div className="w-11 h-11 rounded-lg border border-zinc-800/80 bg-black flex items-center justify-center shrink-0 overflow-hidden relative shadow-md">
+                              {/* Square Track Thumbnail Cover Art changed to exact high-contrast round play button disk */}
+                              <div className="w-11 h-11 rounded-full border border-zinc-800/85 bg-[#000000] flex items-center justify-center shrink-0 overflow-hidden relative shadow-md transition-all group-hover:border-[#12d163]">
                                 {isCurrentlyPlaying ? (
-                                  /* Active emerald dynamic equalizers inside raw image thumb */
-                                  <div className="flex items-end gap-[2.5px] h-5 justify-center select-none w-full bg-[#0a2016]/40 p-2 rounded-lg">
-                                    <span className="w-1 bg-[#10b981] h-3 rounded-full animate-bar-2"></span>
-                                    <span className="w-1 bg-[#10b981] h-4.5 rounded-full animate-bar-3"></span>
-                                    <span className="w-1 bg-[#10b981] h-2.5 rounded-full animate-bar-1"></span>
-                                  </div>
+                                  isActiveAndPlaying ? (
+                                    /* Playing: equalizer by default, pause on hover */
+                                    <div className="w-full h-full flex items-center justify-center bg-[#07090d] transition-all relative">
+                                      <div className="flex items-end gap-[2px] h-5 justify-center select-none w-full bg-[#0a2016]/40 p-2 rounded-full group-hover:hidden">
+                                        <span className="w-1 bg-[#10b981] h-3 rounded-full animate-bar-2"></span>
+                                        <span className="w-1 bg-[#10b981] h-4.5 rounded-full animate-bar-3"></span>
+                                        <span className="w-1 bg-[#10b981] h-2.5 rounded-full animate-bar-1"></span>
+                                      </div>
+                                      <div className="hidden group-hover:flex absolute inset-0 items-center justify-center bg-emerald-500/20 text-[#12d163]">
+                                        <Pause className="w-4 h-4 fill-[#12d163]" />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* Paused: dynamic play icon representation */
+                                    <div className="w-full h-full flex items-center justify-center bg-[#0a2016]/45 text-[#12d163]">
+                                      <Play className="w-4 h-4 fill-[#12d163] ml-0.5 animate-pulse" />
+                                    </div>
+                                  )
                                 ) : (
-                                  /* Decent inactive vinyl logo element */
-                                  <div className="w-full h-full flex items-center justify-center bg-[#07090d]">
-                                    <Disc className="w-5.5 h-5.5 text-zinc-650 group-hover:text-amber-500/80 transition-colors" strokeWidth={1.5} />
-                                    <div className="absolute w-1.5 h-1.5 bg-[#07090d] rounded-full border border-zinc-700/60" />
+                                  /* Inactive track: exquisite vinyl background with crisp overlaid Play icon trigger */
+                                  <div className="w-full h-full flex items-center justify-center bg-[#07090d] transition-all relative">
+                                    <div className="absolute inset-0 bg-transparent group-hover:bg-[#12d163]/20 flex items-center justify-center transition-all">
+                                      <Play className="w-4.5 h-4.5 text-[#12d163] fill-[#12d163] ml-0.5 opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+                                    </div>
+                                    <Disc className="w-7 h-7 text-zinc-800 opacity-20 pointer-events-none absolute" />
                                   </div>
                                 )}
                               </div>
