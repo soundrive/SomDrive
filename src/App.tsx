@@ -87,9 +87,9 @@ export default function App() {
       }
     });
 
-    // Parse URL on start: supports '/artista/id' custom urls
+    // Parse URL on start: supports '/artista/id' and '/s/slug' custom urls
     const path = window.location.pathname;
-    if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/')) {
+    if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
       const parts = path.split('/');
       const artistSlug = parts[parts.length - 1];
       if (artistSlug) {
@@ -152,7 +152,13 @@ export default function App() {
     // Sync browser address bar so copy-paste actually works!
     if (view === 'public' && payload?.id) {
       const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.id);
-      const prefix = isGuid ? '/artista/' : '/catalogo/';
+      const currentPath = window.location.pathname;
+      let prefix = '/catalogo/';
+      if (currentPath.includes('/s/')) {
+        prefix = '/s/';
+      } else if (isGuid || currentPath.includes('/artista/')) {
+        prefix = '/artista/';
+      }
       window.history.pushState({}, '', `${prefix}${payload.id}`);
     } else if (view === 'dashboard') {
       window.history.pushState({}, '', '/dashboard');
@@ -174,7 +180,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
-      if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/')) {
+      if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
         const parts = path.split('/');
         const id = parts[parts.length - 1];
         setCurrentView('public');

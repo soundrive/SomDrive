@@ -35,22 +35,22 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   // Responsive size mappings - smaller on mobile, standard on PC
   const sizeMap = {
     sm: {
-      icon: 'w-5 h-5 sm:w-6 sm:h-6',
-      text: 'text-sm sm:text-base',
-      dWidth: 'w-3 h-3.5 sm:w-4 sm:h-4.5',
-      imgMaxHeight: 'max-h-5 sm:max-h-7',
+      icon: 'w-4.5 h-4.5 sm:w-6 sm:h-6',
+      text: 'text-xs sm:text-base',
+      dWidth: 'w-2 h-2.5 sm:w-4 sm:h-4.5',
+      imgMaxHeight: 'max-h-4 sm:max-h-7',
     },
     md: {
-      icon: 'w-7.5 h-7.5 sm:w-10 sm:h-10',
-      text: 'text-base sm:text-2xl',
-      dWidth: 'w-4 h-4.5 sm:w-5.5 sm:h-6',
-      imgMaxHeight: 'max-h-7.5 sm:max-h-11',
+      icon: 'w-5.5 h-5.5 sm:w-10 sm:h-10',
+      text: 'text-sm sm:text-xl',
+      dWidth: 'w-2.5 h-3 sm:w-5.5 sm:h-6',
+      imgMaxHeight: 'max-h-5.5 sm:max-h-11',
     },
     lg: {
-      icon: 'w-9 h-9 sm:w-14 sm:h-14',
-      text: 'text-xl sm:text-4xl',
-      dWidth: 'w-5 h-5.5 sm:w-8 sm:h-8.5',
-      imgMaxHeight: 'max-h-9 sm:max-h-16',
+      icon: 'w-7.5 h-7.5 sm:w-14 sm:h-14',
+      text: 'text-base sm:text-3xl',
+      dWidth: 'w-3.5 h-4 sm:w-8 sm:h-8.5',
+      imgMaxHeight: 'max-h-7.5 sm:max-h-16',
     }
   };
 
@@ -61,12 +61,12 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
     const baseHeight = size === 'sm' ? 38 : (size === 'md' ? 56 : 76);
     
     // Scale down height on mobile ("modo inteligente se é um celular a logo tem que ser menos"):
-    const mobileReduction = size === 'lg' ? 0.6 : (size === 'md' ? 0.72 : 0.85);
+    const mobileReduction = size === 'lg' ? 0.45 : (size === 'md' ? 0.55 : 0.65);
     const activeBaseHeight = isMobile ? Math.round(baseHeight * mobileReduction) : baseHeight;
     const computedHeight = scale ? Math.round(activeBaseHeight * scale) : activeBaseHeight;
 
     // Scale maximum width ceilings dynamically as well so landscape/wide logos are never cut off
-    const activeMaxW = isMobile ? Math.round(480 * 0.75) : 480;
+    const activeMaxW = isMobile ? Math.round(480 * 0.65) : 480;
     const computedMaxW = scale ? Math.round(activeMaxW * scale) : activeMaxW;
 
     return (
@@ -91,8 +91,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   // Apply a smart responsive scale modification for non-custom logo
   const activeScale = scale 
-    ? (isMobile ? scale * 0.75 : scale) 
-    : (isMobile ? 0.8 : undefined);
+    ? (isMobile ? scale * 0.65 : scale) 
+    : (isMobile ? 0.72 : undefined);
 
   const styleObj = activeScale 
     ? { transform: `scale(${activeScale})`, transformOrigin: 'left center', display: 'inline-flex' } 
