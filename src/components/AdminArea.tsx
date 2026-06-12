@@ -176,14 +176,77 @@ export default function AdminArea({
     }
   };
 
+  const resizeAndOptimizeImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width = 1200;
+        canvas.height = 630;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Não foi possível obter contexto 2D do Canvas."));
+          return;
+        }
+
+        const targetWidth = 1200;
+        const targetHeight = 630;
+        const imageAspectRatio = img.width / img.height;
+        const targetAspectRatio = targetWidth / targetHeight;
+
+        let drawWidth = img.width;
+        let drawHeight = img.height;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (imageAspectRatio > targetAspectRatio) {
+          drawWidth = img.height * targetAspectRatio;
+          offsetX = (img.width - drawWidth) / 2;
+        } else {
+          drawHeight = img.width / targetAspectRatio;
+          offsetY = (img.height - drawHeight) / 2;
+        }
+
+        ctx.fillStyle = "#09090b";
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        ctx.drawImage(
+          img,
+          offsetX,
+          offsetY,
+          drawWidth,
+          drawHeight,
+          0,
+          0,
+          targetWidth,
+          targetHeight
+        );
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Erro ao gerar blob do canvas."));
+            }
+          },
+          "image/jpeg",
+          0.82
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Erro ao decodificar a imagem selecionada."));
+      };
+      img.src = objectUrl;
+    });
+  };
+
   const handleShareCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      setShareCardError("A imagem excede o limite máximo de 10 MB.");
-      return;
-    }
 
     const acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!acceptedTypes.includes(file.type)) {
@@ -196,17 +259,30 @@ export default function AdminArea({
     setShareCardUploadProgress(10);
 
     try {
-      setShareCardUploadProgress(35);
-      const response = await fetch("/api/admin/upload-share-card", {
+      setShareCardUploadProgress(25);
+      const optimizedBlob = await resizeAndOptimizeImage(file);
+      setShareCardUploadProgress(45);
+
+      // We name the file using a clear format (it will be uploaded and R2 proxy will prefix it with timestamp)
+      const optimizedFile = new File([optimizedBlob], "global-share-card.jpg", {
+        type: "image/jpeg"
+      });
+
+      console.log("Starting upload of client-side optimized share-card:", {
+        size: optimizedFile.size,
+        type: optimizedFile.type
+      });
+
+      const response = await fetch("/api/r2-proxy-image-upload", {
         method: "POST",
         headers: {
-          "X-File-Name": encodeURIComponent(file.name),
-          "X-File-Type": file.type,
-          "X-File-Size": file.size.toString(),
+          "X-File-Name": encodeURIComponent(optimizedFile.name),
+          "X-File-Type": optimizedFile.type,
+          "X-File-Size": optimizedFile.size.toString(),
           "X-User-Id": currentUser.userId,
           "X-User-Email": currentUser.email || "",
         },
-        body: file,
+        body: optimizedFile,
       });
 
       setShareCardUploadProgress(75);
@@ -215,8 +291,6 @@ export default function AdminArea({
         const data = await response.json();
         const publicImageUrl = data.publicImageUrl;
         
-        // Write the settings directly from client side to ensure it is always saved successfully
-        // bypassing any server-side Admin SDK credential limitations in the developer container
         if (publicImageUrl) {
           await dbService.updateShareCardSettings(publicImageUrl, currentUser.userId);
         }
