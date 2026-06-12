@@ -868,6 +868,80 @@ async function startServer() {
     }
   };
 
+  // Helper to dynamically build/inject the Open Graph metadata for the home page / main site
+  const generateHomeHtml = async (req: any) => {
+    const host = req.headers['x-forwarded-host'] || req.headers.host || process.env.APP_BASE_URL || "www.somdrive.com.br";
+    const protocol = req.headers['x-forwarded-proto'] || "https";
+    const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
+    const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
+
+    let ogImageToUse = `${appBaseUrl}/favicon.svg`;
+    let baseImageUrl = "";
+    try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl) {
+        baseImageUrl = shareCard.ogImageUrl;
+        let version = "1.0.0";
+        if (shareCard.updatedAt) {
+          const parsedTime = new Date(shareCard.updatedAt).getTime();
+          if (!isNaN(parsedTime)) {
+            version = String(parsedTime);
+          } else {
+            version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
+          }
+        }
+        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
+      }
+    } catch (fErr) {
+      console.warn("Could not fetch global share card settings for home:", fErr);
+    }
+
+    const indexPath = process.env.NODE_ENV === "production"
+      ? path.join(process.cwd(), 'dist', 'index.html')
+      : path.join(process.cwd(), 'index.html');
+
+    const fsMod = await import('fs');
+    if (fsMod.existsSync(indexPath)) {
+      let htmlContents = fsMod.readFileSync(indexPath, 'utf8');
+
+      // Clean static tags fully to prevent duplicates and legacy tag leakage
+      htmlContents = htmlContents
+        .replace(/<title>.*?<\/title>/gi, "")
+        .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
+
+      const ogPayload = `
+  <!-- Dynamic Custom SomDrive OG Home Metadata -->
+  <title>SomDrive | Divulgue seu Repertório Musical</title>
+  <meta name="description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais e compartilharem repertórios com segurança." />
+  <meta property="og:title" content="SomDrive | Divulgue seu Repertório Musical" />
+  <meta property="og:description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais e compartilharem repertórios com segurança." />
+  <meta property="og:image" content="${ogImageToUse}" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:url" content="${appBaseUrl}/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SomDrive" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SomDrive | Divulgue seu Repertório Musical" />
+  <meta name="twitter:description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais e compartilharem repertórios com segurança." />
+  <meta name="twitter:image" content="${ogImageToUse}" />
+`;
+
+      if (htmlContents.includes("</head>")) {
+        htmlContents = htmlContents.replace("</head>", `${ogPayload}\n</head>`);
+      } else {
+        htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
+      }
+
+      return htmlContents;
+    } else {
+      throw new Error(`index.html not found`);
+    }
+  };
+
   // Helper to dynamically build/inject the Open Graph metadata for any artist URI/slug
   const generateArtistHtml = async (slugOrId: string, req: any) => {
     console.time("catalogo-total");
@@ -890,7 +964,10 @@ async function startServer() {
 
     const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
 
-    const appBaseUrl = (process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "");
+    const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host || process.env.APP_BASE_URL || "www.somdrive.com.br";
+    const protocol = req?.headers?.['x-forwarded-proto'] || "https";
+    const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
+    const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
     // Default SomDrive image background fallback, never show/crowd/plateia/unsplash
     let ogImageToUse = `${appBaseUrl}/favicon.svg`; 
@@ -909,7 +986,7 @@ async function startServer() {
             version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
           }
         }
-        ogImageToUse = baseImageUrl.includes("?") ? `${baseImageUrl}&v=${version}` : `${baseImageUrl}?v=${version}`;
+        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings:", fErr);
@@ -974,7 +1051,7 @@ async function startServer() {
   };
 
   // Helper to dynamically build/inject the Open Graph metadata for the clean WhatsApp short share route
-  const generateShareHtml = async (slugOrId: string) => {
+  const generateShareHtml = async (slugOrId: string, req?: any) => {
     const { userId: resolvedArtistId, name, genre, city, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
     const formattedName = name.trim();
 
@@ -992,7 +1069,10 @@ async function startServer() {
 
     const cleanSlug = resolvedSlug || (formattedName ? slugifyStr(formattedName) : resolvedArtistId);
 
-    const appBaseUrl = (process.env.APP_BASE_URL || "https://www.somdrive.com.br").replace(/\/$/, "");
+    const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host || process.env.APP_BASE_URL || "www.somdrive.com.br";
+    const protocol = req?.headers?.['x-forwarded-proto'] || "https";
+    const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
+    const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
 
     // Fetch the global share card image or fallback
     let ogImageToUse = `${appBaseUrl}/favicon.svg`; 
@@ -1010,7 +1090,7 @@ async function startServer() {
             version = encodeURIComponent(String(shareCard.updatedAt).replace(/[^a-zA-Z0-9]/g, ""));
           }
         }
-        ogImageToUse = baseImageUrl.includes("?") ? `${baseImageUrl}&v=${version}` : `${baseImageUrl}?v=${version}`;
+        ogImageToUse = `${appBaseUrl}/api/global-share-card.png?v=${version}`;
       }
     } catch (fErr) {
       console.warn("Could not fetch global share card settings:", fErr);
@@ -1221,7 +1301,7 @@ async function startServer() {
   app.get("/api/debug/share", async (req: any, res: any) => {
     const slug = String(req.query.slug || "ze-quirino").trim();
     try {
-      const result = await generateShareHtml(slug);
+      const result = await generateShareHtml(slug, req);
       const html = result.html;
       const oldImageFound = /unsplash|show|concert|crowd|plateia/i.test(html);
       const ogImageCount = (html.match(/<meta[^>]*property=["']og:image["']/gi) || []).length;
@@ -1803,11 +1883,23 @@ async function startServer() {
     }
   });
 
+  // Intercept root/homepage and index.html to dynamically inject the global sharing metadata (WhatsApp, Facebook, etc.)
+  app.get(["/", "/index.html"], async (req, res, next) => {
+    try {
+      const html = await generateHomeHtml(req);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(html);
+    } catch (err) {
+      console.warn("Error injecting custom OG headers on home page, falling back:", err);
+      next();
+    }
+  });
+
   // WhatsApp short/clean sharing and redirection route
   app.get("/s/:slug", async (req, res, next) => {
     try {
       const slug = req.params.slug;
-      const result = await generateShareHtml(slug);
+      const result = await generateShareHtml(slug, req);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(result.html);
     } catch (err) {

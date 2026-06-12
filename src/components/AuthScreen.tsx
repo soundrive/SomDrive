@@ -40,6 +40,9 @@ interface AuthScreenProps {
   onLoginSuccess: (artist: Artist) => void;
   startInRegister: boolean;
   initPremium: boolean;
+  logoScale?: number;
+  showLogo?: boolean;
+  customLogoUrl?: string;
 }
 
 export default function AuthScreen({ 
@@ -47,6 +50,9 @@ export default function AuthScreen({
   onLoginSuccess, 
   startInRegister = false,
   initPremium = false,
+  logoScale,
+  showLogo,
+  customLogoUrl,
 }: AuthScreenProps) {
   const [isRegister, setIsRegister] = useState(startInRegister);
   const [email, setEmail] = useState('');
@@ -913,7 +919,7 @@ export default function AuthScreen({
             {/* Header branding */}
             <div className="text-center">
               <div className="mb-6 flex justify-center scale-102">
-                <BrandLogo size="lg" />
+                <BrandLogo size="lg" scale={logoScale} showLogo={showLogo} customLogoUrl={customLogoUrl} />
               </div>
               <h2 className="text-2xl md:text-3xl font-heading font-black tracking-tight uppercase">
                 {isRegister ? 'Criar Cadastro Artista' : 'Entrar na Plataforma'}

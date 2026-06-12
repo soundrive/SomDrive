@@ -301,6 +301,9 @@ export default function App() {
           onLoginSuccess={handleLoginSuccess}
           startInRegister={routePayload?.isRegister || false}
           initPremium={routePayload?.startPremium || false}
+          logoScale={logoScale}
+          showLogo={showLogo}
+          customLogoUrl={customLogoUrl}
         />
       )}
 
@@ -322,6 +325,9 @@ export default function App() {
           onLoginSuccess={handleLoginSuccess}
           startInRegister={false}
           initPremium={false}
+          logoScale={logoScale}
+          showLogo={showLogo}
+          customLogoUrl={customLogoUrl}
         />
       )}
 

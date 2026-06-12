@@ -79,11 +79,11 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       {/* Brand Golden Logo Icon */}
       <svg className={`${currentSize.icon} select-none shrink-0 rounded-xl overflow-hidden`} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          {/* Seamless premium gold gradient */}
+          {/* Seamless premium green gradient matching the new logo */}
           <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FFDD00" />
-            <stop offset="45%" stopColor="#FFA800" />
-            <stop offset="100%" stopColor="#FF7F00" />
+            <stop offset="0%" stopColor="#54d92e" />
+            <stop offset="50%" stopColor="#12c149" />
+            <stop offset="100%" stopColor="#049a3c" />
           </linearGradient>
 
           {/* Glowing bright ambient reflection filter */}
@@ -122,18 +122,18 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       {!iconOnly && (
         <span className={`font-heading font-black tracking-tight uppercase leading-none select-none flex items-center ${currentSize.text} ${classNameText}`}>
           <span className="text-white">Som</span>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300 font-black tracking-tight flex items-center ml-0.5">
+          <span className="text-white font-black tracking-tight flex items-center ml-0.5">
             {/* Custom styled "Drive" where the letter D has a play button hole inside */}
             <span className="inline-flex items-center">
               <span className="inline-block relative">
-                <svg className={`${currentSize.dWidth} mr-[1px] select-none text-orange-400 self-center`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg className={`${currentSize.dWidth} mr-[1px] select-none text-emerald-400 self-center`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {/* Outer 'D' shape path */}
                   <path d="M4 2h8c5.523 0 10 4.477 10 10s-4.477 10-10 10H4V2z" fill="currentColor" />
                   {/* Play button triangle cutout */}
                   <polygon points="9.5,7 9.5,17 17.5,12" fill="#090a0f" />
                 </svg>
               </span>
-              <span className="-ml-[1px] tracking-tight uppercase">rive</span>
+              <span className="-ml-[1px] tracking-tight uppercase text-white">rive</span>
             </span>
           </span>
         </span>

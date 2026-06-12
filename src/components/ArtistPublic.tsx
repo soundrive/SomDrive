@@ -418,7 +418,7 @@ export default function ArtistPublic({
               <span>{artist.customBadgeText || "ARTISTA VERIFICADO"}</span>
             </div>
 
-            {/* Custom SVG Golden Fluid Wave Pattern in background - EXACTLY mirroring screenshot premium detail */}
+            {/* Custom SVG Green Fluid Wave Pattern in background - EXACTLY mirroring logo premium detail */}
             <svg className="absolute right-0 bottom-0 top-0 h-full w-full md:w-[65%] opacity-25 md:opacity-40 pointer-events-none z-0" viewBox="0 0 600 200" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M 150,150 C 250,180 320,60 450,110 C 510,130 550,80 600,60 L 600,200 L 150,200 Z" fill="url(#gold-glow)"></path>
               <path d="M 0,160 C 130,90 240,190 360,115 C 450,60 520,130 600,100" stroke="url(#gold-gradient)" strokeWidth="2" strokeOpacity="0.45"></path>
@@ -426,18 +426,18 @@ export default function ArtistPublic({
               <path d="M 0,130 C 180,75 220,150 400,95 C 480,70 520,145 600,80" stroke="url(#gold-gradient)" strokeWidth="1" strokeDasharray="3 4" strokeOpacity="0.4"></path>
               <defs>
                 <linearGradient id="gold-glow" x1="300" y1="0" x2="300" y2="200" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#d4af37" stopOpacity="0"/>
-                  <stop offset="100%" stopColor="#d4af37" stopOpacity="0.06"/>
+                  <stop offset="0%" stopColor="#12d163" stopOpacity="0"/>
+                  <stop offset="100%" stopColor="#12d163" stopOpacity="0.06"/>
                 </linearGradient>
                 <linearGradient id="gold-gradient" x1="0" y1="100" x2="600" y2="100" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#d4af37" stopOpacity="0.05"/>
-                  <stop offset="50%" stopColor="#d4af37" stopOpacity="0.55"/>
-                  <stop offset="100%" stopColor="#ea580c" stopOpacity="0.05"/>
+                  <stop offset="0%" stopColor="#12d163" stopOpacity="0.05"/>
+                  <stop offset="50%" stopColor="#12d163" stopOpacity="0.55"/>
+                  <stop offset="100%" stopColor="#08802f" stopOpacity="0.05"/>
                 </linearGradient>
                 <linearGradient id="gold-gradient-2" x1="0" y1="100" x2="600" y2="100" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#ea580c" stopOpacity="0.03"/>
-                  <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.35"/>
-                  <stop offset="100%" stopColor="#d4af37" stopOpacity="0"/>
+                  <stop offset="0%" stopColor="#08802f" stopOpacity="0.03"/>
+                  <stop offset="60%" stopColor="#10a843" stopOpacity="0.35"/>
+                  <stop offset="100%" stopColor="#12d163" stopOpacity="0"/>
                 </linearGradient>
               </defs>
             </svg>

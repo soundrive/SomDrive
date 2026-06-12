@@ -6,6 +6,40 @@
   --font-heading: "Outfit", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
+  /* Custom overrides for a warm, energetic orange/gold spectrum */
+  --color-orange-300: #fed7aa;
+  --color-orange-400: #fb923c;
+  --color-orange-500: #f97316;
+  --color-orange-600: #ea580c;
+  --color-orange-700: #c2410c;
+  --color-orange-800: #9a3412;
+  --color-orange-900: #7c2d12;
+  --color-orange-950: #2a0e00;
+
+  /* Custom overrides for a premium golden amber */
+  --color-amber-300: #fde68a;
+  --color-amber-400: #facc15;
+  --color-amber-500: #f59e0b;
+  --color-amber-550: #d97706;
+  --color-amber-600: #b45309;
+  --color-amber-950: #200d00;
+
+  /* Shining yellow highlights with great readability */
+  --color-yellow-300: #fffbeb;
+  --color-yellow-400: #fef08a;
+  --color-yellow-500: #eab308;
+  --color-yellow-600: #ca8a04;
+  --color-yellow-950: #1a1000;
+
+  /* Premium midnight ocean-navy and pitch-black colors */
+  --color-slate-950: #020308; /* Very deep pitch-black */
+  --color-slate-900: #040817; /* Rich deep dark midnight blue */
+  --color-slate-850: #070d23; /* Medium deep navy-slate */
+  --color-slate-800: #0a112c; /* Classic midnight blue borders and cards */
+  --color-slate-700: #111b41;
+  --color-slate-600: #19285c;
+  --color-slate-500: #4a5da6;
+
   --animate-bar-1: bar-1 0.8s ease-in-out infinite alternate;
   --animate-bar-2: bar-2 1.1s ease-in-out infinite alternate;
   --animate-bar-3: bar-3 0.7s ease-in-out infinite alternate;
@@ -32,4 +66,69 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
+}
+
+/* Custom class overrides to dynamically map old gold tone #d4af37 to a beautiful, bright and readable warm gold/yellow #ffd350 */
+.text-\[\#d4af37\] {
+  color: #ffd350 !important;
+}
+.border-\[\#d4af37\] {
+  border-color: #ffd350 !important;
+}
+.bg-\[\#d4af37\] {
+  background-color: #ffd350 !important;
+}
+.fill-\[\#d4af37\] {
+  fill: #ffd350 !important;
+}
+.fill-\[\#d4af37\]\/5 {
+  fill: rgba(255, 211, 80, 0.05) !important;
+}
+.fill-\[\#d4af37\]\/10 {
+  fill: rgba(255, 211, 80, 0.1) !important;
+}
+.border-\[\#d4af37\]\/20 {
+  border-color: rgba(255, 211, 80, 0.2) !important;
+}
+.border-\[\#d4af37\]\/30 {
+  border-color: rgba(255, 211, 80, 0.3) !important;
+}
+.border-\[\#d4af37\]\/15 {
+  border-color: rgba(255, 211, 80, 0.15) !important;
+}
+.shadow-\[\#d4af37\]\/10 {
+  --tw-shadow-color: rgba(255, 211, 80, 0.1) !important;
+  box-shadow: 0 4px 14px 0 rgba(255, 211, 80, 0.1) !important;
+}
+.from-\[\#d4af37\]\/10 {
+  --tw-gradient-from: rgba(255, 211, 80, 0.1) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(255, 211, 80, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+.via-\[\#d4af37\]\/3 {
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(255, 211, 80, 0.03) var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+}
+.border-l-\[\#d4af37\] {
+  border-left-color: #ffd350 !important;
+}
+.hover\:border-l-\[\#d4af37\]:hover {
+  border-left-color: #ffd350 !important;
+}
+.hover\:text-\[\#d4af37\]:hover {
+  color: #ffd350 !important;
+}
+.group-hover\/desktop-meta\:border-\[\#d4af37\]\/45:hover {
+  border-color: rgba(255, 211, 80, 0.45) !important;
+}
+.group-hover\/desktop-meta\:text-\[\#d4af37\]:hover {
+  color: #ffd350 !important;
+}
+.group-hover\/mobile-meta\:text-\[\#d4af37\]:hover {
+  color: #ffd350 !important;
+}
+.shadow-\[0_0_15px_rgba\(212\,175\,55\,0\.06\)\] {
+  box-shadow: 0 0 15px rgba(255, 211, 80, 0.08) !important;
+}
+.shadow-\[0_15px_30px_rgba\(212\,175\,55\,0\.3\)\] {
+  box-shadow: 0 15px 30px rgba(255, 211, 80, 0.22) !important;
 }
