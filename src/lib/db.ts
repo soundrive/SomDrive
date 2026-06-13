@@ -1,4 +1,4 @@
-import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project } from '../types';
 
 // Static Royalty-Free MP3 links that are reliable and beautiful
 export const DEMO_SONGS = [
@@ -1824,6 +1824,175 @@ export const dbService = {
     } catch (e) {
       console.error("Error updating appearance settings:", e);
       throw e;
+    }
+  },
+
+  // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
+  async getRepertoires(ownerUid: string): Promise<Repertoire[]> {
+    const localKey = `somdrive_repertoires_${ownerUid}`;
+    try {
+      const q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+      const snap = await getDocs(q).catch(e => {
+        console.warn("Could not fetch repertoires from Firestore, using local fallback", e);
+        return null;
+      });
+
+      if (snap && !snap.empty) {
+        const reps: Repertoire[] = snap.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ownerUid: data.ownerUid,
+            name: data.name,
+            description: data.description || '',
+            type: data.type || 'repertoire',
+            trackIds: data.trackIds || [],
+            orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+            visibility: data.visibility || 'active',
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString()
+          } as Repertoire;
+        });
+        localStorage.setItem(localKey, JSON.stringify(reps));
+        return reps;
+      }
+    } catch (e) {
+      console.error("Error in getRepertoires:", e);
+    }
+
+    const cached = localStorage.getItem(localKey);
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  async saveRepertoire(repertoire: Repertoire): Promise<void> {
+    const ownerUid = repertoire.ownerUid;
+    const localKey = `somdrive_repertoires_${ownerUid}`;
+    
+    // Save to LocalStorage first
+    const cached = localStorage.getItem(localKey);
+    let reps: Repertoire[] = cached ? JSON.parse(cached) : [];
+    const index = reps.findIndex(r => r.id === repertoire.id);
+    if (index !== -1) {
+      reps[index] = { ...repertoire, updatedAt: new Date().toISOString() };
+    } else {
+      reps.push({ ...repertoire, createdAt: repertoire.createdAt || new Date().toISOString() });
+    }
+    localStorage.setItem(localKey, JSON.stringify(reps));
+
+    // Sync to Firestore
+    try {
+      const docRef = doc(db, 'repertoires', repertoire.id);
+      await setDoc(docRef, { ...repertoire, updatedAt: new Date().toISOString() }, { merge: true }).catch(err => {
+        console.error("Error writing repertoire to Firestore:", err);
+      });
+    } catch (e) {
+      console.error("Sync error in saveRepertoire:", e);
+    }
+  },
+
+  async deleteRepertoire(id: string, ownerUid: string): Promise<void> {
+    const localKey = `somdrive_repertoires_${ownerUid}`;
+    
+    // Delete from LocalStorage first
+    const cached = localStorage.getItem(localKey);
+    if (cached) {
+      let reps: Repertoire[] = JSON.parse(cached);
+      reps = reps.filter(r => r.id !== id);
+      localStorage.setItem(localKey, JSON.stringify(reps));
+    }
+
+    // Delete from Firestore
+    try {
+      const docRef = doc(db, 'repertoires', id);
+      await deleteDoc(docRef).catch(err => {
+        console.error("Error deleting repertoire in Firestore:", err);
+      });
+    } catch (e) {
+      console.error("Deletion error in deleteRepertoire:", e);
+    }
+  },
+
+  async getProjects(ownerUid: string): Promise<Project[]> {
+    const localKey = `somdrive_projects_${ownerUid}`;
+    try {
+      const q = query(collection(db, 'projects'), where('ownerUid', '==', ownerUid));
+      const snap = await getDocs(q).catch(e => {
+        console.warn("Could not fetch projects from Firestore, using local fallback", e);
+        return null;
+      });
+
+      if (snap && !snap.empty) {
+        const projs: Project[] = snap.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ownerUid: data.ownerUid,
+            name: data.name,
+            description: data.description || '',
+            type: data.type || 'Sertanejo',
+            trackIds: data.trackIds || [],
+            orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+            status: data.status || 'draft',
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString()
+          } as Project;
+        });
+        localStorage.setItem(localKey, JSON.stringify(projs));
+        return projs;
+      }
+    } catch (e) {
+      console.error("Error in getProjects:", e);
+    }
+
+    const cached = localStorage.getItem(localKey);
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  async saveProject(project: Project): Promise<void> {
+    const ownerUid = project.ownerUid;
+    const localKey = `somdrive_projects_${ownerUid}`;
+    
+    // Save to LocalStorage first
+    const cached = localStorage.getItem(localKey);
+    let projs: Project[] = cached ? JSON.parse(cached) : [];
+    const index = projs.findIndex(p => p.id === project.id);
+    if (index !== -1) {
+      projs[index] = { ...project, updatedAt: new Date().toISOString() };
+    } else {
+      projs.push({ ...project, createdAt: project.createdAt || new Date().toISOString() });
+    }
+    localStorage.setItem(localKey, JSON.stringify(projs));
+
+    // Sync to Firestore
+    try {
+      const docRef = doc(db, 'projects', project.id);
+      await setDoc(docRef, { ...project, updatedAt: new Date().toISOString() }, { merge: true }).catch(err => {
+        console.error("Error writing project to Firestore:", err);
+      });
+    } catch (e) {
+      console.error("Sync error in saveProject:", e);
+    }
+  },
+
+  async deleteProject(id: string, ownerUid: string): Promise<void> {
+    const localKey = `somdrive_projects_${ownerUid}`;
+    
+    // Delete from LocalStorage first
+    const cached = localStorage.getItem(localKey);
+    if (cached) {
+      let projs: Project[] = JSON.parse(cached);
+      projs = projs.filter(p => p.id !== id);
+      localStorage.setItem(localKey, JSON.stringify(projs));
+    }
+
+    // Delete from Firestore
+    try {
+      const docRef = doc(db, 'projects', id);
+      await deleteDoc(docRef).catch(err => {
+        console.error("Error deleting project in Firestore:", err);
+      });
+    } catch (e) {
+      console.error("Deletion error in deleteProject:", e);
     }
   }
 };

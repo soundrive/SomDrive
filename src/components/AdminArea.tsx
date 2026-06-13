@@ -191,7 +191,7 @@ export default function AdminArea({
 
   const resizeAndOptimizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
+      const img = document.createElement("img");
       const objectUrl = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
@@ -276,26 +276,22 @@ export default function AdminArea({
       const optimizedBlob = await resizeAndOptimizeImage(file);
       setShareCardUploadProgress(45);
 
-      // We name the file using a clear format (it will be uploaded and R2 proxy will prefix it with timestamp)
-      const optimizedFile = new File([optimizedBlob], "global-share-card.jpg", {
-        type: "image/jpeg"
-      });
-
+      // We use the optimizedBlob directly to prevent 'new File()' Illegal constructor errors in sandboxed iframes
       console.log("Starting upload of client-side optimized share-card:", {
-        size: optimizedFile.size,
-        type: optimizedFile.type
+        size: optimizedBlob.size,
+        type: "image/jpeg"
       });
 
       const response = await fetch("/api/r2-proxy-image-upload", {
         method: "POST",
         headers: {
-          "X-File-Name": encodeURIComponent(optimizedFile.name),
-          "X-File-Type": optimizedFile.type,
-          "X-File-Size": optimizedFile.size.toString(),
+          "X-File-Name": encodeURIComponent("global-share-card.jpg"),
+          "X-File-Type": "image/jpeg",
+          "X-File-Size": optimizedBlob.size.toString(),
           "X-User-Id": currentUser.userId,
           "X-User-Email": currentUser.email || "",
         },
-        body: optimizedFile,
+        body: optimizedBlob,
       });
 
       setShareCardUploadProgress(75);

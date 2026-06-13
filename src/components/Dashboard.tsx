@@ -30,9 +30,15 @@ import {
   Play,
   Pause,
   SlidersHorizontal,
-  Check
+  Check,
+  FolderPlus,
+  Folders,
+  ListChecks,
+  Square,
+  CheckSquare,
+  X
 } from 'lucide-react';
-import { Artist, Music as Track, Analytics, ShareCardSettings } from '../types';
+import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
 import PlansScreen from './PlansScreen';
 import { motion } from 'motion/react';
@@ -130,6 +136,52 @@ export default function Dashboard({
   const [profCustomSongsListTitle, setProfCustomSongsListTitle] = useState('');
   const [profCustomSongsListSubtitle, setProfCustomSongsListSubtitle] = useState('');
 
+  // Tab Navigation state
+  const [dashboardTab, setDashboardTab] = useState<'musics' | 'repertoires' | 'projects' | 'shares' | 'profile' | 'contact'>('musics');
+
+  // Repertoires list & creations
+  const [dashboardRepertoires, setDashboardRepertoires] = useState<Repertoire[]>([]);
+  const [newRepName, setNewRepName] = useState('');
+  const [newRepType, setNewRepType] = useState<'repertoire' | 'playlist' | 'collection'>('repertoire');
+  const [showCreateRep, setShowCreateRep] = useState(false);
+  const [editingRepertoire, setEditingRepertoire] = useState<Repertoire | null>(null);
+  const [managingRepTrackId, setManagingRepTrackId] = useState<string | null>(null); // Repertoire ID for checkboxes modal
+
+  // Projects list & creations
+  const [dashboardProjects, setDashboardProjects] = useState<any[]>([]);
+  const [newProjName, setNewProjName] = useState('');
+  const [newProjDesc, setNewProjDesc] = useState('');
+  const [newProjStatus, setNewProjStatus] = useState<'draft' | 'ongoing' | 'published'>('ongoing');
+  const [showCreateProj, setShowCreateProj] = useState(false);
+  const [editingProject, setEditingProject] = useState<any | null>(null);
+  const [managingProjTrackId, setManagingProjTrackId] = useState<string | null>(null); // Project ID for checkboxes modal
+
+  // User details type of profile addition
+  const [profUserType, setProfUserType] = useState('');
+
+  // 6-step Wizard Upload states
+  const [uploadStep, setUploadStep] = useState<number>(1);
+  const [audioFiles, setAudioFiles] = useState<File[]>([]);
+  const [organizationOption, setOrganizationOption] = useState<'all_songs' | 'existing_repertoire' | 'new_repertoire' | 'each_separately'>('all_songs');
+  const [selectedRepertoireIds, setSelectedRepertoireIds] = useState<string[]>([]);
+  const [newRepertoireName, setNewRepertoireName] = useState('');
+  const [newRepertoireDesc, setNewRepertoireDesc] = useState('');
+  const [newRepertoireType, setNewRepertoireType] = useState<'repertoire' | 'playlist' | 'collection' | 'project'>('repertoire');
+  const [newRepertoireVisibility, setNewRepertoireVisibility] = useState<'active' | 'private'>('active');
+  const [trackSpecificOrganization, setTrackSpecificOrganization] = useState<Record<string, { option: 'all_songs' | 'existing' | 'new'; selectedRepIds?: string[]; newRepName?: string }>>({});
+
+  // Direct Repertoire Quick Association modal states
+  const [selectedTrackForRepAction, setSelectedTrackForRepAction] = useState<Track | null>(null);
+  const [showRepActionModal, setShowRepActionModal] = useState(false);
+  const [activeTrackRepCheckboxes, setActiveTrackRepCheckboxes] = useState<Record<string, boolean>>({});
+
+  // Interactive Reorder Tracks states
+  const [reorderRepertoire, setReorderRepertoire] = useState<Repertoire | null>(null);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+
+  // Custom multi-selection sharing in Shares and Dissemination Tab
+  const [selectedTracksForCustomShare, setSelectedTracksForCustomShare] = useState<string[]>([]);
+
 
 
   const handleOpenProfileModal = () => {
@@ -226,6 +278,26 @@ export default function Dashboard({
     setProfile(artistData);
     setTracks(dbService.getArtistMusics(currentUser.userId));
     setAnalytics(dbService.getAnalytics(currentUser.userId));
+
+    // Warm up Repertoires & Projects from LocalStorage/Cache instantly
+    const localKeyReps = `somdrive_repertoires_${currentUser.userId}`;
+    const cachedReps = localStorage.getItem(localKeyReps);
+    if (cachedReps) {
+      setDashboardRepertoires(JSON.parse(cachedReps));
+    }
+    const localKeyProj = `somdrive_projects_${currentUser.userId}`;
+    const cachedProjs = localStorage.getItem(localKeyProj);
+    if (cachedProjs) {
+      setDashboardProjects(JSON.parse(cachedProjs));
+    }
+
+    // Refresh concurrently in the background from Firestore
+    dbService.getRepertoires(currentUser.userId).then(reps => {
+      if (reps) setDashboardRepertoires(reps);
+    });
+    dbService.getProjects(currentUser.userId).then(projs => {
+      if (projs) setDashboardProjects(projs);
+    });
   };
 
   const handleMoveTrack = async (trackId: string, direction: 'up' | 'down', e: React.MouseEvent) => {
@@ -492,154 +564,227 @@ export default function Dashboard({
     e.preventDefault();
     setFormError('');
 
-    if (tracks.length >= limitCount) {
-      setFormError('Você atingiu o limite do seu plano. Faça upgrade para enviar mais músicas.');
+    if (tracks.length + audioFiles.length > limitCount) {
+      setFormError(`Limite de plano excedido. Seu limite total é de ${limitCount} músicas.`);
       setShowAddForm(false);
       setShowLimitPrompt(true);
       return;
     }
 
-    if (audioOption === 'file') {
-      if (!audioFile) {
-        setFormError('Por favor, selecione um arquivo de áudio MP3 para enviar.');
-        return;
-      }
-      const maxSizeBytes = 20 * 1024 * 1024; // 20 MB
-
-      const fileExt = '.' + audioFile.name.split('.').pop()?.toLowerCase();
-      const mimeLower = audioFile.type.toLowerCase();
-      const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
-      const isMp3Ext = fileExt === '.mp3';
-
-      // Validação estrita de MP3
-      if (!isMp3Mime && !isMp3Ext) {
-        setFormError('Este arquivo não é um MP3 válido. Converta sua música para MP3 e tente novamente.');
-        return;
-      }
-
-      // Validação de tamanho <= 20MB
-      if (audioFile.size > maxSizeBytes) {
-        setFormError('Este MP3 ultrapassa o limite de 20 MB. Reduza o áudio para MP3 em 96 kbps ou 128 kbps e tente novamente.');
-        return;
-      }
-    }
-
-    if (!title.trim()) {
-      setFormError('O título da música é obrigatório.');
+    if (audioOption === 'file' && audioFiles.length === 0) {
+      setFormError('Por favor, selecione pelo menos um arquivo de áudio MP3 para enviar.');
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(10);
+    // Formats & sizes check
+    if (audioOption === 'file') {
+      for (const file of audioFiles) {
+        const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+        const mimeLower = file.type.toLowerCase();
+        const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
+        const isMp3Ext = fileExt === '.mp3';
 
-    const uniqueId = `track-${Math.floor(Math.random() * 89999) + 10000}`;
+        if (!isMp3Mime && !isMp3Ext) {
+          setFormError(`O arquivo "${file.name}" não é um MP3 válido. Converta para MP3 antes do envio.`);
+          return;
+        }
+
+        const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+        if (file.size > MAX_AUDIO_SIZE_BYTES) {
+          setFormError(`Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente.`);
+          return;
+        }
+      }
+    } else {
+      if (!title.trim()) {
+        setFormError('O título da música é obrigatório.');
+        return;
+      }
+    }
+
+    setIsUploading(true);
+    setUploadProgress(5);
 
     try {
-      // Determine cover URL using Firebase Storage if local file exists
+      // Helper function to create repertoire dynamically
+      const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'active' | 'private', initialTrackIds: string[] = []) => {
+        const repId = `rep-${Math.floor(Math.random() * 89999) + 10000}`;
+        const newRep: Repertoire = {
+          id: repId,
+          ownerUid: profile.userId,
+          name: name.trim(),
+          description: desc.trim(),
+          type: type,
+          trackIds: initialTrackIds,
+          orderedTrackIds: initialTrackIds,
+          visibility: visibility,
+          createdAt: new Date().toISOString()
+        };
+        await dbService.saveRepertoire(newRep);
+        return repId;
+      };
+
+      // 1. Create main batch repertoire if needed
+      let batchNewRepId = "";
+      if (organizationOption === 'new_repertoire' && newRepertoireName.trim()) {
+        batchNewRepId = await createNewRepertoireInFirestore(
+          newRepertoireName,
+          newRepertoireDesc,
+          newRepertoireType,
+          newRepertoireVisibility
+        );
+      }
+
+      const repToTracksMap: Record<string, string[]> = {}; // repertoireId -> trackIds[]
+
+      // Cover image logic configuration
       let finalCover = PRESET_COVERS[Math.floor(Math.random() * PRESET_COVERS.length)];
       if (coverFile) {
-        setUploadProgress(25);
+        setUploadProgress(10);
         finalCover = await dbService.uploadFile(profile.userId, coverFile, 'cover', (p) => setUploadProgress(prev => Math.max(prev, p)));
       } else if (coverOption === 'url' && customCoverUrl.trim()) {
         finalCover = customCoverUrl.trim();
       }
 
-      setUploadProgress(50);
-
-      // Determine audio URL and tracking variables using Cloudflare R2 if local file exists
-      let finalAudio = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
-      let r2StoragePath = "";
-      let r2MimeType = "audio/mpeg";
-      let r2FileSize = 0;
-      let r2OriginalName = "";
-      let r2StorageProvider = "preset_demo";
-      let computedHashHex = "";
-      let calculatedAudioFileId = "";
-
-      if (audioOption === 'file' && audioFile) {
-        setUploadProgress(55);
-        r2OriginalName = audioFile.name;
-        r2MimeType = audioFile.type || "audio/mpeg";
-        r2FileSize = audioFile.size;
-        r2StorageProvider = "cloudflare_r2";
-
-        // Calculate File Hash using browser performance SHA-256
-        try {
-          computedHashHex = await computeSHA256(audioFile);
-          console.log("Calculated MP3 hash:", computedHashHex);
-        } catch (hashErr) {
-          console.error("SHA-255 calculation failed, uploading without: ", hashErr);
-        }
-
-        setUploadProgress(60);
-
-        // Deduplication discovery flow
-        let existingAudioFile = null;
-        if (computedHashHex) {
-          existingAudioFile = await dbService.findAudioFileByHash(computedHashHex);
-        }
-
-        if (existingAudioFile) {
-          console.log("Physical audio duplicate detected in storage! Reusing existing stream URL:", existingAudioFile.audioUrl);
-          finalAudio = existingAudioFile.audioUrl;
-          r2StoragePath = existingAudioFile.storagePath;
-          calculatedAudioFileId = existingAudioFile.id;
+      // Loop over files to save
+      if (audioOption === 'file') {
+        for (let i = 0; i < audioFiles.length; i++) {
+          const file = audioFiles[i];
+          const uniqueId = `track-${Math.floor(Math.random() * 89999) + 10000}`;
           
-          // Safely update file reuse count
-          await dbService.incrementAudioFileUsage(existingAudioFile.id);
-          setUploadProgress(90);
-        } else {
-          // Upload new unique binary file to Cloudflare R2
-          const uploadResult = await uploadAudioToR2(
-            profile.userId,
-            uniqueId,
-            audioFile,
-            (percent) => {
-              const mappedProgress = Math.round(60 + (percent * 0.3));
-              setUploadProgress(mappedProgress);
-            }
-          );
-          finalAudio = uploadResult.publicAudioUrl;
-          r2StoragePath = uploadResult.storagePath;
+          const fileBaseProgress = Math.round((i / audioFiles.length) * 80);
+          const fileProgressWeight = 80 / audioFiles.length;
+          setUploadProgress(fileBaseProgress + 10);
 
-          // Save newly uploaded physical audio file metadata descriptor
-          calculatedAudioFileId = `file-${Math.floor(Math.random() * 89999) + 10000}`;
-          const newAudioFileObject = {
-            id: calculatedAudioFileId,
-            audioHash: computedHashHex,
+          // Compute File Hash (SHA-256)
+          let computedHashHex = "";
+          try {
+            computedHashHex = await computeSHA256(file);
+          } catch (err) {
+            console.error("Hash derivation failed: ", err);
+          }
+
+          // Deduplication check
+          let existingAudioFile = null;
+          if (computedHashHex) {
+            existingAudioFile = await dbService.findAudioFileByHash(computedHashHex);
+          }
+
+          let finalAudio = "";
+          let r2StoragePath = "";
+          let r2MimeType = file.type || "audio/mpeg";
+          let r2FileSize = file.size;
+          let r2OriginalName = file.name;
+          let r2StorageProvider = "cloudflare_r2";
+          let calculatedAudioFileId = "";
+
+          if (existingAudioFile) {
+            finalAudio = existingAudioFile.audioUrl;
+            r2StoragePath = existingAudioFile.storagePath;
+            calculatedAudioFileId = existingAudioFile.id;
+            await dbService.incrementAudioFileUsage(existingAudioFile.id);
+          } else {
+            const uploadResult = await uploadAudioToR2(
+              profile.userId,
+              uniqueId,
+              file,
+              (percent) => {
+                const filePercent = Math.round(fileBaseProgress + ((percent / 100) * fileProgressWeight));
+                setUploadProgress(Math.min(90, filePercent + 10));
+              }
+            );
+            finalAudio = uploadResult.publicAudioUrl;
+            r2StoragePath = uploadResult.storagePath;
+            calculatedAudioFileId = `file-${Math.floor(Math.random() * 89999) + 10000}`;
+
+            const newAudioFileObject = {
+              id: calculatedAudioFileId,
+              audioHash: computedHashHex,
+              audioUrl: finalAudio,
+              storagePath: r2StoragePath,
+              fileSize: r2FileSize,
+              mimeType: r2MimeType,
+              originalFileName: r2OriginalName,
+              createdBy: profile.userId,
+              usageCount: 1,
+              createdAt: new Date().toISOString()
+            };
+            await dbService.createAudioFile(calculatedAudioFileId, newAudioFileObject);
+          }
+
+          // Song Title
+          const songTitle = audioFiles.length === 1 && title.trim() 
+            ? title.trim() 
+            : file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
+
+          // Decide target repertoires
+          let targetRepIds: string[] = [];
+          if (organizationOption === 'all_songs') {
+            targetRepIds = [];
+          } else if (organizationOption === 'existing_repertoire') {
+            targetRepIds = selectedRepertoireIds;
+          } else if (organizationOption === 'new_repertoire') {
+            if (batchNewRepId) {
+              targetRepIds = [batchNewRepId];
+            }
+          } else if (organizationOption === 'each_separately') {
+            const spec = trackSpecificOrganization[file.name] || { option: 'all_songs' };
+            if (spec.option === 'existing') {
+              targetRepIds = spec.selectedRepIds || [];
+            } else if (spec.option === 'new' && spec.newRepName?.trim()) {
+              const itemNewRepId = await createNewRepertoireInFirestore(
+                spec.newRepName,
+                "Criado no upload múltiplo individualizado",
+                'repertoire',
+                'active'
+              );
+              targetRepIds = [itemNewRepId];
+            }
+          }
+
+          await dbService.addMusic(profile.userId, {
+            trackId: uniqueId,
+            artistId: profile.userId,
+            title: songTitle,
+            composer: composer.trim() || profile.name,
+            singer: singer.trim() || profile.name,
+            performer: singer.trim() || profile.name,
+            genre: genre.trim() || profile.genre || 'Sertanejo',
+            description: desc.trim() || 'Faixa exclusiva em exibição para ouvintes.',
             audioUrl: finalAudio,
+            coverUrl: finalCover,
+            lyrics: lyrics.trim(),
+            plays: 0,
+            status: newTrackStatus,
+            storageProvider: r2StorageProvider,
             storagePath: r2StoragePath,
             fileSize: r2FileSize,
             mimeType: r2MimeType,
             originalFileName: r2OriginalName,
-            createdBy: profile.userId,
-            usageCount: 1
-          };
-          await dbService.createAudioFile(calculatedAudioFileId, newAudioFileObject);
+            audioFileId: calculatedAudioFileId,
+            partners: partners.trim(),
+            audioHash: computedHashHex
+          });
+
+          // Reference tracking
+          targetRepIds.forEach(repId => {
+            if (!repToTracksMap[repId]) {
+              repToTracksMap[repId] = [];
+            }
+            repToTracksMap[repId].push(uniqueId);
+          });
         }
-      } else if (audioOption === 'url' && customAudioUrl.trim()) {
-        finalAudio = customAudioUrl.trim();
-        r2OriginalName = "custom_url_link.mp3";
-        r2StoragePath = "custom-external";
-        r2MimeType = "audio/mpeg";
-        r2FileSize = 0;
-        r2StorageProvider = "external_link";
-        calculatedAudioFileId = `file-ext-${Math.floor(Math.random() * 89999) + 10000}`;
       } else {
-        // Rotate roster of high quality fallback MP3 files
-        const index = (tracks.length % 5) + 1;
-        finalAudio = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${index}.mp3`;
-        r2OriginalName = `SoundHelix-Song-${index}.mp3`;
-        r2StoragePath = `preset/helix-${index}.mp3`;
-        r2MimeType = "audio/mpeg";
-        r2FileSize = 0;
-        r2StorageProvider = "preset_demo";
-        calculatedAudioFileId = `file-preset-${index}`;
-      }
+        // Individual URL-linked creation fallback
+        const uniqueId = `track-${Math.floor(Math.random() * 89999) + 10000}`;
+        let finalAudio = customAudioUrl.trim() || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+        let r2OriginalName = "custom_url_link.mp3";
+        let r2StoragePath = "custom-external";
+        let r2MimeType = "audio/mpeg";
+        let r2FileSize = 0;
+        let r2StorageProvider = "external_link";
+        let calculatedAudioFileId = `file-ext-${Math.floor(Math.random() * 89999) + 10000}`;
 
-      setUploadProgress(92);
-
-      try {
         await dbService.addMusic(profile.userId, {
           trackId: uniqueId,
           artistId: profile.userId,
@@ -648,7 +793,7 @@ export default function Dashboard({
           singer: singer.trim() || profile.name,
           performer: singer.trim() || profile.name,
           genre: genre.trim() || profile.genre || 'Sertanejo',
-          description: desc.trim() || 'Faixa exclusiva em exibição para ouvintes.',
+          description: desc.trim() || 'Faixa exclusiva em divulgação.',
           audioUrl: finalAudio,
           coverUrl: finalCover,
           lyrics: lyrics.trim(),
@@ -661,26 +806,65 @@ export default function Dashboard({
           originalFileName: r2OriginalName,
           audioFileId: calculatedAudioFileId,
           partners: partners.trim(),
-          audioHash: computedHashHex
+          audioHash: ""
         });
-      } catch (firestoreErrObj: any) {
-        console.error("erro ao salvar no Firestore:", firestoreErrObj);
-        throw new Error("step:firestore_save_failed");
+
+        // Link with selected repertoires directly if configured
+        let targetRepIds: string[] = [];
+        if (organizationOption === 'existing_repertoire') {
+          targetRepIds = selectedRepertoireIds;
+        } else if (organizationOption === 'new_repertoire' && batchNewRepId) {
+          targetRepIds = [batchNewRepId];
+        }
+        
+        targetRepIds.forEach(repId => {
+          if (!repToTracksMap[repId]) {
+            repToTracksMap[repId] = [];
+          }
+          repToTracksMap[repId].push(uniqueId);
+        });
       }
 
-      setUploadProgress(95);
+      setUploadProgress(92);
 
-      // Immediately run on-demand cloud sync
+      // Now update target repertoires in Firestore/State
+      for (const repId of Object.keys(repToTracksMap)) {
+        const queryReps = await dbService.getRepertoires(profile.userId);
+        const existingRep = queryReps.find(r => r.id === repId);
+        const existingTrackIds = existingRep?.trackIds || [];
+        const updatedTrackIds = [...existingTrackIds];
+
+        repToTracksMap[repId].forEach(tid => {
+          if (!updatedTrackIds.includes(tid)) {
+            updatedTrackIds.push(tid);
+          }
+        });
+
+        const updatedRep: Repertoire = {
+          id: repId,
+          ownerUid: profile.userId,
+          name: existingRep?.name || newRepertoireName || "Novo Repertório",
+          description: existingRep?.description || newRepertoireDesc || "",
+          type: existingRep?.type || newRepertoireType || 'repertoire',
+          trackIds: updatedTrackIds,
+          orderedTrackIds: updatedTrackIds,
+          visibility: existingRep?.visibility || newRepertoireVisibility || 'active',
+          createdAt: existingRep?.createdAt || new Date().toISOString()
+        };
+        await dbService.saveRepertoire(updatedRep);
+      }
+
+      setUploadProgress(96);
       await dbService.syncArtistData(profile.userId);
-
       setUploadProgress(100);
 
-      // Reset Form State
+      // Reset Wizard & form states
       setTitle('');
       setDesc('');
       setLyrics('');
       setPartners('');
       setAudioFile(null);
+      setAudioFiles([]);
       setCoverFile(null);
       setCustomAudioUrl('');
       setCustomCoverUrl('');
@@ -689,52 +873,17 @@ export default function Dashboard({
     } catch (err: any) {
       console.error("Upload workflow failed: ", err);
       const errMsg = err.message || "";
-      
-      // Extract proxy error if present
       let extractedProxyError = "";
       if (errMsg.includes("proxy_error:")) {
-        const proxyParts = errMsg.split("proxy_error:");
-        // Decode and strip colon
-        extractedProxyError = decodeURIComponent(proxyParts[1].split(":")[0]).trim();
+        extractedProxyError = decodeURIComponent(errMsg.split("proxy_error:")[1].split(":")[0]).trim();
       }
 
       if (errMsg.startsWith("step:presigned_url_fetch_failed") || errMsg.startsWith("step:presigned_url_generation_failed")) {
-        let text = "Falha ao gerar URL de upload no Cloudflare R2.";
-        if (extractedProxyError) {
-          text += ` (R2 Error: ${extractedProxyError})`;
-        }
-        setFormError(text);
+        setFormError(`Falha ao gerar URL de upload no Cloudflare R2.${extractedProxyError ? ` (R2: ${extractedProxyError})` : ""}`);
       } else if (errMsg.startsWith("step:r2_upload_put_failed_status_real")) {
-        // Extract real error details
-        const parts = errMsg.split(":");
-        const status = parts[2] || "Desconhecido";
-        const statusText = parts[3] || "Error";
-        const responseText = parts.slice(4).join(":");
-        
-        let displayError = `Falha ao enviar MP3 para R2: ${status} - ${statusText}`;
-        if (responseText && responseText !== "Sem resposta textual") {
-          if (responseText.includes("SignatureDoesNotMatch")) {
-            displayError += " (Erro: SignatureDoesNotMatch — Os parâmetros ou cabeçalhos assinados divergem)";
-          } else if (responseText.includes("AccessDenied")) {
-            displayError += " (Erro: AccessDenied — Credenciais do R2 não possuem permissões de gravação adequadas)";
-          } else {
-            const cleanText = responseText.replace(/<[^>]*>/g, '').substring(0, 100).trim();
-            if (cleanText) {
-              displayError += ` (${cleanText})`;
-            }
-          }
-        }
-        setFormError(displayError);
-      } else if (errMsg.startsWith("step:r2_upload_put_failed_status") || errMsg.startsWith("step:r2_upload_put_failed_network")) {
-        let text = "Falha ao enviar MP3 para R2: Erro de Rede ou Conexão.";
-        if (extractedProxyError) {
-          text += ` (R2 Error: ${extractedProxyError})`;
-        }
-        setFormError(text);
-      } else if (errMsg.startsWith("step:firestore_save_failed")) {
-        setFormError("Falha ao salvar os dados da música no Firestore.");
+        setFormError(`Falha ao carregar arquivo de áudio para armazenamento R2.`);
       } else {
-        setFormError(errMsg || "Erro inesperado ao registrar a música.");
+        setFormError(errMsg || "Erro inesperado ao salvar composições.");
       }
     } finally {
       setIsUploading(false);
@@ -765,6 +914,94 @@ export default function Dashboard({
       }
     } catch (err) {
       console.error("Error toggling music link status:", err);
+    }
+  };
+
+  const handleOpenRepAction = async (track: Track, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSelectedTrackForRepAction(track);
+    
+    try {
+      const allReps = await dbService.getRepertoires(profile.userId);
+      const checkboxes: Record<string, boolean> = {};
+      allReps.forEach(rep => {
+        checkboxes[rep.id] = !!(rep.trackIds && rep.trackIds.includes(track.trackId));
+      });
+      setActiveTrackRepCheckboxes(checkboxes);
+    } catch (err) {
+      console.error("Failed to map track checkbox states: ", err);
+    }
+
+    setNewRepertoireName('');
+    setNewRepertoireDesc('');
+    setNewRepertoireType('repertoire');
+    setNewRepertoireVisibility('active');
+    setShowRepActionModal(true);
+  };
+
+  const handleSaveRepAction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTrackForRepAction) return;
+
+    try {
+      setIsUploading(true);
+      const allReps = await dbService.getRepertoires(profile.userId);
+      let checkboxesSnapshot = { ...activeTrackRepCheckboxes };
+
+      if (newRepertoireName.trim()) {
+        const newRepId = "rep_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        const newRep: Repertoire = {
+          id: newRepId,
+          ownerUid: profile.userId,
+          name: newRepertoireName.trim(),
+          description: newRepertoireDesc.trim(),
+          type: newRepertoireType,
+          trackIds: [selectedTrackForRepAction.trackId],
+          orderedTrackIds: [selectedTrackForRepAction.trackId],
+          visibility: newRepertoireVisibility,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        await dbService.saveRepertoire(newRep);
+        checkboxesSnapshot[newRepId] = true;
+      }
+
+      for (const rep of allReps) {
+        const shouldBelong = !!checkboxesSnapshot[rep.id];
+        const existingTrackIds = rep.trackIds || [];
+        const currentlyHas = existingTrackIds.includes(selectedTrackForRepAction.trackId);
+
+        let updatedTrackIds = [...existingTrackIds];
+        let changed = false;
+
+        if (shouldBelong && !currentlyHas) {
+          updatedTrackIds.push(selectedTrackForRepAction.trackId);
+          changed = true;
+        } else if (!shouldBelong && currentlyHas) {
+          updatedTrackIds = updatedTrackIds.filter(id => id !== selectedTrackForRepAction.trackId);
+          changed = true;
+        }
+
+        if (changed) {
+          const updatedRep: Repertoire = {
+            ...rep,
+            trackIds: updatedTrackIds,
+            orderedTrackIds: updatedTrackIds,
+            updatedAt: new Date().toISOString()
+          };
+          await dbService.saveRepertoire(updatedRep);
+        }
+      }
+
+      setShowRepActionModal(false);
+      setSelectedTrackForRepAction(null);
+      setNewRepertoireName('');
+      setNewRepertoireDesc('');
+      refreshData();
+    } catch (err: any) {
+      console.error("Failed to save quick association: ", err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1062,7 +1299,71 @@ export default function Dashboard({
 
 
 
-        {/* SECTION HEADER: MUSIC CONTROL LIST & ACTIONS */}
+        {/* SUB-AREAS NAVIGATION BAR HEADER (Custom sophisticated tabs) */}
+        <div className="flex border-b border-slate-900 gap-3 sm:gap-6 md:gap-8 select-none overflow-x-auto pb-2.5 mt-2.5 scrollbar-none text-left">
+          <button 
+            type="button"
+            onClick={() => setDashboardTab('musics')}
+            className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative shrink-0 ${
+              dashboardTab === 'musics' 
+                ? 'border-orange-500 text-orange-400 font-extrabold' 
+                : 'border-transparent text-slate-400 hover:text-white cursor-pointer'
+            }`}
+          >
+            Minhas Músicas
+          </button>
+          <button 
+            type="button"
+            onClick={() => setDashboardTab('repertoires')}
+            className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative shrink-0 ${
+              dashboardTab === 'repertoires' 
+                ? 'border-orange-500 text-orange-400 font-extrabold' 
+                : 'border-transparent text-slate-400 hover:text-white cursor-pointer'
+            }`}
+          >
+            Meus Repertórios
+          </button>
+          <button 
+            type="button"
+            onClick={() => setDashboardTab('projects')}
+            className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative shrink-0 ${
+              dashboardTab === 'projects' 
+                ? 'border-orange-500 text-orange-400 font-extrabold' 
+                : 'border-transparent text-slate-400 hover:text-white cursor-pointer'
+            }`}
+          >
+            Meus Projetos
+          </button>
+          <button 
+            type="button"
+            onClick={() => setDashboardTab('shares')}
+            className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative shrink-0 ${
+              dashboardTab === 'shares' 
+                ? 'border-orange-500 text-orange-400 font-extrabold' 
+                : 'border-transparent text-slate-400 hover:text-white cursor-pointer'
+            }`}
+          >
+            Links e Divulgação
+          </button>
+          <button 
+            type="button"
+            onClick={() => {
+              setDashboardTab('profile');
+              handleOpenProfileModal();
+            }}
+            className={`pb-3 text-xs sm:text-sm font-semibold tracking-wider uppercase transition-all border-b-2 relative shrink-0 ${
+              dashboardTab === 'profile' 
+                ? 'border-orange-500 text-orange-400 font-extrabold' 
+                : 'border-transparent text-slate-400 hover:text-white cursor-pointer'
+            }`}
+          >
+            Personalizar Perfil
+          </button>
+        </div>
+
+        {dashboardTab === 'musics' && (
+          <div className="space-y-6 animate-fade-in text-left">
+            {/* SECTION HEADER: MUSIC CONTROL LIST & ACTIONS */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-4">
           <div>
             <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
@@ -1077,6 +1378,21 @@ export default function Dashboard({
               if (tracks.length >= limitCount) {
                 setShowLimitPrompt(true);
               } else {
+                setUploadStep(1);
+                setAudioFiles([]);
+                setOrganizationOption('all_songs');
+                setSelectedRepertoireIds([]);
+                setNewRepertoireName('');
+                setNewRepertoireDesc('');
+                setNewRepertoireType('repertoire');
+                setNewRepertoireVisibility('active');
+                setTrackSpecificOrganization({});
+                setTitle('');
+                setGenre('');
+                setDesc('');
+                setLyrics('');
+                setPartners('');
+                setFormError('');
                 setShowAddForm(true);
               }
             }}
@@ -1390,6 +1706,15 @@ export default function Dashboard({
                       </button>
 
                       <button 
+                        type="button"
+                        onClick={(e) => handleOpenRepAction(track, e)}
+                        className="p-1.5 bg-[#0f172a] border border-slate-800/80 text-orange-450 hover:text-orange-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                        title="Organizar em Repertórios"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5 text-orange-500" />
+                      </button>
+
+                      <button 
                         onClick={(e) => handleStartEdit(track, e)}
                         className="p-1.5 bg-slate-955 border border-slate-800 text-slate-400 hover:text-orange-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
                         title="Editar detalhes"
@@ -1412,24 +1737,26 @@ export default function Dashboard({
           </div>
           )
         )}
+        </div>
+      )}
 
       </main>
 
       {/* MODAL / ADD MUSIC LAYOVER DIALOG */}
       {showAddForm && (
-        <div id="add-music-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
+        <div id="add-music-modal-container" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[95vh] overflow-y-auto">
             
             {isUploading && (
-              <div className="absolute inset-0 z-30 bg-slate-950/95 rounded-3xl backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4">
+              <div className="absolute inset-0 z-50 bg-slate-950/95 rounded-3xl backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4">
                 <div className="relative w-16 h-16">
                   <div className="absolute inset-0 rounded-full border-4 border-orange-500/20 animate-pulse"></div>
                   <div className="absolute inset-0 rounded-full border-4 border-t-orange-500 animate-spin"></div>
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-heading font-black tracking-wide text-white uppercase">Sincronizando com Firebase Storage</h4>
+                  <h4 className="text-sm font-heading font-black tracking-wide text-white uppercase">Sincronizando com Firebase Storage e R2</h4>
                   <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
-                    Fazendo upload seguro das suas faixas de áudio e capa para o Firebase Storage corporativo de alta velocidade...
+                    Sua música está sendo processada físicamente, analisando o hash SHA-256 contra repetições e vinculando seus repertórios com segurança...
                   </p>
                 </div>
                 <div className="w-48 bg-slate-850 h-1.5 rounded-full overflow-hidden">
@@ -1439,19 +1766,26 @@ export default function Dashboard({
               </div>
             )}
 
+            {/* Modal Header */}
             <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-              <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
-                <Music className="w-5 h-5 text-orange-400" /> Cadastrar Composições
+              <h3 className="font-heading font-black text-lg uppercase tracking-tight text-white flex items-center gap-2">
+                <Music className="w-5 h-5 text-orange-500" /> Cadastrar Composições
               </h3>
               <button 
                 onClick={() => {
                   setShowAddForm(false);
                   setFormError('');
                 }}
-                className="text-slate-400 hover:text-white transition cursor-pointer text-xs font-bold uppercase"
+                className="text-slate-400 hover:text-white transition cursor-pointer text-xs font-bold uppercase font-mono"
               >
                 Fechar
               </button>
+            </div>
+
+            {/* Sub-header text indicating simplified single-screen registry */}
+            <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl text-left">
+              <h4 className="text-xs font-mono font-bold text-orange-500 uppercase tracking-wider mb-0.5">Novo Envio de Composições</h4>
+              <p className="text-[11px] text-slate-400">Preencha os metadados básicos, anexe suas guias MP3 e organize seu lançamento em uma única etapa simples.</p>
             </div>
 
             {formError && (
@@ -1460,250 +1794,1358 @@ export default function Dashboard({
               </div>
             )}
 
-            <form onSubmit={handleAddMusic} className="space-y-4">
+            <form onSubmit={handleAddMusic} className="space-y-5">
               
-              {/* Row 1: Title & Style */}
+              {/* Grid 1: Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1 text-left">
                   <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Título da Música *</label>
                   <input 
-                    id="new-track-title"
+                    id="track-title"
                     type="text" 
                     placeholder="Ex: Coração de Pedra"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     required
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none font-sans"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Musical (Genre)</label>
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Musical (Gênero) *</label>
                   <input 
-                    id="new-track-genre"
+                    id="track-genre"
                     type="text" 
-                    placeholder="Ex: Sertanejo Universitário"
+                    placeholder="Ex: Sertanejo"
                     value={genre}
                     onChange={(e) => setGenre(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                    required
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none font-sans"
                   />
                 </div>
               </div>
 
-              {/* Row 2: Composer, Singer & Partners */}
+              {/* Grid 2: Composer, Singer & Partners */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome do Compositor (Autor)</label>
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Compositor (Autor) *</label>
                   <input 
-                    id="new-track-composer"
+                    id="track-composer"
                     type="text" 
-                    placeholder="Nome do compositor"
+                    placeholder="Ex: Nome do Compositor"
                     value={composer}
                     onChange={(e) => setComposer(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                    required
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none font-sans"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Nome do Intérprete / Cantor</label>
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Intérprete / Cantor *</label>
                   <input 
-                    id="new-track-singer"
+                    id="track-singer"
                     type="text" 
-                    placeholder="Cantor ou banda principal"
+                    placeholder="Ex: Cantor ou Banda"
                     value={singer}
                     onChange={(e) => setSinger(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                    required
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none font-sans"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Parceiros / Divisões Co-autorias</label>
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Parceiros (Co-autorias) / Divisões</label>
                   <input 
-                    id="new-track-partners"
+                    id="track-partners"
                     type="text" 
-                    placeholder="Ex: Pedro 50%, João 25%"
+                    placeholder="Ex: Pedro 50%, João 50%"
                     value={partners}
                     onChange={(e) => setPartners(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none font-sans"
                   />
                 </div>
               </div>
-              <div className="pt-2 border-t border-slate-850 p-4 bg-slate-950 rounded-2xl space-y-3">
-                <h5 className="text-[11px] font-mono font-bold tracking-widest text-yellow-400 uppercase">1. Arquivo de Áudio da Música (Apenas MP3)</h5>
-                
-                <div className="border border-slate-850 p-4.5 rounded-2xl bg-slate-950/60 space-y-4 text-left">
-                  {/* Clear orientation panel for composer before uploading */}
-                  <div className="p-4 bg-slate-900 border border-slate-850/60 rounded-xl space-y-2.5">
-                    <h4 className="text-xs font-heading font-black text-white uppercase tracking-wider flex items-center gap-1.5 leading-snug">
-                      <Music className="w-4 h-4 text-orange-500 shrink-0" />
-                      Envie sua música em MP3
-                    </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                      Para tocar rápido no celular e no carro, envie um arquivo MP3 leve, de preferência entre 96 kbps e 128 kbps.
-                    </p>
-                    <div className="border-t border-slate-800/40 pt-2.5 mt-2">
-                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-slate-400 text-[10px] font-mono uppercase tracking-wider leading-relaxed">
-                        <li className="flex items-center gap-1"><span className="text-orange-500 font-bold">•</span> Tamanho recomendado: <span className="text-zinc-200">até 5 MB</span></li>
-                        <li className="flex items-center gap-1"><span className="text-orange-500 font-bold">•</span> Formatos aceitos: <span className="text-zinc-200">apenas .mp3</span></li>
-                        <li className="flex items-center gap-1"><span className="text-orange-500 font-bold">•</span> Tamanho máximo: <span className="text-zinc-200">20 MB</span></li>
-                        <li className="flex items-center gap-1 text-[9px] text-red-400 font-semibold"><span className="text-red-450 font-bold">•</span> Não aceitar WAV, FLAC, M4A, AAC, OGG ou áudio pesado</li>
-                      </ul>
-                    </div>
-                  </div>
 
-                  {/* Interactive Drag & Drop Upload Zone */}
-                  <div 
-                    onClick={() => {
-                      document.getElementById('hidden-audio-input')?.click();
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      e.currentTarget.classList.add('border-orange-500', 'bg-orange-500/10', 'scale-[1.01]');
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      e.currentTarget.classList.remove('border-orange-500', 'bg-orange-500/10', 'scale-[1.01]');
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      e.currentTarget.classList.remove('border-orange-500', 'bg-orange-500/10', 'scale-[1.01]');
-                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                        const file = e.dataTransfer.files[0];
-                        setAudioFile(file);
-                      }
-                    }}
-                    className="border-2 border-dashed border-slate-800 hover:border-orange-500/50 p-6 rounded-xl text-center space-y-3 cursor-pointer relative bg-slate-900/10 hover:bg-slate-900/20 transition-all duration-200 group flex flex-col items-center justify-center min-h-[140px]"
+              {/* Grid 3: Audio Upload Source */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block">Arquivo MP3 da Música (Guia)</label>
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setAudioOption('file')}
+                    className={`text-xs px-3.5 py-2 rounded-xl border font-mono uppercase font-semibold transition cursor-pointer select-none ${
+                      audioOption === 'file' 
+                        ? 'bg-slate-950 border-orange-500/50 text-orange-400' 
+                        : 'bg-slate-950/45 border-slate-880 text-slate-500'
+                    }`}
                   >
-                    <UploadCloud className="w-10 h-10 text-slate-500 group-hover:text-orange-400 transition-colors animate-pulse duration-[3000ms]" strokeWidth={1.5} />
-                    
-                    <div className="space-y-1 select-none">
-                      <p className="text-xs text-slate-200 font-bold">
-                        Arraste seu MP3 aqui ou clique para selecionar.
-                      </p>
-                      <p className="text-[11px] text-slate-405 leading-normal">
-                        Recomendado: MP3 de até 5 MB para carregar rápido no 4G.
-                      </p>
-                      <p className="text-[10px] font-mono uppercase text-slate-500 font-extrabold tracking-wider pt-0.5">
-                        Máximo permitido: 20 MB.
-                      </p>
+                    Arquivo Local MP3
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAudioOption('url')}
+                    className={`text-xs px-3.5 py-2 rounded-xl border font-mono uppercase font-semibold transition cursor-pointer select-none ${
+                      audioOption === 'url' 
+                        ? 'bg-slate-950 border-orange-500/50 text-orange-400' 
+                        : 'bg-slate-950/45 border-slate-880 text-slate-500'
+                    }`}
+                  >
+                    Link Externo (URL)
+                  </button>
+                </div>
+
+                {audioOption === 'file' ? (
+                  <div className="space-y-3">
+                    <div className="border-2 border-dashed border-slate-850 hover:border-orange-500/40 rounded-2xl p-6 text-center bg-slate-950/40 transition cursor-pointer relative group">
+                      <input 
+                        type="file" 
+                        accept=".mp3,audio/mpeg"
+                        multiple
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            const filesArr = Array.from(e.target.files) as File[];
+                            
+                            // Formato aceito: somente MP3. Validar tipo MIME se existir ou a extensão
+                            const invalidFormat = filesArr.some(f => {
+                              const fileExt = '.' + f.name.split('.').pop()?.toLowerCase();
+                              const mimeLower = f.type.toLowerCase();
+                              const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
+                              const isMp3Ext = fileExt === '.mp3';
+                              return !isMp3Mime && !isMp3Ext;
+                            });
+
+                            if (invalidFormat) {
+                              setFormError('Todos os arquivos enviados devem estar no formato MP3!');
+                              return;
+                            }
+
+                            // Limite técnico máximo: 6 MB
+                            const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+                            const invalidSize = filesArr.some(f => f.size > MAX_AUDIO_SIZE_BYTES);
+                            if (invalidSize) {
+                              setFormError('Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente.');
+                              return;
+                            }
+
+                            setFormError('');
+                            setAudioFiles(filesArr);
+                          }
+                        }}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                      />
+                      <UploadCloud className="w-10 h-10 text-orange-500/60 group-hover:text-orange-500 mx-auto mb-2 transition" />
+                      <span className="block text-xs font-bold text-white uppercase font-sans">Selecione uma ou múltipla guia MP3</span>
+                      <span className="block text-[10px] text-slate-500 mt-1 font-mono">Arraste arquivos ou clique para buscar</span>
                     </div>
 
-                    <input 
-                      id="hidden-audio-input"
-                      type="file" 
-                      accept=".mp3,audio/mpeg,audio/mp3" 
-                      onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                      className="hidden" 
-                    />
-                    
-                    {audioFile && (
-                      <div className="p-2 px-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center gap-2 mt-2 max-w-sm animate-fade-in">
-                        <Music className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <p className="text-xs text-emerald-400 font-mono font-bold truncate">
-                          Selecionado: {audioFile.name} ({(audioFile.size / (1024 * 1024)).toFixed(2)} MB)
-                        </p>
+                    {/* Orientations Block */}
+                    <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl space-y-2 text-left text-xs text-slate-300">
+                      <p className="font-sans leading-relaxed text-slate-350">
+                        “Para carregamento mais rápido no celular e no carro, recomendamos arquivos MP3 entre 2 MB e 5 MB.”
+                      </p>
+                      <p className="font-sans font-bold text-orange-400">
+                        “Arquivos de até 6 MB também são aceitos.”
+                      </p>
+                      <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                        “Arquivos leves carregam mais rápido e ajudam a reduzir o consumo de dados móveis durante a reprodução.”
+                      </p>
+                      <div className="pt-2 border-t border-slate-900 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[10.5px] font-mono text-slate-400">
+                        <div>• Formato aceito: <span className="text-slate-200 font-bold">somente MP3</span></div>
+                        <div>• Tamanho recomendado: <span className="text-slate-200 font-bold">entre 2 MB e 5 MB</span></div>
+                        <div>• Limite técnico máximo: <span className="text-slate-200 font-bold">6 MB</span></div>
+                        <div>• Qualidade recomendada: <span className="text-slate-200 font-bold">96 kbps ou 128 kbps</span></div>
+                      </div>
+                    </div>
+
+                    {audioFiles.length > 0 && (
+                      <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-1.5">
+                        <span className="text-[9.5px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block mb-1">Arquivos selecionados ({audioFiles.length}):</span>
+                        <div className="max-h-32 overflow-y-auto space-y-1 divide-y divide-slate-900/50 pr-1">
+                          {audioFiles.map((f, idx) => (
+                            <div key={idx} className="flex justify-between items-center text-[10px] py-1 text-slate-300 font-mono">
+                              <span className="truncate max-w-[280px]">🎧 {f.name}</span>
+                              <span className="text-[9px] text-slate-500 select-none">({(f.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
+                ) : (
+                  <div className="space-y-1">
+                    <input 
+                      type="url" 
+                      placeholder="https://exemplo.com/musica.mp3"
+                      value={customAudioUrl}
+                      onChange={(e) => setCustomAudioUrl(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Grid 4: Lyrics & Technical Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Ficha Técnica da Música</label>
+                  <textarea 
+                    placeholder="Detalhes adicionais, tom, arranjo, instrumentos utilizados..."
+                    value={desc}
+                    onChange={(e) => setDesc(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white resize-none transition font-sans"
+                  ></textarea>
+                </div>
+
+                <div className="space-y-1 text-left">
+                  <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Letra Completa</label>
+                  <textarea 
+                    placeholder="Cole aqui a letra completa para que os ouvintes possam acompanhar."
+                    value={lyrics}
+                    onChange={(e) => setLyrics(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white resize-none transition font-sans"
+                  ></textarea>
                 </div>
               </div>
 
-              {/* Cover Upload Controls simplified to Notes Only Mode */}
-              <div className="pt-2 border-t border-slate-850 p-4 bg-slate-950 rounded-2xl space-y-3">
-                <h5 className="text-[11px] font-mono font-bold tracking-widest text-orange-400 uppercase flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-orange-400 animate-pulse" /> 2. Capa da Música: Notas Musicais Ativadas
-                </h5>
-                <div className="flex items-center gap-2.5 p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 leading-relaxed">
-                  <Music className="w-5 h-5 text-orange-500 shrink-0" />
-                  <span>
-                    O design de <strong>Notas Musicais e Ondas Sonoras Líticas</strong> está ativo por padrão! Não é necessário enviar capas de fotos. Seus ouvintes verão lindos discos interativos animados.
-                  </span>
-                </div>
-              </div>
-
-              {/* Description bio */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Descrição da Música (Ficha criativa / Detalhes)</label>
-                <textarea 
-                  placeholder="Ex: Escrita após assistir o pôr do sol na beira do rio. Ritmo romântico com arranjo de cordas de aço e violoncelo."
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  rows={2}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white resize-none transition"
-                ></textarea>
-              </div>
-
-              {/* Lyrics text box */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Letra da Música (Opcional)</label>
-                <textarea 
-                  placeholder="Cole aqui a letra completa da música para os seus ouvintes e intérpretes acompanharem."
-                  value={lyrics}
-                  onChange={(e) => setLyrics(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
-                ></textarea>
-              </div>
-
-              {/* Visibilidade do Catálogo */}
-              <div className="pt-2 pb-1 border-t border-slate-850/60">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block mb-2">Visibilidade inicial no Catálogo Público</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Grid 5: Privacy/Status */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block mb-1.5">Status / Visibilidade da Música</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <button
                     type="button"
                     onClick={() => setNewTrackStatus('active')}
-                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer select-none ${
-                      newTrackStatus === 'active'
-                        ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-400'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    className={`p-3 rounded-xl border text-left transition select-none cursor-pointer ${
+                      newTrackStatus === 'active' 
+                        ? 'bg-emerald-950/25 border-emerald-500/50 text-emerald-400' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase flex items-center gap-1.5 font-mono mb-1">
                       <span className={`w-2 h-2 rounded-full ${newTrackStatus === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
-                      <span className="text-xs font-bold uppercase tracking-wider">Ativa / Visível</span>
-                    </div>
-                    <p className="text-[10px] text-slate-450 font-sans leading-relaxed">Seus ouvintes poderão visualizar e tocar no seu link público.</p>
+                      Ativo / Público Livre
+                    </span>
+                    <p className="text-[10px] text-slate-500 font-sans leading-relaxed">Disponível no catálogo geral público e visível imediatamente.</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setNewTrackStatus('inactive')}
-                    className={`p-3 rounded-xl border text-left transition relative cursor-pointer select-none ${
-                      newTrackStatus === 'inactive'
-                        ? 'bg-rose-950/20 border-rose-500/50 text-rose-400'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    className={`p-3 rounded-xl border text-left transition select-none cursor-pointer ${
+                      newTrackStatus === 'inactive' 
+                        ? 'bg-rose-950/25 border-[#f43f5e]/50 text-[#f43f5e]' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase flex items-center gap-1.5 font-mono mb-1">
                       <span className={`w-2 h-2 rounded-full ${newTrackStatus === 'inactive' ? 'bg-rose-500' : 'bg-slate-500'}`}></span>
-                      <span className="text-xs font-bold uppercase tracking-wider">Inativa / Oculta</span>
-                    </div>
-                    <p className="text-[10px] text-slate-450 font-sans leading-relaxed">Oculta do seu catálogo principal público. Fica reservada privada.</p>
+                      Inativo / Privado Oculto
+                    </span>
+                    <p className="text-[10px] text-slate-500 font-sans leading-relaxed">Fica com acesso privado restrito, ocultada dos canais públicos.</p>
                   </button>
                 </div>
               </div>
 
-              {/* Action buttons */}
+              {/* NEW SECTION: ORGANIZAÇÃO */}
+              <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-4 text-left">
+                <div className="border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-mono font-bold text-orange-500 uppercase tracking-wider">
+                    ORGANIZAÇÃO
+                  </h4>
+                  <p className="text-[11px] text-slate-300 font-bold uppercase font-sans mt-0.5">
+                    ONDE VOCÊ DESEJA ORGANIZAR ESTA MÚSICA?
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* 1. TODAS AS MÚSICAS */}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setOrganizationOption('all_songs');
+                      setSelectedRepertoireIds([]);
+                    }}
+                    className={`p-3 border rounded-xl cursor-pointer transition text-left select-none outline-none focus:outline-none ${
+                      organizationOption === 'all_songs' 
+                        ? 'bg-[#0f172a] border-orange-500/60 text-white shadow-md' 
+                        : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs uppercase text-slate-200">1. TODAS AS MÚSICAS</div>
+                    <div className="text-[10px] text-slate-500 mt-1">“Salvar normalmente no meu acervo.”</div>
+                  </button>
+
+                  {/* 2. REPERTÓRIO EXISTENTE */}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (dashboardRepertoires.length === 0) {
+                        setFormError('Você ainda não possui nenhum repertório cadastrado. Escolha a opção "Criar Novo Repertório" para montar o primeiro.');
+                      } else {
+                        setFormError('');
+                        setOrganizationOption('existing_repertoire');
+                      }
+                    }}
+                    className={`p-3 border rounded-xl cursor-pointer transition text-left select-none outline-none focus:outline-none ${
+                      organizationOption === 'existing_repertoire' 
+                        ? 'bg-[#0f172a] border-orange-500/60 text-white shadow-md' 
+                        : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs uppercase text-slate-200">2. REPERTÓRIO EXISTENTE</div>
+                    <div className="text-[10px] text-slate-500 mt-1">“Adicionar a um repertório já criado.”</div>
+                  </button>
+
+                  {/* 3. CRIAR NOVO REPERTÓRIO */}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setFormError('');
+                      setOrganizationOption('new_repertoire');
+                    }}
+                    className={`p-3 border rounded-xl cursor-pointer transition text-left select-none outline-none focus:outline-none ${
+                      organizationOption === 'new_repertoire' 
+                        ? 'bg-[#0f172a] border-orange-500/60 text-white shadow-md' 
+                        : 'bg-slate-950/50 border-slate-850 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs uppercase text-slate-200">3. CRIAR NOVO REPERTÓRIO</div>
+                    <div className="text-[10px] text-slate-500 mt-1">“Criar um novo repertório para esta música.”</div>
+                  </button>
+                </div>
+
+                {/* Conditional fields based on selection */}
+                {organizationOption === 'existing_repertoire' && (
+                  <div className="mt-2 bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-2 animate-fadeIn">
+                    <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block mb-1">Selecione o Repertório Existente:</label>
+                    <select
+                      value={selectedRepertoireIds[0] || ""}
+                      onChange={(e) => {
+                        setSelectedRepertoireIds(e.target.value ? [e.target.value] : []);
+                      }}
+                      className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 focus:border-orange-500 font-sans"
+                    >
+                      <option value="">-- Selecione o Repertório (Ex: Românticas, Animadas...) --</option>
+                      {dashboardRepertoires.map(rep => (
+                        <option key={rep.id} value={rep.id}>{rep.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {organizationOption === 'new_repertoire' && (
+                  <div className="mt-2 bg-slate-950/80 p-4 rounded-xl border border-slate-850 space-y-3 animate-fadeIn">
+                    <div className="space-y-1 font-sans">
+                      <label className="text-[9px] font-mono text-zinc-400 uppercase">Nome do Repertório *</label>
+                      <input 
+                        type="text"
+                        placeholder="Nome do repertório (Ex: Românticas, Sertanejas...)"
+                        value={newRepertoireName}
+                        onChange={(e) => setNewRepertoireName(e.target.value)}
+                        required={organizationOption === 'new_repertoire'}
+                        className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
+                      />
+                    </div>
+
+                    <div className="space-y-1 font-sans">
+                      <label className="text-[9px] font-mono text-zinc-400 uppercase">Descrição Opcional</label>
+                      <input 
+                        type="text"
+                        placeholder="Ex: Músicas românticas para show acústico"
+                        value={newRepertoireDesc}
+                        onChange={(e) => setNewRepertoireDesc(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
+                      />
+                    </div>
+
+                    <div className="pt-2 flex justify-start">
+                      <button
+                        type="submit"
+                        disabled={isUploading}
+                        className="px-4 py-2 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-lg text-[11px] font-heading font-black uppercase text-slate-950 transition cursor-pointer select-none font-bold"
+                      >
+                        {isUploading ? "PROCESSANDO..." : "Criar e adicionar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Form Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
                 <button 
-                  type="button"
+                  type="button" 
                   onClick={() => {
                     setShowAddForm(false);
                     setFormError('');
                   }}
-                  className="px-4 py-3 bg-slate-950 text-slate-400 hover:text-white text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+                  className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                
+                {organizationOption !== 'new_repertoire' && (
+                  <button 
+                    id="submit-new-track"
+                    type="submit"
+                    disabled={isUploading}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition-transform active:scale-98 font-bold flex items-center gap-1.5 border-0 focus:outline-none"
+                  >
+                    {isUploading ? (
+                      <>Sincronizando...</>
+                    ) : (
+                      <>Salvar composição</>
+                    )}
+                  </button>
+                )}
+              </div>
+
+            </form>
+
+            {/* Hidden wrapper containing redundant steps to avoid original file code structure breaking */}
+            {false && (
+              <div className="hidden opacity-0">
+              {uploadStep === 1 && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-wider mb-1">Passo 1: Identificação Básica</h4>
+                    <p className="text-[11px] text-slate-400">Insira as informações autorais. Se enviar múltiplos arquivos no Passo 2, estes metadados servirão como modelo padrão.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Título da Música {audioFiles.length <= 1 && '*'}</label>
+                      <input 
+                        type="text" 
+                        placeholder={audioFiles.length > 1 ? "Opcional (Usa nome de arquivo)" : "Ex: Coração de Pedra"}
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        required={audioFiles.length <= 1}
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Estilo Musical (Gênero)</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Sertanejo Universitário"
+                        value={genre}
+                        onChange={(e) => setGenre(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Compositor (Autor) *</label>
+                      <input 
+                        type="text" 
+                        placeholder="Nome do compositor"
+                        value={composer || profile.name}
+                        onChange={(e) => setComposer(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Intérprete / Cantor *</label>
+                      <input 
+                        type="text" 
+                        placeholder="Cantor ou banda principal"
+                        value={singer || profile.name}
+                        onChange={(e) => setSinger(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Co-autorias / Divisões</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Pedro 50%, João 25%"
+                        value={partners}
+                        onChange={(e) => setPartners(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end pt-4">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (audioFiles.length <= 1 && !title.trim()) {
+                          setFormError('O título da música é obrigatório para cadastros singulares.');
+                        } else {
+                          setFormError('');
+                          setUploadStep(2);
+                        }
+                      }}
+                      className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-mono font-bold uppercase text-slate-950 flex items-center gap-1 cursor-pointer transition select-none"
+                    >
+                      Avançar para Áudio <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 2: MP3 FILE SOURCE */}
+              {uploadStep === 2 && (
+                <div className="space-y-4 animate-fadeIn text-left">
+                  <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl space-y-1">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-wider">Passo 2: Arquivo de Som (MP3 Máx 6 MB)</h4>
+                    <p className="text-[11px] text-slate-400">Arraste um ou mais arquivos. Nosso banco utiliza hashing criptográfico para rejeitar arquivos binários duplicados.</p>
+                  </div>
+
+                  <div className="flex items-center gap-4 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setAudioOption('file')}
+                      className={`text-xs px-3.5 py-2 rounded-xl border font-mono uppercase font-semibold transition ${
+                        audioOption === 'file' 
+                          ? 'bg-slate-950 border-orange-500/50 text-orange-400' 
+                          : 'bg-slate-950/45 border-slate-800 text-slate-500'
+                      }`}
+                    >
+                      Arquivo Local MP3
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAudioOption('url')}
+                      className={`text-xs px-3.5 py-2 rounded-xl border font-mono uppercase font-semibold transition ${
+                        audioOption === 'url' 
+                          ? 'bg-slate-950 border-orange-500/50 text-orange-400' 
+                          : 'bg-slate-950/45 border-slate-800 text-slate-500'
+                      }`}
+                    >
+                      Link Externo (URL)
+                    </button>
+                  </div>
+
+                  {audioOption === 'file' ? (
+                    <div className="space-y-3">
+                      <div className="border-2 border-dashed border-slate-800 hover:border-orange-500/40 rounded-2xl p-6 text-center bg-slate-950/40 transition cursor-pointer relative group">
+                        <input 
+                          type="file" 
+                          accept=".mp3,audio/mpeg"
+                          multiple
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              const filesArr = Array.from(e.target.files) as File[];
+                              
+                              // Validate MP3 format (ext or mime type)
+                              const invalidFormat = filesArr.some(f => {
+                                const fileExt = '.' + f.name.split('.').pop()?.toLowerCase();
+                                const mimeLower = f.type.toLowerCase();
+                                const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
+                                const isMp3Ext = fileExt === '.mp3';
+                                return !isMp3Mime && !isMp3Ext;
+                              });
+
+                              if (invalidFormat) {
+                                setFormError('Todos os arquivos enviados devem estar no formato MP3!');
+                                return;
+                              }
+
+                              // Limite técnico máximo: 6 MB
+                              const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+                              const invalidSize = filesArr.some(f => f.size > MAX_AUDIO_SIZE_BYTES);
+                              if (invalidSize) {
+                                setFormError('Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente.');
+                                return;
+                              }
+
+                              setFormError('');
+                              setAudioFiles(filesArr);
+                            }
+                          }}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                        />
+                        <UploadCloud className="w-10 h-10 text-orange-500/60 group-hover:text-orange-500 mx-auto mb-2.5 transition" />
+                        <span className="block text-xs font-bold text-white uppercase font-sans">Selecione uma ou várias guias MP3</span>
+                        <span className="block text-[10px] text-slate-500 mt-1 font-mono">Arraste arquivos ou clique para buscar</span>
+                      </div>
+
+                      {/* Orientations Block */}
+                      <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl space-y-2 text-left text-xs text-slate-300">
+                        <p className="font-sans leading-relaxed text-slate-350">
+                          “Para carregamento mais rápido no celular e no carro, recomendamos arquivos MP3 entre 2 MB e 5 MB.”
+                        </p>
+                        <p className="font-sans font-bold text-orange-400">
+                          “Arquivos de até 6 MB também são aceitos.”
+                        </p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                          “Arquivos leves carregam mais rápido e ajudam a reduzir o consumo de dados móveis durante a reprodução.”
+                        </p>
+                        <div className="pt-2 border-t border-slate-900 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[10.5px] font-mono text-slate-400">
+                          <div>• Formato aceito: <span className="text-slate-200 font-bold">somente MP3</span></div>
+                          <div>• Tamanho recomendado: <span className="text-slate-200 font-bold">entre 2 MB e 5 MB</span></div>
+                          <div>• Limite técnico máximo: <span className="text-slate-200 font-bold">6 MB</span></div>
+                          <div>• Qualidade recomendada: <span className="text-slate-200 font-bold">96 kbps ou 128 kbps</span></div>
+                        </div>
+                      </div>
+
+                      {audioFiles.length > 0 && (
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-1.5">
+                          <span className="text-[9.5px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block mb-1">Arquivos selecionados ({audioFiles.length}):</span>
+                          <div className="max-h-32 overflow-y-auto space-y-1 divide-y divide-slate-900/50 pr-1">
+                            {audioFiles.map((f, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-[11px] py-1 text-slate-300 font-mono">
+                                <span className="truncate max-w-[340px]">🎧 {f.name}</span>
+                                <span className="text-[10px] text-slate-500 select-none">({(f.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Endereço da música (Stream URL)</label>
+                      <input 
+                        type="url" 
+                        placeholder="https://exemplo.com/musica.mp3"
+                        value={customAudioUrl}
+                        onChange={(e) => setCustomAudioUrl(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-850/40">
+                    <button 
+                      type="button" 
+                      onClick={() => setUploadStep(1)}
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition"
+                    >
+                      Voltar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (audioOption === 'file' && audioFiles.length === 0) {
+                          setFormError('Faça upload de pelo menos uma guia MP3 para prosseguir.');
+                        } else if (audioOption === 'url' && !customAudioUrl.trim()) {
+                          setFormError('Insira uma URL pública estruturada para a música.');
+                        } else {
+                          setFormError('');
+                          setUploadStep(3);
+                        }
+                      }}
+                      className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-mono font-bold uppercase text-slate-950 flex items-center gap-1 cursor-pointer transition select-none"
+                    >
+                      Avançar para Letras <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 3: LYRICS & TECH DETAILS */}
+              {uploadStep === 3 && (
+                <div className="space-y-4 animate-fadeIn text-left">
+                  <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-wider mb-1">Passo 3: Letra & Inspiração</h4>
+                    <p className="text-[11px] text-slate-400">Ofereça letras detalhadas para que possíveis compradores possam acompanhar a métrica e a poesia.</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Descrição criativa (Ficha Técnica / Gênese da composição)</label>
+                    <textarea 
+                      placeholder="Ex: Escrita em parceria após assistir ao pôr do sol na beira do rio. Clima acústico romântico..."
+                      value={desc}
+                      onChange={(e) => setDesc(e.target.value)}
+                      rows={2}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white resize-none transition"
+                    ></textarea>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Letra Completa</label>
+                    <textarea 
+                      placeholder="Espaço reservado para a letra integral da obra..."
+                      value={lyrics}
+                      onChange={(e) => setLyrics(e.target.value)}
+                      rows={5}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                    ></textarea>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-850/40">
+                    <button 
+                      type="button" 
+                      onClick={() => setUploadStep(2)}
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition"
+                    >
+                      Voltar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setFormError('');
+                        setUploadStep(4);
+                      }}
+                      className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-mono font-bold uppercase text-slate-950 flex items-center gap-1 cursor-pointer transition select-none"
+                    >
+                      Avançar para Destino <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 4: MUSIC ORGANIZATION OPTIONS (THE INTENT AND DECISION OF SAVE DESTINY) */}
+              {uploadStep === 4 && (
+                <div className="space-y-4 animate-fadeIn text-left">
+                  <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl mb-2">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-wider mb-1">Passo 4: Organização do Catálogo</h4>
+                    <p className="text-[11.5px] text-orange-400 font-semibold font-mono uppercase">Onde você deseja organizar esta(s) música(s)?</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Option 1: Save only on All Songs (General Catalog) */}
+                    <div 
+                      onClick={() => setOrganizationOption('all_songs')}
+                      className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
+                        organizationOption === 'all_songs' 
+                          ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
+                          : 'bg-slate-950/50 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <Folders className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'all_songs' ? 'text-orange-400' : 'text-slate-500'}`} />
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wide">Salvar somente no meu acervo geral ("Todas as Músicas")</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Sua música será arquivada e listada no catálogo principal, mas não fará parte de coleções públicas separadas.</p>
+                      </div>
+                    </div>
+
+                    {/* Option 2: Add to existing repertoire */}
+                    <div 
+                      onClick={() => {
+                        if (dashboardRepertoires.length === 0) {
+                          setFormError('Você ainda não possui nenhum repertório cadastrado. Selecione outra opção ou crie um novo abaixo.');
+                        } else {
+                          setFormError('');
+                          setOrganizationOption('existing_repertoire');
+                        }
+                      }}
+                      className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
+                        organizationOption === 'existing_repertoire' 
+                          ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
+                          : 'bg-slate-950/50 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <ListChecks className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'existing_repertoire' ? 'text-orange-400' : 'text-slate-500'}`} />
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wide">Escolher um repertório que já criei</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Associe referências destas gravações nas pastas que já existem. Sem custos extras ou duplicações.</p>
+                        
+                        {organizationOption === 'existing_repertoire' && dashboardRepertoires.length > 0 && (
+                          <div className="mt-4 bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-2" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-[9px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block mb-1">Selecione uma ou mais pastas:</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                              {dashboardRepertoires.map(rep => {
+                                const isChecked = selectedRepertoireIds.includes(rep.id);
+                                return (
+                                  <label key={rep.id} className="flex items-center gap-2 text-xs py-1 px-1.5 bg-slate-900 border border-slate-850 rounded-lg hover:border-zinc-700 cursor-pointer select-none">
+                                    <input 
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        if (isChecked) {
+                                          setSelectedRepertoireIds(prev => prev.filter(id => id !== rep.id));
+                                        } else {
+                                          setSelectedRepertoireIds(prev => [...prev, rep.id]);
+                                        }
+                                      }}
+                                      className="accent-orange-500"
+                                    />
+                                    <span className="truncate">{rep.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Option 3: Create new Repertoire */}
+                    <div 
+                      onClick={() => setOrganizationOption('new_repertoire')}
+                      className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
+                        organizationOption === 'new_repertoire' 
+                          ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
+                          : 'bg-slate-950/50 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <FolderPlus className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'new_repertoire' ? 'text-orange-400' : 'text-slate-500'}`} />
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wide">Criar um novo repertório e carregar músicas nele</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Cria simultaneamente uma pasta/repertório específico e vincula estas novas músicas diretamente.</p>
+
+                        {organizationOption === 'new_repertoire' && (
+                          <div className="mt-4 bg-slate-950/80 p-4 rounded-xl border border-slate-850 space-y-4 text-left" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-[9px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block">Dados do Novo Repertório:</span>
+                            
+                            <div className="space-y-3">
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-mono text-zinc-400 uppercase">Nome do Repertório *</label>
+                                <input 
+                                  type="text"
+                                  placeholder="Ex: Trabalho Sertanejo Romântico"
+                                  value={newRepertoireName}
+                                  onChange={(e) => setNewRepertoireName(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-mono text-zinc-400 uppercase">Descrição Curta</label>
+                                <input 
+                                  type="text"
+                                  placeholder="Ex: Repertório oficial de trabalho enviado para produtores da Som Livre."
+                                  value={newRepertoireDesc}
+                                  onChange={(e) => setNewRepertoireDesc(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-mono text-zinc-400 uppercase">Classificação</label>
+                                  <select
+                                    value={newRepertoireType}
+                                    onChange={(e: any) => setNewRepertoireType(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
+                                  >
+                                    <option value="repertoire">Repertório</option>
+                                    <option value="playlist">Seleção</option>
+                                    <option value="collection">Pasta Particular</option>
+                                    <option value="project">Projeto</option>
+                                  </select>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-mono text-zinc-400 uppercase">Privacidade</label>
+                                  <select
+                                    value={newRepertoireVisibility}
+                                    onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
+                                  >
+                                    <option value="active">Público (Visível no Link)</option>
+                                    <option value="private">Privado (Invisível no Link Geral)</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Option 4: Configure severally (Visible only if bulk upload length > 1) */}
+                    {audioFiles.length > 1 && (
+                      <div 
+                        onClick={() => setOrganizationOption('each_separately')}
+                        className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
+                          organizationOption === 'each_separately' 
+                            ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
+                            : 'bg-slate-950/50 border-slate-800 text-slate-300'
+                        }`}
+                      >
+                        <SlidersHorizontal className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'each_separately' ? 'text-orange-400' : 'text-slate-500'}`} />
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wide">Escolher o destino de cada música separadamente</h4>
+                          <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Configurar individualmente o destino específico de cada um do(s) {audioFiles.length} MP3.</p>
+
+                          {organizationOption === 'each_separately' && (
+                            <div className="mt-4 bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-3 text-left" onClick={(e) => e.stopPropagation()}>
+                              <span className="text-[9.5px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block">Configurar guias individuais:</span>
+                              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                                {audioFiles.map(file => {
+                                  const spec = trackSpecificOrganization[file.name] || { option: 'all_songs' };
+                                  return (
+                                    <div key={file.name} className="p-2.5 bg-slate-900 border border-slate-850 rounded-lg space-y-2">
+                                      <div className="text-[10px] font-mono font-bold text-white truncate">🎵 {file.name}</div>
+                                      <div className="flex gap-2">
+                                        {['all_songs', 'existing', 'new'].map((opt) => (
+                                          <button
+                                            key={opt}
+                                            type="button"
+                                            onClick={() => {
+                                              setTrackSpecificOrganization(prev => ({
+                                                ...prev,
+                                                [file.name]: {
+                                                  ...spec,
+                                                  option: opt as any
+                                                }
+                                              }));
+                                            }}
+                                            className={`text-[9px] px-2 py-1 rounded font-mono uppercase transition ${
+                                              spec.option === opt 
+                                                ? 'bg-orange-500 text-slate-950 font-extrabold' 
+                                                : 'bg-slate-950 text-zinc-500'
+                                            }`}
+                                          >
+                                            {opt === 'all_songs' ? 'Todas' : opt === 'existing' ? 'Existente' : 'Novo'}
+                                          </button>
+                                        ))}
+                                      </div>
+
+                                      {spec.option === 'existing' && dashboardRepertoires.length > 0 && (
+                                        <select
+                                          multiple
+                                          value={spec.selectedRepIds || []}
+                                          onChange={(e) => {
+                                            const opts = Array.from(e.target.selectedOptions, (o: any) => o.value);
+                                            setTrackSpecificOrganization(prev => ({
+                                              ...prev,
+                                              [file.name]: {
+                                                ...spec,
+                                                selectedRepIds: opts
+                                              }
+                                            }));
+                                          }}
+                                          className="w-full text-[10px] bg-slate-950 border border-slate-800 rounded p-1 text-white font-mono"
+                                        >
+                                          {dashboardRepertoires.map(r => (
+                                            <option key={r.id} value={r.id}>{r.name}</option>
+                                          ))}
+                                        </select>
+                                      )}
+
+                                      {spec.option === 'new' && (
+                                        <input
+                                          type="text"
+                                          placeholder="Nome do Novo Repertório"
+                                          value={spec.newRepName || ''}
+                                          onChange={(e) => {
+                                            setTrackSpecificOrganization(prev => ({
+                                              ...prev,
+                                              [file.name]: {
+                                                ...spec,
+                                                newRepName: e.target.value
+                                              }
+                                            }));
+                                          }}
+                                          className="w-full px-2 py-1 text-[10px] bg-slate-950 border border-slate-800 rounded text-white"
+                                        />
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-850/40">
+                    <button 
+                      type="button" 
+                      onClick={() => setUploadStep(3)}
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition"
+                    >
+                      Voltar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (organizationOption === 'new_repertoire' && !newRepertoireName.trim()) {
+                          setFormError('Por favor, defina um nome para o novo de repertório.');
+                        } else if (organizationOption === 'existing_repertoire' && selectedRepertoireIds.length === 0) {
+                          setFormError('Por favor, selecione pelo menos uma pasta/repertório na lista.');
+                        } else {
+                          setFormError('');
+                          setUploadStep(5);
+                        }
+                      }}
+                      className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-mono font-bold uppercase text-slate-950 flex items-center gap-1 cursor-pointer transition select-none"
+                    >
+                      Avançar para Visual <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 5: VISIBILITY & COVER */}
+              {uploadStep === 5 && (
+                <div className="space-y-4 animate-fadeIn text-left">
+                  <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-wider mb-1">Passo 5: Capa de Arte & Privacidade</h4>
+                    <p className="text-[11px] text-slate-400">Escolha como a música será indexada publicamente e configure a capa.</p>
+                  </div>
+
+                  {/* Visibility choices */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block mb-1.5">Quem pode ouvir na web?</label>
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <button
+                        type="button"
+                        onClick={() => setNewTrackStatus('active')}
+                        className={`p-3.5 rounded-xl border text-left transition select-none cursor-pointer ${
+                          newTrackStatus === 'active' 
+                            ? 'bg-emerald-950/25 border-emerald-500/50 text-emerald-400' 
+                            : 'bg-slate-950 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        <h4 className="text-[11.5px] font-bold uppercase flex items-center gap-1.5 font-mono">
+                          <Globe className="w-4 h-4 text-emerald-400" /> Público / Livre
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">Indexado em sua vitrine principal no catálogo público.</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setNewTrackStatus('inactive')}
+                        className={`p-3.5 rounded-xl border text-left transition select-none cursor-pointer ${
+                          newTrackStatus === 'inactive' 
+                            ? 'bg-rose-950/25 border-[#f43f5e]/50 text-[#f43f5e]' 
+                            : 'bg-slate-950 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        <h4 className="text-[11.5px] font-bold uppercase flex items-center gap-1.5 font-mono">
+                          <Lock className="w-4 h-4 text-rose-450" /> Privado / Oculto
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">Apenas você visualiza no painel principal, ideal para rascunhos.</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cover options */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block leading-none">Imagens da Música (Capa de Álbum)</label>
+                    <div className="flex items-center gap-3">
+                      {['preset', 'file', 'url'].map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setCoverOption(opt as any)}
+                          className={`text-xs px-3.5 py-1.5 rounded-xl border font-mono uppercase transition font-bold ${
+                            coverOption === opt 
+                              ? 'bg-slate-950 border-orange-500/50 text-orange-400' 
+                              : 'bg-slate-950/50 border-slate-800 text-slate-500'
+                          }`}
+                        >
+                          {opt === 'preset' ? 'Gerar Aleatório' : opt === 'file' ? 'Arquivo' : 'Link Web'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {coverOption === 'file' && (
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={(e) => e.target.files && setCoverFile(e.target.files[0])}
+                        className="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-mono file:bg-slate-950 file:text-orange-400 hover:file:bg-slate-850 cursor-pointer"
+                      />
+                    )}
+
+                    {coverOption === 'url' && (
+                      <input 
+                        type="url" 
+                        placeholder="https://images.unsplash.com/photo-..."
+                        value={customCoverUrl}
+                        onChange={(e) => setCustomCoverUrl(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-850/40">
+                    <button 
+                      type="button" 
+                      onClick={() => setUploadStep(4)}
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition"
+                    >
+                      Voltar
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setFormError('');
+                        setUploadStep(6);
+                      }}
+                      className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-xl text-xs font-mono font-bold uppercase text-slate-950 flex items-center gap-1 cursor-pointer transition select-none"
+                    >
+                      Avançar para Revisão <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 6: FINAL REVIEW AND COMMIT */}
+              {uploadStep === 6 && (
+                <div className="space-y-4 animate-fadeIn text-left">
+                  <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-wider mb-1">Passo 6: Conferir Dados do Cadastro</h4>
+                    <p className="text-[11px] text-slate-400">Excelente! Seus dados foram validados localmente. Confira abaixo o sumário de sincronização antes de publicar.</p>
+                  </div>
+
+                  <div className="bg-slate-950/70 rounded-2xl p-4 border border-slate-850 space-y-3 font-mono text-[11.5px] text-slate-300">
+                    <div className="flex justify-between items-center pb-1.5 border-b border-slate-900">
+                      <span>Total de Guia(s) MP3:</span>
+                      <span className="text-white font-extrabold">{audioOption === 'file' ? audioFiles.length : 1} arquivo(s)</span>
+                    </div>
+
+                    <div className="pb-1.5 border-b border-slate-900 space-y-1">
+                      <span className="text-slate-500 text-[10px] uppercase">Nomes a Registrar:</span>
+                      <div className="pl-3 space-y-0.5 text-[11px] max-h-20 overflow-y-auto">
+                        {audioOption === 'file' ? (
+                          audioFiles.map((file, idx) => {
+                            const songTitle = audioFiles.length === 1 && title.trim() 
+                              ? title.trim() 
+                              : file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
+                            return (
+                              <div key={idx} className="truncate text-yellow-500">
+                                #{idx + 1}: {songTitle}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-yellow-500 font-bold">{title}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pb-1.5 border-b border-slate-900">
+                      <div>
+                        <span className="text-[9.5px] uppercase text-slate-500 block">Autor / Intérprete:</span>
+                        <span className="text-white font-bold">{composer || profile.name} / {singer || profile.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] uppercase text-slate-500 block">Gênero Tema:</span>
+                        <span className="text-white font-bold">{genre || 'Sertanejo'}</span>
+                      </div>
+                    </div>
+
+                    <div className="pb-1 text-slate-300">
+                      <span className="text-[9.5px] uppercase text-slate-500 block">Dísticos de Organização:</span>
+                      {organizationOption === 'all_songs' && (
+                        <span className="text-emerald-400">✓ Salvar somente no meu acervo principal ("Todas as Músicas")</span>
+                      )}
+                      {organizationOption === 'existing_repertoire' && (
+                        <span className="text-yellow-400">✓ Associar a {selectedRepertoireIds.length} repertório(s) que já criei</span>
+                      )}
+                      {organizationOption === 'new_repertoire' && (
+                        <span className="text-orange-400">✓ Criar novo repertório: "{newRepertoireName}" ({newRepertoireType})</span>
+                      )}
+                      {organizationOption === 'each_separately' && (
+                        <span className="text-yellow-400">✓ Organizar cada arquivo MP3 independentemente</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-850/40">
+                    <button 
+                      type="button" 
+                      onClick={() => setUploadStep(5)}
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition"
+                    >
+                      Voltar
+                    </button>
+                    
+                    <button 
+                      id="submit-new-track"
+                      type="submit"
+                      disabled={isUploading}
+                      className="px-6 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition-transform active:scale-98 font-bold flex items-center gap-1.5 border-0 focus:outline-none"
+                    >
+                      {isUploading ? (
+                        <>Sincronizando...</>
+                      ) : (
+                        <>Sincronizar com SomDrive</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* QUICK REPERTOIRE ASSOCIATION MODAL */}
+      {showRepActionModal && selectedTrackForRepAction && (
+        <div id="repertoire-action-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+              <h3 className="font-heading font-black text-base uppercase tracking-wider text-white flex items-center gap-2">
+                <Folders className="w-5 h-5 text-orange-500 animate-pulse" /> Organização de Repertórios
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowRepActionModal(false);
+                  setSelectedTrackForRepAction(null);
+                }}
+                className="text-slate-400 hover:text-white transition cursor-pointer text-xs font-mono font-bold uppercase"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-850/80">
+              <span className="text-[9px] font-mono text-slate-500 uppercase block leading-none mb-1">Música Selecionada:</span>
+              <h4 className="text-sm font-heading font-black text-white">{selectedTrackForRepAction.title}</h4>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">Autor: {selectedTrackForRepAction.composer || 'Sem registro'} • Estilo: {selectedTrackForRepAction.genre || 'Geral'}</p>
+            </div>
+
+            <form onSubmit={handleSaveRepAction} className="space-y-5">
+              
+              <div className="space-y-3 text-left">
+                <label className="text-[10px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block">Selecione os repertórios destino abaixo:</label>
+                
+                {dashboardRepertoires.length === 0 ? (
+                  <div className="p-4 text-center rounded-2xl bg-slate-950 border border-slate-850">
+                    <p className="text-xs text-slate-400">Você ainda não tem nenhum repertório ou pasta criada no SomDrive.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {dashboardRepertoires.map((rep) => {
+                      const isChecked = !!activeTrackRepCheckboxes[rep.id];
+                      return (
+                        <div 
+                          key={rep.id} 
+                          onClick={() => {
+                            setActiveTrackRepCheckboxes(prev => ({
+                              ...prev,
+                              [rep.id]: !isChecked
+                            }));
+                          }}
+                          className={`p-3 border rounded-xl flex items-center justify-between cursor-pointer transition select-none ${
+                            isChecked 
+                              ? 'bg-[#0f172a] border-orange-500/50 text-white' 
+                              : 'bg-slate-950/40 border-slate-850 text-slate-350 hover:bg-slate-900/30'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Folders className="w-4 h-4 text-slate-500 shrink-0" />
+                            <div>
+                              <span className="text-xs font-bold font-sans block">{rep.name}</span>
+                              <span className="text-[9.5px] text-slate-500 font-mono tracking-wider block uppercase">{rep.type || 'repertoire'} • {rep.trackIds?.length || 0} música(s)</span>
+                            </div>
+                          </div>
+                          
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}} // handled by row onClick
+                            className="accent-orange-500 shrink-0"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Toggle new repertoire generation on-the-fly nested workflow */}
+              <div className="border-t border-slate-850 pt-4 text-left">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Toggle form visibility
+                    if (newRepertoireName) {
+                      setNewRepertoireName('');
+                    } else {
+                      setNewRepertoireName('Repertório de Trabalho ' + (dashboardRepertoires.length + 1));
+                    }
+                  }}
+                  className="text-[11px] font-mono font-bold uppercase text-orange-400 hover:text-orange-300 transition flex items-center gap-1 cursor-pointer select-none"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  {newRepertoireName ? '[- Cancela criação de nova pasta]' : '[+ Criar uma nova pasta e associar já]'}
+                </button>
+
+                {newRepertoireName && (
+                  <div className="mt-4 p-4 bg-slate-950/90 rounded-2xl border border-slate-850 space-y-3.5 animate-fadeIn">
+                    <span className="text-[9px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block mb-1">Dados da Nova Pasta / Playlist:</span>
+                    
+                    <div className="space-y-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-mono text-zinc-400 uppercase">Nome da Pasta *</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: Trabalho Comercial"
+                          value={newRepertoireName}
+                          onChange={(e) => setNewRepertoireName(e.target.value)}
+                          required
+                          className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-850 rounded-lg focus:border-orange-500 outline-none text-white"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-mono text-zinc-400 uppercase">Descrição Curta</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: Pasta rápida de audição para produtores."
+                          value={newRepertoireDesc}
+                          onChange={(e) => setNewRepertoireDesc(e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-850 rounded-lg focus:border-orange-500 outline-none text-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3.5">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-mono text-zinc-400 uppercase">Tipo</label>
+                          <select
+                            value={newRepertoireType}
+                            onChange={(e: any) => setNewRepertoireType(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-850 rounded-lg outline-none text-zinc-350 focus:border-orange-500"
+                          >
+                            <option value="repertoire">Repertório</option>
+                            <option value="playlist">Seleção</option>
+                            <option value="collection">Pasta Particular</option>
+                            <option value="project">Projeto</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-mono text-zinc-400 uppercase">Privacidade</label>
+                          <select
+                            value={newRepertoireVisibility}
+                            onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-850 rounded-lg outline-none text-zinc-350 focus:border-orange-500"
+                          >
+                            <option value="active">Público (Visível no Link)</option>
+                            <option value="private">Privado (Link Oculto/Privado)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Form Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850/80">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowRepActionModal(false);
+                    setSelectedTrackForRepAction(null);
+                  }}
+                  className="px-4 py-2 bg-slate-950 text-slate-400 hover:text-white text-xs font-bold uppercase font-mono transition rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
-                  id="submit-new-track"
                   type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition-transform active:scale-98 font-bold"
+                  disabled={isUploading}
+                  className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-mono font-bold uppercase tracking-wider text-slate-950 shadow-lg cursor-pointer"
                 >
-                  Salvar Música no SomDrive
+                  {isUploading ? 'Salvando...' : 'Salvar Organização'}
                 </button>
               </div>
 

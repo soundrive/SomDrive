@@ -2,7 +2,7 @@ import React from 'react';
 
 interface BrandLogoProps {
   iconOnly?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
   classNameText?: string;
   scale?: number;
@@ -32,41 +32,47 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   if (!showLogo) return null;
 
-  // Responsive size mappings - smaller on mobile, standard on PC
+  // Responsive size mappings - comfortable, proportional sizes on both mobile and PC
   const sizeMap = {
+    xs: {
+      icon: 'w-5.5 h-5.5 sm:w-6.5 sm:h-6.5', 
+      text: 'text-xs sm:text-base',  
+      dWidth: 'w-2 h-2.5 sm:w-3 sm:h-3.5',
+      imgMaxHeight: 'max-h-5.5 sm:max-h-8', 
+    },
     sm: {
-      icon: 'w-4.5 h-4.5 sm:w-6 sm:h-6',
-      text: 'text-xs sm:text-base',
-      dWidth: 'w-2 h-2.5 sm:w-4 sm:h-4.5',
-      imgMaxHeight: 'max-h-4 sm:max-h-7',
+      icon: 'w-6.5 h-6.5 sm:w-8 sm:h-8', 
+      text: 'text-sm sm:text-lg',   
+      dWidth: 'w-2.5 h-3 sm:w-3.5 sm:h-4',
+      imgMaxHeight: 'max-h-6.5 sm:max-h-12', 
     },
     md: {
-      icon: 'w-5.5 h-5.5 sm:w-10 sm:h-10',
-      text: 'text-sm sm:text-xl',
-      dWidth: 'w-2.5 h-3 sm:w-5.5 sm:h-6',
-      imgMaxHeight: 'max-h-5.5 sm:max-h-11',
+      icon: 'w-8.5 h-8.5 sm:w-11 sm:h-11', 
+      text: 'text-base sm:text-xl',
+      dWidth: 'w-3 h-3.5 sm:w-4.5 sm:h-5',
+      imgMaxHeight: 'max-h-9 sm:max-h-16', 
     },
     lg: {
-      icon: 'w-7.5 h-7.5 sm:w-14 sm:h-14',
-      text: 'text-base sm:text-3xl',
-      dWidth: 'w-3.5 h-4 sm:w-8 sm:h-8.5',
-      imgMaxHeight: 'max-h-7.5 sm:max-h-16',
+      icon: 'w-10.5 h-10.5 sm:w-15 sm:h-15', 
+      text: 'text-lg sm:text-3xl',
+      dWidth: 'w-3.5 h-4 sm:w-6.5 sm:h-7',
+      imgMaxHeight: 'max-h-13 sm:max-h-24', 
     }
   };
 
-  const currentSize = sizeMap[size];
+  const currentSize = sizeMap[size as keyof typeof sizeMap] || sizeMap.sm;
 
   if (customLogoUrl && customLogoUrl.trim() !== '') {
     // Elegant base heights for custom logo, giving a robust and well-proportioned visual
-    const baseHeight = size === 'sm' ? 38 : (size === 'md' ? 56 : 76);
+    const baseHeight = size === 'xs' ? 34 : (size === 'sm' ? 48 : (size === 'md' ? 68 : 92));
     
-    // Scale down height on mobile ("modo inteligente se é um celular a logo tem que ser menos"):
-    const mobileReduction = size === 'lg' ? 0.45 : (size === 'md' ? 0.55 : 0.65);
+    // Scale down height on mobile but maintain healthy visibility
+    const mobileReduction = size === 'lg' ? 0.65 : (size === 'md' ? 0.70 : (size === 'sm' ? 0.75 : 0.80));
     const activeBaseHeight = isMobile ? Math.round(baseHeight * mobileReduction) : baseHeight;
     const computedHeight = scale ? Math.round(activeBaseHeight * scale) : activeBaseHeight;
 
     // Scale maximum width ceilings dynamically as well so landscape/wide logos are never cut off
-    const activeMaxW = isMobile ? Math.round(480 * 0.65) : 480;
+    const activeMaxW = isMobile ? Math.round(480 * 0.80) : 480;
     const computedMaxW = scale ? Math.round(activeMaxW * scale) : activeMaxW;
 
     return (
@@ -77,7 +83,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         <img 
           src={customLogoUrl} 
           alt="SomDrive Logo" 
-          className="object-contain select-none transition-all duration-150"
+          className="object-contain select-none transition-all duration-150 animate-none"
           style={{ 
             height: `${computedHeight}px`, 
             maxHeight: `${computedHeight}px`,
@@ -91,8 +97,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   // Apply a smart responsive scale modification for non-custom logo
   const activeScale = scale 
-    ? (isMobile ? scale * 0.65 : scale) 
-    : (isMobile ? 0.72 : undefined);
+    ? (isMobile ? scale * 0.85 : scale) 
+    : undefined;
 
   const styleObj = activeScale 
     ? { transform: `scale(${activeScale})`, transformOrigin: 'left center', display: 'inline-flex' } 

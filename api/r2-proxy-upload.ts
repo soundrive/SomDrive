@@ -53,10 +53,10 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Este arquivo não é um MP3 válido. Por favor, converta sua música para formato MP3 (.mp3) e tente novamente." });
     }
 
-    // 2. Validar Tamanho Máximo <= 20 MB (20 * 1024 * 1024)
-    const maxSizeBytes = 20 * 1024 * 1024;
-    if (fileSize > maxSizeBytes) {
-      return res.status(400).json({ error: `Este arquivo MP3 possui ${(fileSize / (1024 * 1024)).toFixed(2)} MB, ultrapassando o limite de 20 MB.` });
+    // 2. Validar Tamanho Máximo <= 6 MB
+    const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+    if (fileSize > MAX_AUDIO_SIZE_BYTES) {
+      return res.status(400).json({ error: "Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente." });
     }
 
     // 3. Validar variáveis de ambiente essenciais do Cloudflare R2

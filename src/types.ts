@@ -119,3 +119,30 @@ export interface AppearanceSettings {
   updatedAt?: string;
   updatedBy?: string;
 }
+
+export interface Repertoire {
+  id: string; // generated id
+  ownerUid: string;
+  name: string;
+  description?: string;
+  type: 'repertoire' | 'collection' | 'playlist' | 'project';
+  trackIds: string[];
+  orderedTrackIds?: string[];
+  visibility: 'active' | 'private';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Project {
+  id: string; // generated id
+  ownerUid: string;
+  name: string;
+  description?: string;
+  type: string;
+  trackIds: string[];
+  orderedTrackIds?: string[];
+  status: 'active' | 'completed' | 'draft' | 'private';
+  createdAt: string;
+  updatedAt?: string;
+}
+

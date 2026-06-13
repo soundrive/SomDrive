@@ -43,12 +43,11 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: errMsg });
     }
 
-    // 2. Validar Tamanho Máximo <= 20 MB (20 * 1024 * 1024)
-    const maxSizeBytes = 20 * 1024 * 1024;
-    if (fileSize > maxSizeBytes) {
-      const formattedSize = (fileSize / (1024 * 1024)).toFixed(2);
-      const errMsg = `Este arquivo MP3 possui ${formattedSize} MB, ultrapassando o limite máximo permitido de 20 MB. Reduza o arquivo e tente novamente.`;
-      console.error("Erro de Validação de Tamanho:", { fileSize, limit: maxSizeBytes });
+    // 2. Validar Tamanho Máximo <= 6 MB
+    const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+    if (fileSize > MAX_AUDIO_SIZE_BYTES) {
+      const errMsg = "Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente.";
+      console.error("Erro de Validação de Tamanho:", { fileSize, limit: MAX_AUDIO_SIZE_BYTES });
       return res.status(400).json({ error: errMsg });
     }
 

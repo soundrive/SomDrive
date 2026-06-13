@@ -302,7 +302,7 @@ export default function Player({
     if (!currentTrack) return;
 
     if (!audioRef.current) {
-      audioRef.current = new Audio();
+      audioRef.current = document.createElement('audio');
     }
 
     const audio = audioRef.current;
@@ -848,9 +848,9 @@ export default function Player({
 
               <button 
                 onClick={() => setCarMode(true)}
-                className="flex items-center justify-center gap-1 py-2.5 bg-transparent border border-[#d4af37]/25 hover:border-[#d4af37] text-amber-555 hover:text-[#ffe082] rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                className="flex items-center justify-center gap-1 py-2.5 bg-yellow-500/10 border border-yellow-500/80 hover:border-yellow-400 text-yellow-400 hover:text-yellow-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97 shadow-[0_0_10px_rgba(234,179,8,0.15)]"
               >
-                <Car className="w-4 h-4 text-amber-555 shrink-0" />
+                <Car className="w-4 h-4 text-yellow-500 shrink-0" />
                 <span>CARRO</span>
               </button>
             </div>

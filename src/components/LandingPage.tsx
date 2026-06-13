@@ -121,58 +121,70 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
   const landingPlans = {
     free: {
       name: 'SomDrive Free',
-      description: 'Para começar e testar seu catálogo privado.',
+      description: 'Comece seu catálogo gratuitamente.',
+      highlightText: 'Crie seu primeiro catálogo musical gratuitamente.',
       price: 'Grátis',
       badge: 'Grátis',
       features: [
         { name: '★ Até 3 músicas cadastradas', highlight: true },
+        { name: 'Envio de músicas em MP3' },
+        { name: 'Acervo musical' },
         { name: 'Catálogo privado por link' },
-        { name: 'Upload de músicas em MP3' },
-        { name: 'Limite de 20 MB por música' },
-        { name: 'Player para celular' },
-        { name: 'Modo carro' },
-        { name: 'Ficha técnica da música' },
-        { name: 'Letra da composição' },
-        { name: 'Botão WhatsApp do compositor' },
-        { name: 'Compartilhamento do catálogo' }
+        { name: 'Compartilhamento do perfil' },
+        { name: 'Player profissional' },
+        { name: 'Ficha técnica' },
+        { name: 'Letra' },
+        { name: 'Contato e WhatsApp' },
+        { name: 'Modo celular' },
+        { name: 'Modo carro' }
       ]
     },
     pro: {
       name: 'SomDrive Pro',
-      description: 'Para compositores que querem enviar mais repertório.',
-      price: billingCycle === 'monthly' ? 'R$ 19,90' : 'R$ 199,90',
+      description: 'Organize e compartilhe seu repertório do seu jeito.',
+      highlightText: 'Crie repertórios e compartilhe somente as músicas que escolher.',
+      price: billingCycle === 'monthly' ? 'R$ 19,90' : 'R$ 199,00',
       period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
       badge: 'Mais Escolhido',
       features: [
-        { name: 'Até 15 músicas cadastradas', highlight: true },
-        { name: 'Catálogo privado por link' },
-        { name: 'Upload de músicas em MP3' },
-        { name: 'Limite de 20 MB por música' },
-        { name: 'Player para celular' },
-        { name: 'Modo carro' },
-        { name: 'Ficha técnica da música' },
-        { name: 'Letra da composição' },
-        { name: 'Botão WhatsApp do compositor' },
-        { name: 'Compartilhamento do catálogo' }
+        { name: '★ Até 15 músicas cadastradas', highlight: true },
+        { name: 'Tudo do plano Free incluído' },
+        { name: 'Criação de repertórios' },
+        { name: 'Organização em pastas e seleções' },
+        { name: 'Compartilhar uma música' },
+        { name: 'Compartilhar apenas algumas músicas escolhidas' },
+        { name: 'Compartilhar um repertório completo' },
+        { name: 'Compartilhar o perfil completo' },
+        { name: 'Organizar músicas por estilo, cantor ou projeto' },
+        { name: 'Adicionar a mesma música em diferentes repertórios' },
+        { name: 'Escolher a ordem das músicas' },
+        { name: 'Links privados' },
+        { name: 'Analytics básicos' },
+        { name: 'Total de reproduções' },
+        { name: 'Música mais ouvida' },
+        { name: 'Botão de interesse' },
+        { name: 'Modo carro' }
       ]
     },
     premium: {
       name: 'SomDrive Premium',
-      description: 'Para quem trabalha com maior volume de composições.',
-      price: billingCycle === 'monthly' ? 'R$ 39,90' : 'R$ 399,90',
+      description: 'Para catálogos e projetos maiores.',
+      highlightText: 'Organize até 50 músicas em repertórios, projetos e seleções privadas.',
+      price: billingCycle === 'monthly' ? 'R$ 39,90' : 'R$ 399,00',
       period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
-      badge: 'Elite',
+      badge: 'Premium',
       features: [
-        { name: 'Até 50 músicas cadastradas', highlight: true },
-        { name: 'Catálogo privado por link' },
-        { name: 'Upload de músicas em MP3' },
-        { name: 'Limite de 20 MB por música' },
-        { name: 'Player para celular' },
-        { name: 'Modo carro' },
-        { name: 'Ficha técnica da música' },
-        { name: 'Letra da composição' },
-        { name: 'Botão WhatsApp do compositor' },
-        { name: 'Compartilhamento do catálogo' }
+        { name: '★ Até 50 músicas cadastradas', highlight: true },
+        { name: 'Tudo do plano Pro incluído' },
+        { name: 'Organização de catálogos maiores' },
+        { name: 'Repertórios e seleções' },
+        { name: 'Projetos de gravação' },
+        { name: 'Organização por cantor, show, estilo, CD, EP ou produção' },
+        { name: 'Compartilhamento de projetos' },
+        { name: 'Analytics avançados' },
+        { name: 'Histórico de acessos' },
+        { name: 'Catálogo personalizado' },
+        { name: 'Suporte prioritário' }
       ]
     }
   };
@@ -192,7 +204,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
             onClick={() => onNavigate('landing')}
             className="cursor-pointer select-none group"
           >
-            <BrandLogo size="sm" scale={logoScale} showLogo={showLogo} customLogoUrl={customLogoUrl} className="origin-left" />
+            <BrandLogo size="sm" scale={logoScale || 1.0} showLogo={showLogo} customLogoUrl={customLogoUrl} className="origin-left" />
           </div>
 
           <nav id="top-nav" className="flex items-center gap-1.5 md:gap-4 shrink-0">
@@ -272,9 +284,14 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
             cantor certo.
           </h2>
 
-          <p className="text-slate-400 text-xs sm:text-sm md:text-base max-w-xl font-normal leading-relaxed">
-            Abandone os arquivos pesados de WhatsApp e pen drives de plástico. Crie seu catálogo profissional online e envie o link exclusivo para produtores ouvirem direto no celular ou pareado via Bluetooth no painel do carro.
-          </p>
+          <div className="space-y-3">
+            <p className="text-slate-400 text-xs sm:text-sm md:text-base max-w-xl font-normal leading-relaxed">
+              Envie suas músicas em MP3, organize por repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo através de links privados.
+            </p>
+            <p className="text-orange-400 text-[11px] sm:text-xs font-mono font-bold uppercase tracking-wider">
+              Você escolhe exatamente quais músicas cada pessoa poderá ouvir.
+            </p>
+          </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2 sm:pt-4 shrink-0">
             <button 
@@ -282,14 +299,14 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
               onClick={() => onNavigate('auth', { isRegister: true })}
               className="px-5 py-3.5 sm:px-8 sm:py-4 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-xl font-heading font-extrabold text-xs sm:text-sm uppercase lg:text-base tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-xl shadow-orange-500/20 text-center flex items-center justify-center gap-2 group transition-transform hover:scale-102 text-slate-950 font-black whitespace-nowrap"
             >
-              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 group-hover:animate-bounce shrink-0" /> Criar Meu SomDrive Grátis
+              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 group-hover:animate-bounce shrink-0" /> CRIAR MEU SOMDRIVE GRÁTIS
             </button>
             
             <a 
               href="#planos"
               className="px-5 py-3.5 sm:px-6 sm:py-4 border border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 transition rounded-xl text-center font-heading font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-300 hover:text-white flex items-center justify-center gap-2"
             >
-              Conhecer Planos
+              CONHECER OS PLANOS
             </a>
           </div>
 
@@ -578,66 +595,256 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
 
       </section>
 
-      {/* Premium Advantages Bento-like Grid */}
+      {/* COMPARTILHE DO SEU JEITO */}
       <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
         <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Por que Criar Seu SomDrive?</h3>
+          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Compartilhe do Seu Jeito</h3>
           <h2 className="text-3xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
-            A forma inteligente de <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-400">compartilhar suas produções</span>
+            Várias Formas de <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-400">distribuir seu acervo</span>
           </h2>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Focado especificamente nas necessidades do produtor e do compositor de música autoral brasileira.
+            Seja direcionado ou completo, você tem o controle total de como divulga suas gravações.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-4 shadow-xl hover:border-orange-500/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 bg-orange-950/50 rounded-xl flex items-center justify-center border border-orange-500/30 text-orange-400 mb-4">
+                <Music className="w-5 h-5" />
+              </div>
+              <h4 className="text-base font-heading font-bold uppercase tracking-tight text-white mb-2">UMA MÚSICA</h4>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                “Crie um link exclusivo para uma única composição. Quem receber verá somente a música escolhida.”
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-4 shadow-xl hover:border-orange-500/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 bg-orange-950/50 rounded-xl flex items-center justify-center border border-orange-500/30 text-orange-400 mb-4">
+                <Check className="w-5 h-5" />
+              </div>
+              <h4 className="text-base font-heading font-bold uppercase tracking-tight text-white mb-2">UMA SELEÇÃO</h4>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                “Escolha 2, 3, 5 ou quantas músicas desejar e compartilhe apenas essa seleção.”
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-4 shadow-xl hover:border-orange-500/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 bg-orange-950/50 rounded-xl flex items-center justify-center border border-orange-500/30 text-orange-400 mb-4">
+                <Share2 className="w-5 h-5" />
+              </div>
+              <h4 className="text-base font-heading font-bold uppercase tracking-tight text-white mb-2">UM REPERTÓRIO</h4>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                “Organize músicas por estilo, cantor, gravação, show, ensaio ou projeto.”
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-4 shadow-xl hover:border-orange-500/20 transition-all flex flex-col justify-between">
+            <div>
+              <div className="w-10 h-10 bg-orange-950/50 rounded-xl flex items-center justify-center border border-orange-500/30 text-orange-400 mb-4">
+                <Users className="w-5 h-5" />
+              </div>
+              <h4 className="text-base font-heading font-bold uppercase tracking-tight text-white mb-2">PERFIL COMPLETO</h4>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                “Compartilhe seu catálogo completo com repertórios, músicas liberadas, contato e player profissional.”
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ORGANIZE SUAS MÚSICAS */}
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
+        <div className="bg-gradient-to-br from-[#0d1326] to-[#080d1a] border border-slate-850 rounded-3xl p-8 md:p-12 shadow-2xl">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-7 space-y-5">
+              <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Organize Seu Acervo</h3>
+              <h2 className="text-2xl md:text-4xl font-heading font-black tracking-tight uppercase text-white leading-tight">
+                ORGANIZE SEU ACERVO DO SEU JEITO
+              </h2>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                “Todas as músicas enviadas ficam no seu acervo principal. Depois, você pode separá-las em repertórios, pastas, seleções e projetos.”
+              </p>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                “Uma mesma música pode fazer parte de diferentes repertórios sem precisar ser enviada novamente.”
+              </p>
+              <div className="p-4 bg-slate-950/40 rounded-xl border border-slate-900/60 text-xs text-orange-400 font-medium">
+                “O limite do plano considera a quantidade de músicas enviadas, e não a quantidade de repertórios criados.”
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 bg-[#06080d]/80 border border-slate-800 p-6 rounded-2xl space-y-4">
+              <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 pb-2 border-b border-white/[0.04] font-black">Exemplo Visual Prático:</h4>
+              <ul className="space-y-2.5 text-xs">
+                <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
+                  <span className="text-slate-300">📁 Românticas</span>
+                  <span className="font-mono text-orange-400 font-bold">5 músicas</span>
+                </li>
+                <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
+                  <span className="text-slate-300">📁 Animadas</span>
+                  <span className="font-mono text-orange-400 font-bold">6 músicas</span>
+                </li>
+                <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
+                  <span className="text-slate-300">📁 Para gravação</span>
+                  <span className="font-mono text-orange-400 font-bold">4 músicas</span>
+                </li>
+                <li className="flex justify-between items-center bg-orange-950/35 px-3.5 py-2 rounded-lg border border-orange-500/20 font-black">
+                  <span className="text-white">⭐ Repertório completo</span>
+                  <span className="font-mono text-orange-400">15 músicas</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* COMO FUNCIONA */}
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
+        <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
+          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Workflow Simples</h3>
+          <h2 className="text-3xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
+            COMO FUNCIONA
+          </h2>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Sem burocracias, do upload ao play no som do carro em poucos segundos.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-3 shadow-xl">
+            <span className="text-xs font-mono text-orange-400 font-black block">ETAPA 01</span>
+            <h4 className="text-base font-heading font-bold uppercase text-white">1. ENVIE SUAS MÚSICAS</h4>
+            <p className="text-slate-405 text-xs leading-relaxed">
+              “Faça o upload dos seus próprios arquivos MP3.”
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-3 shadow-xl">
+            <span className="text-xs font-mono text-orange-400 font-black block">ETAPA 02</span>
+            <h4 className="text-base font-heading font-bold uppercase text-white">2. ORGANIZE</h4>
+            <p className="text-slate-405 text-xs leading-relaxed">
+              “Deixe a música no acervo geral, adicione a um repertório existente ou crie uma nova pasta.”
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-3 shadow-xl">
+            <span className="text-xs font-mono text-orange-400 font-black block">ETAPA 03</span>
+            <h4 className="text-base font-heading font-bold uppercase text-white">3. ESCOLHA O QUE COMPARTILHAR</h4>
+            <p className="text-slate-405 text-xs leading-relaxed">
+              “Compartilhe uma música, algumas faixas, um repertório ou seu perfil completo.”
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-3 shadow-xl">
+            <span className="text-xs font-mono text-orange-400 font-black block">ETAPA 04</span>
+            <h4 className="text-base font-heading font-bold uppercase text-white">4. ENVIE O LINK</h4>
+            <p className="text-slate-405 text-xs leading-relaxed">
+              “Compartilhe pelo WhatsApp com cantores, produtores, músicos ou integrantes da equipe.”
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* PARA QUEM É O SOMDRIVE */}
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
           
-          {/* Card 1: Easy bluetooth for cars */}
-          <div className="p-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl text-left space-y-4 shadow-xl hover:border-orange-500/20 transition-all flex flex-col justify-between">
+          {/* Para quem compõe */}
+          <div className="p-8 bg-slate-900/60 border border-slate-800/80 rounded-3xl space-y-6 flex flex-col justify-between">
             <div className="space-y-4">
-              <div className="w-12 h-12 bg-orange-950/50 rounded-2xl flex items-center justify-center border border-orange-500/30 text-orange-400">
-                <Car className="w-6 h-6 stroke-[2]" />
-              </div>
-              <h4 className="text-lg font-heading font-bold uppercase tracking-tight text-white">
-                Ouvir no Carro e no Celular
-              </h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Quem recebe o link pode ouvir com facilidade no celular ou via Bluetooth no carro, com player limpo, modo carro e botão direto para falar com você no WhatsApp.
+              <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">PARA COMPOSITORES</h3>
+              <h2 className="text-2xl font-heading font-black text-white uppercase">FEITO PARA QUEM COMPÕE</h2>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                “Crie uma seleção profissional e envie apenas as músicas que combinam com cada cantor.”
               </p>
+              <ul className="space-y-2 text-xs text-slate-400 pt-2">
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> organizar músicas inéditas;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> criar repertórios por estilo;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> separar músicas para diferentes cantores;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> compartilhar somente as composições adequadas para cada oportunidade;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> apresentar letra, ficha técnica e contato;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> ouvir no celular ou no carro;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> evitar o envio de vários arquivos soltos pelo WhatsApp.</li>
+              </ul>
             </div>
           </div>
 
-          {/* Card 2: Technical Sheet */}
-          <div className="p-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl text-left space-y-4 shadow-xl hover:border-yellow-500/20 transition-all flex flex-col justify-between">
+          {/* Para quem vai gravar */}
+          <div className="p-8 bg-slate-900/60 border border-slate-800/80 rounded-3xl space-y-6 flex flex-col justify-between">
             <div className="space-y-4">
-              <div className="w-12 h-12 bg-yellow-950/50 rounded-2xl flex items-center justify-center border border-yellow-500/30 text-yellow-400">
-                <Check className="w-6 h-6 stroke-[2]" />
-              </div>
-              <h4 className="text-lg font-heading font-bold uppercase tracking-tight text-white">
-                Ficha Técnica Completa
-              </h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Cada música fica organizada com título, compositor, intérprete guia, estilo, letra, descrição e informações importantes para avaliação profissional.
+              <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">PARA CANTORES E ARTISTAS</h3>
+              <h2 className="text-2xl font-heading font-black text-white uppercase">TAMBÉM PARA QUEM VAI GRAVAR</h2>
+              <p className="text-slate-300 text-sm leading-relaxed">
+                “O cantor também pode usar o SomDrive como seu acervo musical privado de trabalho.”
               </p>
+              <ul className="space-y-2 text-xs text-slate-400 pt-2">
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> organizar guias e demos;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> separar músicas para gravação;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> montar repertório de show;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> criar pastas para ensaio;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> organizar músicas por CD, EP ou projeto;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> compartilhar com músicos e produtores;</li>
+                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-orange-500 shrink-0" /> ouvir no celular e no carro.</li>
+              </ul>
             </div>
           </div>
 
-          {/* Card 3: Private Catalog */}
-          <div className="p-8 bg-slate-900/60 border border-slate-800/80 rounded-2xl text-left space-y-4 shadow-xl hover:border-orange-500/20 transition-all flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="w-12 h-12 bg-orange-950/50 rounded-2xl flex items-center justify-center border border-orange-500/30 text-amber-400">
-                <Lock className="w-6 h-6 stroke-[2]" />
-              </div>
-              <h4 className="text-lg font-heading font-bold uppercase tracking-tight text-white">
-                Catálogo Privado por Link
-              </h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Suas músicas não ficam abertas ao público. Você gera um link privado e envia apenas para cantores, artistas, produtores ou contratantes selecionados.
+        </div>
+      </section>
+
+      {/* ÁUDIO LEVE */}
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
+        <div className="p-8 bg-[#10131e] border border-orange-500/20 rounded-3xl space-y-5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-orange-950 border border-orange-500/20 text-orange-400 rounded-xl">
+              <Volume2 className="w-5 h-5 animate-pulse" />
+            </div>
+            <h3 className="font-heading font-black text-lg sm:text-xl uppercase tracking-tight text-white/90">
+              STREAMING LEVE E OTIMIZADO PARA REDES MÓVEIS
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-2">
+            <div className="lg:col-span-7 space-y-4">
+              <p className="text-slate-300 text-sm leading-relaxed">
+                “Para carregamento mais rápido no celular e no carro, recomendamos enviar arquivos em MP3 com até 5 MB por música.”
+              </p>
+              <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                “Arquivos menores carregam mais rápido e ajudam a reduzir o consumo de dados móveis durante a reprodução.”
+              </p>
+              <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                “Um MP3 bem convertido pode manter uma boa qualidade para audição mesmo ocupando menos espaço.”
               </p>
             </div>
-          </div>
 
+            <div className="lg:col-span-5 bg-slate-900/60 border border-slate-800 p-5 rounded-2xl">
+              <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 pb-2 border-b border-white/[0.04] mb-3 font-bold">Guia Recomendado:</h4>
+              <ul className="space-y-2 text-xs font-mono">
+                <li className="flex justify-between px-2 py-1 bg-slate-950/60 rounded">
+                  <span className="text-slate-400">Formato:</span>
+                  <span className="text-orange-400 font-bold">MP3</span>
+                </li>
+                <li className="flex justify-between px-2 py-1 bg-slate-950/60 rounded">
+                  <span className="text-slate-400">Tamanho Recomendado:</span>
+                  <span className="text-orange-400 font-bold">entre 2 MB e 4 MB</span>
+                </li>
+                <li className="flex justify-between px-2 py-1 bg-slate-950/60 rounded">
+                  <span className="text-slate-400">Tamanho Máximo Sugerido:</span>
+                  <span className="text-orange-400 font-bold">5 MB</span>
+                </li>
+                <li className="flex justify-between px-2 py-1 bg-slate-950/60 rounded">
+                  <span className="text-slate-400">Qualidade Recomendada:</span>
+                  <span className="text-orange-400 font-bold">96 kbps ou 128 kbps</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -831,6 +1038,86 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
             </div>
           </div>
 
+        </div>
+      </section>
+
+      {/* FAQ - Perguntas Frequentes */}
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-32">
+        <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
+          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Dúvidas Comuns</h3>
+          <h2 className="text-2xl sm:text-4xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
+            Perguntas Frequentes
+          </h2>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Tire todas as suas dúvidas sobre o funcionamento do SomDrive, compartilhamento e planos.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-6 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2 text-left">
+            <h4 className="text-base font-heading font-bold text-white uppercase tracking-tight">1. Posso criar mais de um repertório?</h4>
+            <p className="text-slate-350 text-xs sm:text-sm leading-relaxed">
+              "Sim! Você pode criar quantos repertórios, pastas ou seleções desejar. O limite do seu plano considera apenas a quantidade de músicas diferentes que você faz o upload no seu acervo geral."
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2 text-left">
+            <h4 className="text-base font-heading font-bold text-white uppercase tracking-tight">2. Como funciona o compartilhamento?</h4>
+            <p className="text-slate-350 text-xs sm:text-sm leading-relaxed">
+              "Você pode compartilhar seu perfil inteiro com todas as pastas públicas, compartilhar apenas uma pasta/repertório específico, compartilhar uma seleção manual de algumas faixas ou criar um link exclusivo para uma única composição."
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2 text-left">
+            <h4 className="text-base font-heading font-bold text-white uppercase tracking-tight">3. Quem receber o link precisa ter conta ou login no SomDrive?</h4>
+            <p className="text-slate-350 text-xs sm:text-sm leading-relaxed">
+              "Não! Produtores, cantores, músicos e contratantes acessam o player profissional de forma aberta e direta. Eles podem ouvir as músicas, ler a ficha técnica e ver sua letra sem precisar criar nenhuma conta ou instalar qualquer aplicativo."
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2 text-left">
+            <h4 className="text-base font-heading font-bold text-white uppercase tracking-tight">4. O SomDrive é público? Outros compositores podem ver minhas músicas?</h4>
+            <p className="text-slate-355 text-xs sm:text-sm leading-relaxed text-left">
+              "Não. Suas músicas são privadas por padrão. Elas só podem ser encontradas por quem tiver os links de compartilhamento específicos que você mesmo gerou e divulgou."
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2 text-left">
+            <h4 className="text-base font-heading font-bold text-white uppercase tracking-tight">5. Como funciona a liberação automática do plano?</h4>
+            <p className="text-slate-350 text-xs sm:text-sm leading-relaxed">
+              "Nossos pagamentos são processados via Mercado Pago. Assim que o Pix ou Cartão é aprovado, o próprio Mercado Pago avisa nosso sistema e seu plano é liberado automaticamente na hora."
+            </p>
+          </div>
+
+          <div className="p-6 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2 text-left">
+            <h4 className="text-base font-heading font-bold text-white uppercase tracking-tight">6. Como funciona a recomendação de MP3 leve?</h4>
+            <p className="text-slate-350 text-xs sm:text-sm leading-relaxed">
+              "Para garantir que quem receber seu link no trânsito, no celular ou pareando via Bluetooth no carro consiga ouvir instantaneamente sem travamentos, sugerimos enviar arquivos MP3 de até 5 MB de tamanho. Seus ouvintes agradecerão o carregamento rápido."
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* FINAL CALL TO ACTION */}
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-32 text-center">
+        <div className="bg-gradient-to-r from-orange-600/10 via-yellow-500/5 to-orange-600/10 border border-orange-500/20 rounded-3xl p-8 md:p-14 space-y-6 md:space-y-8 shadow-2xl relative overflow-hidden">
+          {/* Glowing particle background behind CTA */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-orange-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+          
+          <h2 className="text-xl sm:text-3xl md:text-4xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-300 tracking-tight leading-tight relative z-10">
+            PRONTO PARA APRESENTAR SEU REPERTÓRIO COMO UM PROFISSIONAL?
+          </h2>
+          <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto relative z-10 font-sans">
+            Crie sua conta agora mesmo e organize seu catálogo musical na nuvem.
+          </p>
+          <div className="flex justify-center pt-2 relative z-10">
+            <button 
+              onClick={() => onNavigate('auth', { isRegister: true })}
+              className="px-8 py-4 sm:px-10 sm:py-5 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-xl font-heading font-extrabold text-xs sm:text-sm uppercase tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-xl shadow-orange-500/20 transition duration-300 select-none text-slate-950 font-black"
+            >
+              COMEÇAR AGORA DE GRAÇA
+            </button>
+          </div>
         </div>
       </section>
 
