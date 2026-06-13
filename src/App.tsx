@@ -145,7 +145,7 @@ export default function App() {
         setRoutePayload({ id: artistSlug, autoCar: false });
         return;
       }
-    } else if (path === '/pagamento/retorno') {
+    } else if (path === '/pagamento/retorno' || path === '/pagamento/sucesso' || path === '/pagamento/pendente' || path === '/pagamento/erro') {
       setCurrentView('payment_return');
       return;
     } else if (path === '/dashboard') {
@@ -215,7 +215,8 @@ export default function App() {
     } else if (view === 'admin') {
       window.history.pushState({}, '', '/admin');
     } else if (view === 'payment_return') {
-      window.history.pushState({}, '', '/pagamento/retorno');
+      const subPath = payload?.subPath || '/pagamento/retorno';
+      window.history.pushState({}, '', subPath);
     } else {
       window.history.pushState({}, '', '/');
     }
@@ -242,7 +243,7 @@ export default function App() {
         }
       } else if (path === '/entrar') {
         setCurrentView('auth');
-      } else if (path === '/pagamento/retorno') {
+      } else if (path === '/pagamento/retorno' || path === '/pagamento/sucesso' || path === '/pagamento/pendente' || path === '/pagamento/erro') {
         setCurrentView('payment_return');
       } else if (path === '/admin') {
         const u = dbService.getCurrentUser();

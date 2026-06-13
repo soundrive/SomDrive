@@ -75,50 +75,150 @@ function getDb() {
 // Helper to verify Mercado Pago webhook signatures safely
 function verifySignature(req: any, webhookSecret: string): boolean {
   try {
-    const signatureHeader = req.headers['x-signature'] as string || req.headers['X-Signature'] as string || '';
-    if (!signatureHeader) return false;
+    const getHeader = (headers: any, key: string): string => {
+      const kObj = key.toLowerCase();
+      for (const hKey of Object.keys(headers || {})) {
+        if (hKey.toLowerCase() === kObj) {
+          return String(headers[hKey] || '');
+        }
+      }
+      return '';
+    };
+
+    const signatureHeader = getHeader(req.headers, 'x-signature');
+    const xRequestId = getHeader(req.headers, 'x-request-id');
+
+    if (!signatureHeader) {
+      console.log("[MercadoPago Webhook Signature Audit] Missing signature header.");
+      return false;
+    }
 
     // Split using either comma or semicolon
     const parts = signatureHeader.includes(',') ? signatureHeader.split(',') : signatureHeader.split(';');
     let ts = '';
     let v1 = '';
     for (const part of parts) {
-      const [key, val] = part.trim().split('=');
-      if (key === 'ts') ts = val;
-      if (key === 'v1') v1 = val;
+      const eqIdx = part.indexOf('=');
+      if (eqIdx !== -1) {
+        const key = part.substring(0, eqIdx).trim().toLowerCase();
+        const val = part.substring(eqIdx + 1).trim();
+        if (key === 'ts') ts = val;
+        if (key === 'v1') v1 = val;
+      }
     }
 
-    if (!ts || !v1) return false;
+    if (!ts || !v1) {
+      console.log("[MercadoPago Webhook Signature Audit] Missing ts or v1 parsed values from signature header.");
+      return false;
+    }
 
-    const requestId = req.headers['x-request-id'] || req.headers['X-Request-Id'] || req.headers['request-id'] || '';
-    const dataId = req.body?.data?.id || req.body?.id || req.query?.['data.id'] || req.query?.data?.id || req.query?.id || '';
+    // Get data.id prioritizing from URL query parameters
+    let dataId = '';
+    let fromQuery = false;
+    let fromBody = false;
 
-    if (!dataId) return false;
+    try {
+      const reqUrl = req.url || '';
+      // Use a fallback base URL so new URL() doesn't fail on relative URLs
+      const parsedUrl = new URL(reqUrl, "https://www.somdrive.com.br");
+      const urlDataId = parsedUrl.searchParams.get('data.id');
+      if (urlDataId) {
+        dataId = urlDataId.trim();
+        fromQuery = true;
+      }
+    } catch (e) {
+      console.warn("[MercadoPago Webhook Signature] Error parsing req.url with new URL:", e);
+    }
 
-    const signatureTemplate = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    // Fallback to req.query["data.id"] or nested query data.id
+    if (!dataId && req.query) {
+      if (req.query['data.id']) {
+        dataId = String(req.query['data.id']).trim();
+        fromQuery = true;
+      } else if (req.query.data && typeof req.query.data === 'object' && req.query.data.id) {
+        dataId = String(req.query.data.id).trim();
+        fromQuery = true;
+      } else if (req.query.id) {
+        dataId = String(req.query.id).trim();
+        fromQuery = true;
+      }
+    }
+
+    // Securitized body fallback (only data.id or data?.id as requested)
+    if (!dataId && req.body) {
+      if (req.body.data && typeof req.body.data === 'object' && req.body.data.id) {
+        dataId = String(req.body.data.id).trim();
+        fromBody = true;
+      } else if (req.body.id) {
+        dataId = String(req.body.id).trim();
+        fromBody = true;
+      }
+    }
+
+    if (!dataId) {
+      console.log("[MercadoPago Webhook Signature Audit] No potential data.id found in request URL query or body.");
+      return false;
+    }
+
+    // Montar o manifesto conforme regras 5 e 6:
+    // "Montar o manifesto exatamente assim: id:{dataId};request-id:{xRequestId};ts:{ts};"
+    // "Se algum valor não existir, remover integralmente essa parte do manifesto"
+    let manifest = '';
+    if (dataId) {
+      manifest += `id:${dataId};`;
+    }
+    if (xRequestId) {
+      manifest += `request-id:${xRequestId};`;
+    }
+    if (ts) {
+      manifest += `ts:${ts};`;
+    }
+
+    const cleanedSecret = webhookSecret.trim();
+
+    // Calculate Hash
     const computedHash = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(signatureTemplate)
+      .createHmac('sha256', cleanedSecret)
+      .update(manifest)
       .digest('hex');
 
-    const isMatch = computedHash === v1;
+    // Secure comparison of v1 with timingSafeEqual fallback
+    let isMatch = false;
+    try {
+      isMatch = crypto.timingSafeEqual(
+        Buffer.from(computedHash, 'utf-8'),
+        Buffer.from(v1, 'utf-8')
+      );
+    } catch (e) {
+      isMatch = (computedHash === v1);
+    }
 
-    console.log("[MercadoPago Webhook Signature Audit]", {
+    // Adicionar logs seguros sem expor segredos
+    const auditLog = {
       hasSignatureHeader: true,
       signatureLength: signatureHeader.length,
-      ts,
-      hasV1: !!v1,
-      requestId,
-      dataId,
-      template: signatureTemplate,
-      computedHashPrefix: computedHash ? computedHash.substring(0, 5) : "",
-      receivedV1Prefix: v1 ? v1.substring(0, 5) : "",
-      isMatch
-    });
+      hasRequestId: !!xRequestId,
+      hasDataIdFromQuery: fromQuery,
+      hasDataIdFromBody: fromBody,
+      signatureTsPresent: !!ts,
+      signatureV1Present: !!v1,
+      manifestPartsUsed: {
+        useId: !!dataId,
+        useRequestId: !!xRequestId,
+        useTs: !!ts
+      },
+      signatureValid: isMatch,
+      notificationType: req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || 'unknown',
+      paymentId: dataId,
+      // Secure logging as requested (never print secret, token or full hashes)
+      hashPrefixReceived: v1.substring(0, 4) + '...',
+      hashPrefixCalculated: computedHash.substring(0, 4) + '...'
+    };
 
+    console.log("[MercadoPago Webhook Signature Audit]", JSON.stringify(auditLog));
     return isMatch;
   } catch (err) {
-    console.warn("[MercadoPago Webhook Signature Error] Exception during verification:", err);
+    console.warn("[MercadoPago Webhook Signature Error] Exception during signature verification:", err);
     return false;
   }
 }

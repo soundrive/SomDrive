@@ -387,8 +387,9 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                 {loadingPlan === 'pro' ? 'Carregando...' : 'Pagar agora'}
               </button>
 
-              <div className="text-[11px] text-slate-400 font-medium text-center">
-                Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.
+              <div className="text-[11px] text-slate-400 font-medium text-center space-y-1.5">
+                <p>Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.</p>
+                <p className="text-amber-450 font-semibold font-mono bg-amber-950/10 p-1 rounded border border-amber-500/10 text-[10px]">Depois do pagamento, aguarde a confirmação e volte automaticamente ao seu painel.</p>
               </div>
             </div>
           </div>
@@ -446,8 +447,9 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                 {loadingPlan === 'premium' ? 'Carregando...' : 'Pagar agora'}
               </button>
 
-              <div className="text-[11px] text-slate-400 font-medium text-center">
-                Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.
+              <div className="text-[11px] text-slate-400 font-medium text-center space-y-1.5">
+                <p>Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.</p>
+                <p className="text-amber-450 font-semibold font-mono bg-amber-950/10 p-1 rounded border border-amber-500/10 text-[10px]">Depois do pagamento, aguarde a confirmação e volte automaticamente ao seu painel.</p>
               </div>
             </div>
           </div>

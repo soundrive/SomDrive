@@ -68,8 +68,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const externalReference = `${uid}|${planCode}|checkout_pro`;
-    const appBaseUrl = process.env.APP_BASE_URL ? process.env.APP_BASE_URL.replace(/\/$/, "") : "https://www.somdrive.com.br";
-    const backUrl = `${appBaseUrl}/pagamento/retorno`;
+    const backUrls = {
+      success: "https://www.somdrive.com.br/pagamento/sucesso",
+      pending: "https://www.somdrive.com.br/pagamento/pendente",
+      failure: "https://www.somdrive.com.br/pagamento/erro"
+    };
 
     // 3. Format body according to exact requirements
     const body = {
@@ -96,11 +99,7 @@ export default async function handler(req: any, res: any) {
         purchaseType: "checkout_pro"
       },
       notification_url: "https://www.somdrive.com.br/api/mercadopago-webhook",
-      back_urls: {
-        success: backUrl,
-        failure: backUrl,
-        pending: backUrl
-      },
+      back_urls: backUrls,
       auto_return: "approved"
     };
 
