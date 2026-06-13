@@ -17,6 +17,30 @@ dotenv.config();
 let firebaseAdminApp;
 if (!getApps().length) {
   const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
+  const pIdRaw = process.env.FIREBASE_PROJECT_ID;
+  const cEmailRaw = process.env.FIREBASE_CLIENT_EMAIL;
+  const pKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
+
+  function cleanEnvValue(val: string | undefined): string {
+    if (!val) return "";
+    let s = val.trim();
+    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+      s = s.substring(1, s.length - 1);
+    }
+    s = s.trim();
+    if (s.endsWith(",")) {
+      s = s.substring(0, s.length - 1);
+    }
+    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+      s = s.substring(1, s.length - 1);
+    }
+    return s.trim();
+  }
+
+  const projectIdClean = cleanEnvValue(pIdRaw);
+  const clientEmailClean = cleanEnvValue(cEmailRaw);
+  const privateKeyClean = cleanEnvValue(pKeyRaw)?.replace(/\\n/g, "\n").replace(/\\\\n/g, "\n");
+
   if (serviceAccountVar) {
     try {
       const serviceAccount = JSON.parse(serviceAccountVar);
@@ -26,6 +50,23 @@ if (!getApps().length) {
       });
     } catch (e) {
       console.error("Error parsing FIREBASE_SERVICE_ACCOUNT in server.ts:", e);
+      firebaseAdminApp = initializeApp({
+        projectId: "gen-lang-client-0946896754"
+      });
+    }
+  } else if (projectIdClean && clientEmailClean && privateKeyClean) {
+    try {
+      firebaseAdminApp = initializeApp({
+        credential: cert({
+          projectId: projectIdClean,
+          clientEmail: clientEmailClean,
+          privateKey: privateKeyClean,
+        }),
+        projectId: projectIdClean
+      });
+      console.log("[Firebase Admin] Initialized successfully in server.ts with individual certificates.");
+    } catch (e) {
+      console.error("Error initializing Firebase Admin with individual certificates in server.ts:", e);
       firebaseAdminApp = initializeApp({
         projectId: "gen-lang-client-0946896754"
       });

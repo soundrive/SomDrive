@@ -97,6 +97,18 @@ export default function AdminArea({
   const [editSubStatus, setEditSubStatus] = useState('authorized');
   const [editSubUserId, setEditSubUserId] = useState('');
 
+  // Manual payment verification panel states
+  const [manualPaymentId, setManualPaymentId] = useState('');
+  const [manualVerifying, setManualVerifying] = useState(false);
+  const [manualVerifyResult, setManualVerifyResult] = useState<{
+    success: boolean;
+    paymentId: string;
+    status: string;
+    planActivated: boolean;
+    message: string;
+    isApiWarning?: boolean;
+  } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -479,6 +491,58 @@ export default function AdminArea({
       triggerNotification(`Erro ao consultar webhook: ${err.message || String(err)}`, true);
     } finally {
       setVerifyingId(null);
+    }
+  };
+
+  const handleManualVerifyPayment = async () => {
+    if (!manualPaymentId.trim()) {
+      triggerNotification("Por favor, digite um ID de pagamento válido.", true);
+      return;
+    }
+
+    try {
+      setManualVerifying(true);
+      setManualVerifyResult(null);
+      triggerNotification("Iniciando verificação manual de pagamento...", false);
+
+      const res = await fetch('/api/mercadopago-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify_payment',
+          paymentId: manualPaymentId.trim()
+        })
+      });
+
+      const data = await res.json();
+      
+      setManualVerifyResult({
+        success: !!data.success,
+        paymentId: data.paymentId || manualPaymentId.trim(),
+        status: data.status || 'unknown',
+        planActivated: !!data.planActivated,
+        message: data.message || 'Resultado sem mensagem descritiva.'
+      });
+
+      if (data.success) {
+        triggerNotification("Pagamento reprocessado e plano ativado com sucesso!");
+        loadSubscriptions();
+        loadData();
+      } else {
+        triggerNotification("Verificação finalizada. Verifique os logs ou a mensagem exibida.", true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setManualVerifyResult({
+        success: false,
+        paymentId: manualPaymentId.trim(),
+        status: 'error',
+        planActivated: false,
+        message: `Erro de rede/servidor ao enviar requisição: ${err.message || String(err)}`
+      });
+      triggerNotification("Erro ao conectar com servidor para verificação.", true);
+    } finally {
+      setManualVerifying(false);
     }
   };
 
@@ -2217,21 +2281,95 @@ export default function AdminArea({
                 </button>
               </div>
 
-              {/* SEARCH FILTERS */}
-              <div className="flex items-center bg-slate-950 px-4 py-3 rounded-2xl border border-slate-850">
-                <Search className="h-4 w-4 text-slate-500 mr-2 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Buscar por e-mail, plano ou status..."
-                  value={subscriptionSearch}
-                  onChange={(e) => setSubscriptionSearch(e.target.value)}
-                  className="w-full bg-transparent border-none text-slate-200 text-xs focus:ring-0 outline-none placeholder:text-slate-500"
-                />
-                {subscriptionSearch && (
-                  <button onClick={() => setSubscriptionSearch('')} className="text-xs text-slate-500 hover:text-white px-1">
-                    Limpar
-                  </button>
-                )}
+              {/* PANELS LIST SECTION */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-2">
+                {/* 1. SEARCH SECTION */}
+                <div className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl space-y-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Pesquisar pagamentos já registrados
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+                    Filtrar transações e histórico que já foram processadas ou salvas localmente no banco de dados.
+                  </p>
+                  <div className="flex items-center bg-slate-950 px-4 py-3 rounded-xl border border-slate-850 mt-1">
+                    <Search className="h-4 w-4 text-slate-500 mr-2 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por e-mail, plano ou status..."
+                      value={subscriptionSearch}
+                      onChange={(e) => setSubscriptionSearch(e.target.value)}
+                      className="w-full bg-transparent border-none text-slate-200 text-xs focus:ring-0 outline-none placeholder:text-slate-500"
+                    />
+                    {subscriptionSearch && (
+                      <button onClick={() => setSubscriptionSearch('')} className="text-xs text-slate-500 hover:text-white px-1">
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. MANUAL VERIFICATION SECTION */}
+                <div className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl space-y-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Verificar pagamento manualmente
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+                    Insira o ID real de pagamento do Mercado Pago para forçar uma conciliação administrativa e liberação de planos.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                    <input
+                      type="text"
+                      placeholder="ID do pagamento Mercado Pago"
+                      value={manualPaymentId}
+                      onChange={(e) => setManualPaymentId(e.target.value)}
+                      className="flex-1 bg-slate-950 px-4 py-3 rounded-xl border border-slate-850 text-slate-200 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
+                    />
+                    <button
+                      onClick={handleManualVerifyPayment}
+                      disabled={manualVerifying}
+                      className="px-5 py-3 bg-orange-600 hover:bg-orange-500 text-slate-955 hover:text-slate-950 font-bold rounded-xl transition text-xs shrink-0 disabled:opacity-40 disabled:cursor-not-allowed select-none flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {manualVerifying ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Verificando...</span>
+                        </>
+                      ) : (
+                        <span>VERIFICAR AGORA</span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Manual verification result display */}
+                  {manualVerifyResult && (
+                    <div className={`p-4 rounded-xl text-xs font-sans border animate-fade-in ${manualVerifyResult.success ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                      <div className="font-bold flex items-center justify-between mb-1.5">
+                        <span className="uppercase tracking-wider">
+                          Resultado da Verificação: {manualVerifyResult.success ? 'SUCESSO' : 'ERRO / ALERTA'}
+                        </span>
+                        <button 
+                          onClick={() => setManualVerifyResult(null)} 
+                          className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer select-none ml-2"
+                        >
+                          Limpar resultado
+                        </button>
+                      </div>
+                      <p className="leading-relaxed whitespace-pre-wrap">{manualVerifyResult.message}</p>
+                      
+                      <div className="mt-2 pt-2 border-t border-slate-850/40 grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
+                        <div>
+                          <span className="text-slate-400">ID Fornecido:</span> {manualVerifyResult.paymentId}
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Status API:</span> <span className={`uppercase font-bold ${manualVerifyResult.status === 'approved' ? 'text-emerald-400' : 'text-amber-500'}`}>{manualVerifyResult.status}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-slate-400">Plano Ativado no Firestore:</span> {manualVerifyResult.planActivated ? <span className="text-emerald-400 font-bold">SIM ✅</span> : <span className="text-slate-500 font-bold">NÃO ❌</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {loadingSubscriptions ? (
@@ -2290,8 +2428,8 @@ export default function AdminArea({
                                 </span>
                               </td>
                               <td className="p-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[9px] border tracking-wider uppercase ${isNowActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
-                                  ● {sub.status}
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[9px] border tracking-wider uppercase ${sub.status === 'refunded' ? 'bg-amber-600/15 border-amber-500/25 text-amber-500' : isNowActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                                  ● {sub.status === 'refunded' ? 'REEMBOLSADO' : sub.status}
                                 </span>
                               </td>
                               <td className="p-4 text-slate-300">
