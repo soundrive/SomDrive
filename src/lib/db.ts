@@ -212,6 +212,103 @@ import { signInAnonymously } from 'firebase/auth';
 
 // Database Actions Layer
 export const dbService = {
+  // Map and parse raw Firestore user/artist documents to complete Artist object format with precise field naming and UTC timestamp support
+  mapFirestoreDocToArtist(userId: string, d: any): Artist {
+    if (!d) {
+      return {
+        userId,
+        name: "Artista",
+        artistName: "Artista",
+        email: "",
+        plan: "free",
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    const parseTimestamp = (val: any): string | null => {
+      if (!val) return null;
+      if (val instanceof Timestamp) return val.toDate().toISOString();
+      if (typeof val.toDate === 'function') return val.toDate().toISOString();
+      if (val && typeof val === 'object' && typeof val._seconds === 'number') {
+        return new Date(val._seconds * 1000).toISOString();
+      }
+      if (val && typeof val === 'object' && typeof val.seconds === 'number') {
+        return new Date(val.seconds * 1000).toISOString();
+      }
+      if (typeof val === 'string') {
+        return val;
+      }
+      try {
+        const parsedDate = new Date(val);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toISOString();
+        }
+      } catch {}
+      return null;
+    };
+
+    const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
+    const cleanPlan = (rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'pro' | 'premium';
+    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 5 : (cleanPlan === 'pro' ? 15 : 50));
+    const isMainAdmin = (d.email || '').toLowerCase().trim() === 'videopremieroficial@gmail.com' || (d.email || '').toLowerCase().trim() === 'sertanejopremier@gmail.com';
+    const role = isMainAdmin ? 'admin' : (d.role || 'user');
+
+    const result: Artist = {
+      userId,
+      name: d.name || d.artistName || 'Artista',
+      artistName: d.artistName || d.name || 'Artista',
+      avatarUrl: d.avatarUrl || d.profileImageUrl || d.photoURL || '',
+      profileImageUrl: d.profileImageUrl || d.avatarUrl || d.photoURL || '',
+      photoURL: d.photoURL || d.avatarUrl || d.profileImageUrl || '',
+      slug: d.slug || '',
+      city: d.city || '',
+      state: d.state || '',
+      genre: d.genre || d.mainGenre || '',
+      mainGenre: d.mainGenre || d.genre || '',
+      whatsapp: d.whatsapp || d.phone || '',
+      phone: d.phone || d.whatsapp || '',
+      instagram: d.instagram || '',
+      email: d.email || '',
+      bio: d.bio || '',
+      role: role,
+      plan: cleanPlan,
+      paymentStatus: d.paymentStatus || (cleanPlan !== 'free' ? 'approved' : 'inactive'),
+      accessType: d.accessType || (cleanPlan !== 'free' ? 'subscriber' : 'free'),
+      musicLimit: limit,
+      songsCount: d.songsCount !== undefined ? Number(d.songsCount) : 0,
+      trialEndsAt: parseTimestamp(d.trialEndsAt),
+      manualAccessEndsAt: parseTimestamp(d.manualAccessEndsAt),
+      subscriptionStartedAt: parseTimestamp(d.subscriptionStartedAt),
+      subscriptionEndsAt: parseTimestamp(d.subscriptionEndsAt),
+      mercadoPagoPaymentId: d.mercadoPagoPaymentId || d.paymentId || d.id || null,
+      mercadoPagoSubscriptionId: d.mercadoPagoSubscriptionId || null,
+      isBlocked: d.isBlocked || false,
+      createdAt: parseTimestamp(d.createdAt) || new Date().toISOString(),
+      updatedAt: parseTimestamp(d.updatedAt) || new Date().toISOString(),
+    };
+
+    if (d.customBadgeText !== undefined) result.customBadgeText = d.customBadgeText;
+    if (d.customContactLabel !== undefined) result.customContactLabel = d.customContactLabel;
+    if (d.customShareLabel !== undefined) result.customShareLabel = d.customShareLabel;
+    if (d.customRightBadgeTitle !== undefined) result.customRightBadgeTitle = d.customRightBadgeTitle;
+    if (d.customRightBadgeStatus !== undefined) result.customRightBadgeStatus = d.customRightBadgeStatus;
+    if (d.customRightBadgeDescription !== undefined) result.customRightBadgeDescription = d.customRightBadgeDescription;
+    if (d.customNoticeText !== undefined) result.customNoticeText = d.customNoticeText;
+    if (d.customSongsListTitle !== undefined) result.customSongsListTitle = d.customSongsListTitle;
+    if (d.customSongsListSubtitle !== undefined) result.customSongsListSubtitle = d.customSongsListSubtitle;
+    if (d.customCardImageUrl !== undefined) result.customCardImageUrl = d.customCardImageUrl;
+    if (d.userType !== undefined) result.userType = d.userType;
+
+    // Remove any undefined properties to prevent firestore runtime crashes
+    const clean: any = {};
+    for (const [key, value] of Object.entries(result)) {
+      if (value !== undefined) {
+        clean[key] = value;
+      }
+    }
+    return clean as Artist;
+  },
+
   // Normalize and prepare user object mapping users/{userId} properties
   getNormalizedUserData(artist: Artist, songsCount = 0) {
     const planRaw = (artist.plan || 'free').toLowerCase();
@@ -515,16 +612,22 @@ export const dbService = {
       const musicCount = (this.getArtistMusics(id) || []).length;
       const normalizedUser = this.getNormalizedUserData(saved, musicCount);
 
-      // Async write to 'artists' collection
-      setDoc(doc(db, "artists", id), {
+      const cleanObjectPayload = (obj: any): any => {
+        const clean: any = {};
+        for (const [key, val] of Object.entries(obj)) {
+          if (val !== undefined) {
+            clean[key] = val;
+          }
+        }
+        return clean;
+      };
+
+      const artistsPayload = cleanObjectPayload({
         ...saved,
         createdAt: Timestamp.fromDate(new Date(saved.createdAt))
-      }, { merge: true }).catch(e => {
-        console.error("Failed to sync updated profile to artists: ", e);
       });
 
-      // Async write to 'users' collection with raw dates converted to Firestore timestamps
-      setDoc(doc(db, "users", id), {
+      const usersPayload = cleanObjectPayload({
         ...normalizedUser,
         createdAt: Timestamp.fromDate(new Date(normalizedUser.createdAt)),
         updatedAt: Timestamp.fromDate(new Date(normalizedUser.updatedAt)),
@@ -532,7 +635,15 @@ export const dbService = {
         manualAccessEndsAt: normalizedUser.manualAccessEndsAt ? Timestamp.fromDate(new Date(normalizedUser.manualAccessEndsAt)) : null,
         subscriptionStartedAt: normalizedUser.subscriptionStartedAt ? Timestamp.fromDate(new Date(normalizedUser.subscriptionStartedAt)) : null,
         subscriptionEndsAt: normalizedUser.subscriptionEndsAt ? Timestamp.fromDate(new Date(normalizedUser.subscriptionEndsAt)) : null,
-      }, { merge: true }).catch(e => {
+      });
+
+      // Async write to 'artists' collection
+      setDoc(doc(db, "artists", id), artistsPayload, { merge: true }).catch(e => {
+        console.error("Failed to sync updated profile to artists: ", e);
+      });
+
+      // Async write to 'users' collection with raw dates converted to Firestore timestamps
+      setDoc(doc(db, "users", id), usersPayload, { merge: true }).catch(e => {
         console.error("Failed to sync updated profile to users: ", e);
       });
     } catch (e) {
@@ -636,32 +747,7 @@ export const dbService = {
         const d = item.data;
         const uid = item.id;
         
-        let formattedUser: Artist = {
-          userId: uid,
-          name: d.name || d.artistName || 'Artista',
-          email: d.email || '',
-          whatsapp: d.whatsapp || d.phone || '',
-          phone: d.phone || d.whatsapp || '',
-          artistName: d.artistName || d.name || '',
-          instagram: d.instagram || '',
-          city: d.city || '',
-          state: d.state || '',
-          role: (d.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' || d.email?.toLowerCase().trim() === 'sertanejopremier@gmail.com') ? 'admin' : (d.role || 'user'),
-          plan: (d.plan || 'free').toLowerCase(),
-          paymentStatus: d.paymentStatus || 'inactive',
-          accessType: d.accessType || 'free',
-          musicLimit: d.musicLimit !== undefined ? d.musicLimit : (((d.plan || 'free').toLowerCase()) === 'free' ? 5 : (((d.plan || 'free').toLowerCase()) === 'pro' ? 15 : 50)),
-          songsCount: d.songsCount !== undefined ? d.songsCount : 0,
-          trialEndsAt: d.trialEndsAt instanceof Timestamp ? d.trialEndsAt.toDate().toISOString() : d.trialEndsAt || null,
-          manualAccessEndsAt: d.manualAccessEndsAt instanceof Timestamp ? d.manualAccessEndsAt.toDate().toISOString() : d.manualAccessEndsAt || null,
-          subscriptionStartedAt: d.subscriptionStartedAt instanceof Timestamp ? d.subscriptionStartedAt.toDate().toISOString() : d.subscriptionStartedAt || null,
-          subscriptionEndsAt: d.subscriptionEndsAt instanceof Timestamp ? d.subscriptionEndsAt.toDate().toISOString() : d.subscriptionEndsAt || null,
-          mercadoPagoPaymentId: d.mercadoPagoPaymentId || null,
-          mercadoPagoSubscriptionId: d.mercadoPagoSubscriptionId || null,
-          isBlocked: d.isBlocked || false,
-          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-          updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || new Date().toISOString(),
-        };
+        let formattedUser = this.mapFirestoreDocToArtist(uid, d);
 
         dbUsers.push(formattedUser);
       });
@@ -1146,27 +1232,7 @@ export const dbService = {
           }
         }
 
-        const formattedArtist: Artist = {
-          userId: resolvedUserId,
-          name: artData?.name || artData?.artistName || "Artista",
-          artistName: artData?.artistName || artData?.name || "Artista",
-          avatarUrl: artData?.avatarUrl || artData?.profileImageUrl || artData?.photoURL || "",
-          profileImageUrl: artData?.profileImageUrl || artData?.avatarUrl || artData?.photoURL || "",
-          photoURL: artData?.photoURL || artData?.avatarUrl || artData?.profileImageUrl || "",
-          slug: artData?.slug || "",
-          city: artData?.city || "",
-          state: artData?.state || "",
-          genre: artData?.genre || artData?.mainGenre || "",
-          mainGenre: artData?.mainGenre || artData?.genre || "",
-          whatsapp: artData?.whatsapp || artData?.phone || "",
-          phone: artData?.phone || artData?.whatsapp || "",
-          instagram: artData?.instagram || "",
-          email: artData?.email || "",
-          bio: artData?.bio || "",
-          plan: artData?.plan || "free",
-          subscriptionStatus: artData?.subscriptionStatus || "ativo",
-          createdAt: artData?.createdAt instanceof Timestamp ? artData.createdAt.toDate().toISOString() : artData?.createdAt || new Date().toISOString()
-        };
+        const formattedArtist = this.mapFirestoreDocToArtist(resolvedUserId, artData);
 
         // Cache artist profile in LocalStorage under BOTH resolvedUserId and slug for instant rendering
         const cachedArtists = this.getAllArtists();

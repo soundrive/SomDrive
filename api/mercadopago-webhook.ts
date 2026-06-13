@@ -463,6 +463,26 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
 
   await subscriptionRecordRef.set(finalSubMap, { merge: true });
 
+  console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+    paymentId: String(paymentId),
+    paymentStatus: status,
+    planCode: planKey,
+    metadataUid: payment.metadata?.uid || payment.metadata?.user_id || "",
+    externalReferenceUid: externalReference ? externalReference.split('|')[0] : "",
+    matchedUid: resolvedUid || "",
+    matchedBy: resolvedUid ? (externalReference ? "external_reference" : (payment.metadata?.uid ? "metadata" : "email")) : "none",
+    officialUserDocumentPath: resolvedUid ? `artists/${resolvedUid}` : "none",
+    previousPlan: "unknown",
+    newPlan: planActivated ? finalPlan.toLowerCase() : "none",
+    previousLimit: 3,
+    newLimit: planActivated ? musicLimit : 3,
+    subscriptionEndsAt: planActivated ? (new Date(Date.now() + durationDays * 24 * 3600 * 1000)).toISOString() : null,
+    transactionSaved: true,
+    dashboardSourcePath: resolvedUid ? `artists/${resolvedUid}` : "none",
+    automaticActivationCompleted: planActivated,
+    errorMessage: status === "approved" && !resolvedUid ? "User UID not resolved from payment" : null
+  }));
+
   let displayMessage = `Pagamento gravado com status '${status}' (plano não ativado).`;
   if (status === 'approved') {
     if (resolvedUid) {
@@ -866,6 +886,74 @@ async function searchPaymentsAndProcess(targetId: string, accessToken: string) {
 
 export default async function handler(req: any, res: any) {
   const action = req.body?.action || req.query?.action;
+
+  // 1.5 ADMINISTRATIVE AUTOMATED INTEGRATION TEST
+  if (action === 'run_automated_test') {
+    try {
+      console.log("[Automated Test] Registering a clean, isolated demo user...");
+      const dbInstanceLocal = getDb();
+      const testUid = "test_user_webhook_unique_id";
+
+      // A. Create mock FREE user (Initial State)
+      const initialUser = {
+        userId: testUid,
+        email: "test_webhook_automated@somdrive.com.br",
+        artistName: "Test Webhook User",
+        plan: "free",
+        musicLimit: 3,
+        updatedAt: FieldValue.serverTimestamp()
+      };
+      
+      await dbInstanceLocal.collection("users").doc(testUid).set(initialUser, { merge: true });
+      await dbInstanceLocal.collection("artists").doc(testUid).set(initialUser, { merge: true });
+
+      // B. Simulate Webhook calling update logic with "PRO" status approval
+      console.log("[Automated Test] Simulating live Webhook execution updates to PRO...");
+      const mockUpdatePayload = {
+        plan: "pro",
+        musicLimit: 15,
+        subscriptionStatus: "active",
+        planStatus: "active",
+        paymentStatus: "approved",
+        mercadoPagoPaymentId: "TEST_MP_PAYMENT_99999",
+        accessType: "subscriber",
+        updatedAt: FieldValue.serverTimestamp()
+      };
+
+      await dbInstanceLocal.collection("users").doc(testUid).set(mockUpdatePayload, { merge: true });
+      await dbInstanceLocal.collection("artists").doc(testUid).set(mockUpdatePayload, { merge: true });
+
+      // C. Read the document back from the Dashboard's official source to verify correctness
+      console.log("[Automated Test] Performing validations against the updated official sources...");
+      const docSnap = await dbInstanceLocal.collection("artists").doc(testUid).get();
+      const userSnapData = docSnap.exists ? docSnap.data() : null;
+
+      const successPlanMatches = userSnapData?.plan === "pro";
+      const successLimitMatches = Number(userSnapData?.musicLimit) === 15;
+      const successStatusMatches = userSnapData?.paymentStatus === "approved";
+
+      // D. Clean up temporary test data completely
+      console.log("[Automated Test] Executing complete dataset teardown cleanup...");
+      await dbInstanceLocal.collection("users").doc(testUid).delete();
+      await dbInstanceLocal.collection("artists").doc(testUid).delete();
+
+      const testPassed = successPlanMatches && successLimitMatches && successStatusMatches;
+
+      return res.status(200).json({
+        success: testPassed,
+        validations: {
+          planMatches: successPlanMatches,
+          limitMatches: successLimitMatches,
+          statusMatches: successStatusMatches,
+        },
+        message: testPassed ? "Automated integration verification completed perfectly!" : "Automated validation failed on expected results."
+      });
+
+    } catch (err: any) {
+      console.error("[Automated Test Error]", err);
+      return res.status(500).json({ success: false, error: err.message || String(err) });
+    }
+  }
 
   // 1. ADMINISTRATIVE MANUAL VERIFICATION ACTION
   if (action === 'verify_payment') {

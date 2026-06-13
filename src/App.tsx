@@ -11,6 +11,7 @@ import PaymentReturnScreen from './components/PaymentReturnScreen';
 import { ShieldAlert } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
+import { onSnapshot, doc } from 'firebase/firestore';
 
 export default function App() {
   // SPA Routing state sync with address bar
@@ -121,7 +122,14 @@ export default function App() {
     }
 
     // Dynamic Firebase Auth State handler
+    let unsubscribeProfileSnapshot: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, (fireUser) => {
+      if (unsubscribeProfileSnapshot) {
+        unsubscribeProfileSnapshot();
+        unsubscribeProfileSnapshot = null;
+      }
+
       if (fireUser) {
         const emailLower = fireUser.email?.toLowerCase().trim() || '';
         if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
@@ -132,6 +140,22 @@ export default function App() {
             }
           });
         }
+
+        // Setup real-time listener for current logged-in user documents
+        unsubscribeProfileSnapshot = onSnapshot(doc(db, 'artists', fireUser.uid), (snapshot) => {
+          if (snapshot.exists()) {
+            const liveData = snapshot.data();
+            const formatted = dbService.mapFirestoreDocToArtist(fireUser.uid, liveData);
+            const checked = dbService.checkAndRevertExpiredAccess(formatted);
+            dbService.setCurrentUser(checked);
+            setCurrentUser(checked);
+          }
+        }, (error) => {
+          console.error("Real-time profile subscription error:", error);
+        });
+
+      } else {
+        setCurrentUser(null);
       }
     });
 
@@ -178,6 +202,9 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      if (unsubscribeProfileSnapshot) {
+        unsubscribeProfileSnapshot();
+      }
     };
   }, []);
 
