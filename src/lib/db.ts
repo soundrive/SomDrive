@@ -214,8 +214,9 @@ import { signInAnonymously } from 'firebase/auth';
 export const dbService = {
   // Normalize and prepare user object mapping users/{userId} properties
   getNormalizedUserData(artist: Artist, songsCount = 0) {
-    const defaultLimit = artist.plan === 'free' ? 5 : (artist.plan === 'pro' ? 15 : 50);
-    const plan = artist.plan || 'free';
+    const planRaw = (artist.plan || 'free').toLowerCase();
+    const plan = planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
+    const defaultLimit = plan === 'free' ? 5 : (plan === 'pro' ? 15 : 50);
     const emailLower = (artist.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
 
@@ -646,10 +647,10 @@ export const dbService = {
           city: d.city || '',
           state: d.state || '',
           role: (d.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' || d.email?.toLowerCase().trim() === 'sertanejopremier@gmail.com') ? 'admin' : (d.role || 'user'),
-          plan: d.plan || 'free',
+          plan: (d.plan || 'free').toLowerCase(),
           paymentStatus: d.paymentStatus || 'inactive',
           accessType: d.accessType || 'free',
-          musicLimit: d.musicLimit !== undefined ? d.musicLimit : (d.plan === 'free' ? 5 : (d.plan === 'pro' ? 15 : 50)),
+          musicLimit: d.musicLimit !== undefined ? d.musicLimit : (((d.plan || 'free').toLowerCase()) === 'free' ? 5 : (((d.plan || 'free').toLowerCase()) === 'pro' ? 15 : 50)),
           songsCount: d.songsCount !== undefined ? d.songsCount : 0,
           trialEndsAt: d.trialEndsAt instanceof Timestamp ? d.trialEndsAt.toDate().toISOString() : d.trialEndsAt || null,
           manualAccessEndsAt: d.manualAccessEndsAt instanceof Timestamp ? d.manualAccessEndsAt.toDate().toISOString() : d.manualAccessEndsAt || null,

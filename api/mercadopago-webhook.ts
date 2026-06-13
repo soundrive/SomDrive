@@ -5,28 +5,57 @@ import crypto from 'crypto';
 // Initialize Firebase Admin securely and lazily
 let dbInstance: any = null;
 
+function cleanEnvValue(val: string | undefined): string {
+  if (!val) return "";
+  let s = val.trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.substring(1, s.length - 1);
+  }
+  s = s.trim();
+  if (s.endsWith(",")) {
+    s = s.substring(0, s.length - 1);
+  }
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.substring(1, s.length - 1);
+  }
+  return s.trim();
+}
+
 function getDb() {
   if (!dbInstance) {
+    const rawProjectId = process.env.FIREBASE_PROJECT_ID;
+    const rawClientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    const projectId = cleanEnvValue(rawProjectId);
+    const clientEmail = cleanEnvValue(rawClientEmail);
+    const privateKey = cleanEnvValue(rawPrivateKey)?.replace(/\\n/g, "\n");
+
+    if (!projectId) {
+      throw new Error("Missing FIREBASE_PROJECT_ID");
+    }
+    if (!clientEmail) {
+      throw new Error("Missing FIREBASE_CLIENT_EMAIL");
+    }
+    if (!privateKey) {
+      throw new Error("Missing FIREBASE_PRIVATE_KEY");
+    }
+
     let app;
     if (!getApps().length) {
-      const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT;
-      if (serviceAccountVar) {
-        try {
-          const serviceAccount = JSON.parse(serviceAccountVar);
-          app = initializeApp({
-            credential: cert(serviceAccount),
-            projectId: "gen-lang-client-0946896754"
-          });
-        } catch (e) {
-          console.error("Error parsing FIREBASE_SERVICE_ACCOUNT:", e);
-          app = initializeApp({
-            projectId: "gen-lang-client-0946896754"
-          });
-        }
-      } else {
+      try {
         app = initializeApp({
-          projectId: "gen-lang-client-0946896754"
+          credential: cert({
+            projectId,
+            clientEmail,
+            privateKey,
+          }),
+          projectId: projectId,
         });
+        console.log("[Firebase Admin] Initialized successfully with cert().");
+      } catch (e: any) {
+        console.error("Error initializing Firebase Admin with service credentials:", e);
+        throw e;
       }
     } else {
       app = getApp();
@@ -39,22 +68,23 @@ function getDb() {
 // Helper to verify Mercado Pago webhook signatures safely
 function verifySignature(req: any, webhookSecret: string): boolean {
   try {
-    const signatureHeader = req.headers['x-signature'] as string || '';
+    const signatureHeader = req.headers['x-signature'] as string || req.headers['X-Signature'] as string || '';
     if (!signatureHeader) return false;
 
-    const parts = signatureHeader.split(';');
+    // Split using either comma or semicolon
+    const parts = signatureHeader.includes(',') ? signatureHeader.split(',') : signatureHeader.split(';');
     let ts = '';
     let v1 = '';
     for (const part of parts) {
-      const [key, val] = part.split('=');
+      const [key, val] = part.trim().split('=');
       if (key === 'ts') ts = val;
       if (key === 'v1') v1 = val;
     }
 
     if (!ts || !v1) return false;
 
-    const requestId = req.headers['x-request-id'] || '';
-    const dataId = req.body?.data?.id || req.body?.id || req.query?.id || '';
+    const requestId = req.headers['x-request-id'] || req.headers['X-Request-Id'] || req.headers['request-id'] || '';
+    const dataId = req.body?.data?.id || req.body?.id || req.query?.['data.id'] || req.query?.data?.id || req.query?.id || '';
 
     if (!dataId) return false;
 
@@ -64,9 +94,25 @@ function verifySignature(req: any, webhookSecret: string): boolean {
       .update(signatureTemplate)
       .digest('hex');
 
-    return computedHash === v1;
+    const isMatch = computedHash === v1;
+
+    // Safe signature log (no token content printed)
+    console.log("[MercadoPago Webhook Signature Audit]", {
+      hasSignatureHeader: true,
+      signatureLength: signatureHeader.length,
+      ts,
+      hasV1: !!v1,
+      requestId,
+      dataId,
+      template: signatureTemplate,
+      computedHashPrefix: computedHash ? computedHash.substring(0, 5) : "",
+      receivedV1Prefix: v1 ? v1.substring(0, 5) : "",
+      isMatch
+    });
+
+    return isMatch;
   } catch (err) {
-    console.warn("Signature verification throw exception:", err);
+    console.warn("[MercadoPago Webhook Signature Error] Exception during verification:", err);
     return false;
   }
 }
@@ -100,395 +146,398 @@ async function findUserByEmailInFirestore(email: string): Promise<string | null>
 }
 
 export default async function handler(req: any, res: any) {
-  try {
-    // 1. Only accept POST requests
-    if (req.method !== 'POST') {
-      res.setHeader('Allow', ['POST']);
-      return res.status(200).json({ received: false, error: `Method ${req.method} not allowed. Safe 200 response.` });
-    }
+  // Safe default values for structured logger
+  let statusConsulted = 'unknown';
+  let externalReference = '';
+  let payerEmail = '';
+  let userId: string | null = null;
+  let planCode = '';
+  let purchaseAlreadyProcessed = false;
+  let firestoreUpdated = false;
+  let purchaseRecorded = false;
+  let errorMessage = '';
+  let paymentFound = false;
+  let description = '';
 
+  const eventType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || 'payment';
+  const resourceId = req.body?.data?.id || req.body?.id || req.query?.['data.id'] || req.query?.data?.id || req.query?.id || '';
+
+  try {
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
     const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+    const isManualReprocess = req.query?.reprocess === 'true';
 
     if (!accessToken) {
-      console.warn("[MercadoPago Webhook Warning] MERCADOPAGO_ACCESS_TOKEN environment variable is not defined.");
-      return res.status(200).json({ received: false, error: "Mercado Pago secret credentials not configured on the server." });
+      errorMessage = "MERCADOPAGO_ACCESS_TOKEN is missing";
+      console.warn(`[MercadoPago Webhook Warning] ${errorMessage}`);
+      return res.status(200).json({ received: false, error: "Access token credentials not configured on the server." });
     }
 
-    // Intercept and print body payloads and metadata for Mercado Pago dashboard simulations
-    console.log("[MercadoPago Webhook] Received webhook call.");
-    console.log("[MercadoPago Webhook] Headers received:", JSON.stringify(req.headers || {}));
-    console.log("[MercadoPago Webhook] Body received:", JSON.stringify(req.body || {}));
-    console.log("[MercadoPago Webhook] Query received:", JSON.stringify(req.query || {}));
-
-    // 2. Identify the resource details safely from either body or query params
-    const eventType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || 'unknown';
-    const resourceId = req.body?.data?.id || req.body?.id || req.query?.id || '';
-
-    console.log(`[MercadoPago Webhook] Extracted details: Type: ${eventType}, ID: ${resourceId}`);
+    console.log("[MercadoPago Webhook] Incoming Webhook:", {
+      method: req.method,
+      query: req.query,
+      body: req.body,
+      isManualReprocess
+    });
 
     if (!resourceId) {
-      console.warn("[MercadoPago Webhook Warning] Ignore request: Required identifier 'id' was missing from payload.");
+      errorMessage = "Missing resource ID";
+      console.warn(`[MercadoPago Webhook Warning] ${errorMessage}`);
       return res.status(200).json({ received: true, ignored: true, reason: "missing_id" });
     }
 
-    // Check for obvious simulation ID
+    // Ignore dummy mock requests from Mercado Pago sandbox setup
     const isTestId = resourceId === '123456' || String(resourceId).startsWith('123456') || resourceId === '123455';
     if (isTestId) {
-      console.warn(`[MercadoPago Webhook Warning] Simulated test ID detected: ${resourceId}. Ignored safely.`);
       return res.status(200).json({ received: true, ignored: true, reason: "invalid_or_test_notification" });
     }
 
-    // 3. Webhook origin/signature verification
-    if (webhookSecret) {
-      const signatureHeader = req.headers['x-signature'] as string || '';
+    // Signature Verification (only skipped if administrator manually queries via reprocess parameter)
+    if (webhookSecret && !isManualReprocess) {
+      const signatureHeader = req.headers['x-signature'] as string || req.headers['X-Signature'] as string || '';
       if (!signatureHeader) {
-        console.warn("[MercadoPago Webhook Warning] webhookSecret exists, but 'x-signature' header is missing. Continuing for tests/simulations.");
+        errorMessage = "Missing x-signature header";
+        console.warn(`[MercadoPago Webhook Warning] ${errorMessage}`);
+        return res.status(400).json({ received: false, error: errorMessage });
       } else {
         const isVerified = verifySignature(req, webhookSecret);
         if (!isVerified) {
-          console.warn("[MercadoPago Webhook Warning] Webhook signature verification failed. Continuing on safety tolerance to avoid blocking requests.");
+          errorMessage = "Webhook signature verification failed";
+          console.warn(`[MercadoPago Webhook Warning] ${errorMessage}`);
+          return res.status(400).json({ received: false, error: errorMessage });
         } else {
           console.log("[MercadoPago Webhook] Webhook signature verified successfully!");
         }
       }
     }
 
-    // We only process specific payment or subscription event types
-    // Tratar: subscription_preapproval, subscription_authorized_payment, o payment
-    const isPaymentEvent = eventType.includes('payment');
-    const isPreapprovalEvent = eventType.includes('preapproval') || eventType.includes('subscription_preapproval');
-    const isAuthorizedPaymentEvent = eventType.includes('authorized_payment') || eventType.includes('subscription_authorized_payment');
+    // Checking paymentId idempotency (only skipped for forced administrator reprocess queries)
+    const subscriptionRecordRef = getDb().collection("mp_subscriptions").doc(String(resourceId));
+    const existingDoc = await subscriptionRecordRef.get();
 
-    if (!isPaymentEvent && !isPreapprovalEvent && !isAuthorizedPaymentEvent) {
-      console.log(`[MercadoPago Webhook] Non-critical topic event: ${eventType}. Ignoring with status 200.`);
-      return res.status(200).json({ received: true, ignored: true, reason: "unsupported_event_type" });
-    }
+    if (existingDoc.exists) {
+      const data = existingDoc.data();
+      if (data && data.status === 'approved' && data.processedAt && !isManualReprocess) {
+        purchaseAlreadyProcessed = true;
+        console.log(`[MercadoPago Webhook Idempotency] Payment ${resourceId} already processed successfully.`);
+        
+        // Return 200 immediately
+        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+          firebaseAdminInitialized: getApps().length > 0,
+          firebaseProjectConfigured: !!process.env.FIREBASE_PROJECT_ID,
+          paymentId: String(resourceId),
+          paymentStatus: 'approved',
+          resolvedUid: data.userId || null,
+          resolvedPlanCode: data.planCode || null,
+          userFound: true,
+          firestoreUpdated: false,
+          purchaseRecorded: false,
+          alreadyProcessed: true,
+          errorMessage: null,
+          timestamp: new Date().toISOString()
+        }));
 
-    // 4. Consult API to confirm actual status
-    let statusConsulted = 'unknown';
-    let externalReference = '';
-    let payerEmail = '';
-    let finalPlan = 'free';
-    let billingCycle = 'monthly';
-    let musicLimit = 5;
-    let subscriptionStatus = 'inactive';
-    let mercadoPagoSubscriptionId = '';
-    let mercadoPagoPaymentId = '';
-    let description = '';
-
-    if (isPreapprovalEvent) {
-      // Get preapproval subscription status
-      const mpUrl = `https://api.mercadopago.com/v1/preapproval/${resourceId}`;
-      const response = await fetch(mpUrl, {
-        headers: { "Authorization": `Bearer ${accessToken}` }
-      });
-
-      if (!response.ok) {
-        console.warn(`[MercadoPago Webhook Warning] Failed to fetch preapproval from Mercado Pago. Status: ${response.status}. Ignored smoothly.`);
-        return res.status(200).json({ received: true, ignored: true, reason: "invalid_or_test_notification" });
-      }
-
-      const preapproval = await response.json();
-      statusConsulted = preapproval.status || 'unknown';
-      externalReference = preapproval.external_reference || '';
-      payerEmail = preapproval.payer_email || '';
-      mercadoPagoSubscriptionId = preapproval.id || resourceId;
-      description = preapproval.reason || '';
-
-      console.log("[MercadoPago Webhook] Queried Preapproval details successfully:", {
-        id: preapproval.id,
-        status: statusConsulted,
-        externalReference,
-        payerEmail,
-        description
-      });
-
-      if (statusConsulted === 'authorized' || statusConsulted === 'active') {
-        subscriptionStatus = 'active';
-      } else {
-        subscriptionStatus = 'inactive';
-      }
-
-    } else if (isPaymentEvent) {
-      // Get payment transaction status
-      const mpUrl = `https://api.mercadopago.com/v1/payments/${resourceId}`;
-      const response = await fetch(mpUrl, {
-        headers: { "Authorization": `Bearer ${accessToken}` }
-      });
-
-      if (!response.ok) {
-        console.warn(`[MercadoPago Webhook Warning] Failed to fetch payment from Mercado Pago. Status: ${response.status}. Ignored smoothly.`);
-        return res.status(200).json({ received: true, ignored: true, reason: "invalid_or_test_notification" });
-      }
-
-      const payment = await response.json();
-      statusConsulted = payment.status || 'unknown';
-      externalReference = payment.external_reference || '';
-      payerEmail = payment.payer?.email || '';
-      mercadoPagoPaymentId = String(payment.id || resourceId);
-      description = payment.description || '';
-
-      console.log("[MercadoPago Webhook] Queried Payment details successfully:", {
-        id: payment.id,
-        status: statusConsulted,
-        externalReference,
-        payerEmail,
-        description
-      });
-
-      if (statusConsulted === 'approved') {
-        subscriptionStatus = 'active';
-      } else {
-        subscriptionStatus = 'inactive';
-      }
-
-    } else if (isAuthorizedPaymentEvent) {
-      // Get authorized payment status
-      const mpUrl = `https://api.mercadopago.com/v1/authorized_payments/${resourceId}`;
-      const response = await fetch(mpUrl, {
-        headers: { "Authorization": `Bearer ${accessToken}` }
-      });
-
-      if (!response.ok) {
-        console.warn(`[MercadoPago Webhook Warning] Failed to fetch authorized payment from Mercado Pago. Status: ${response.status}. Ignored smoothly.`);
-        return res.status(200).json({ received: true, ignored: true, reason: "invalid_or_test_notification" });
-      }
-
-      const authPayment = await response.json();
-      statusConsulted = authPayment.status || 'unknown';
-      externalReference = authPayment.external_reference || '';
-      payerEmail = authPayment.payer_email || '';
-      mercadoPagoSubscriptionId = authPayment.preapproval_id || '';
-      mercadoPagoPaymentId = String(authPayment.id || resourceId);
-
-      console.log("[MercadoPago Webhook] Queried Authorized Payment details successfully:", {
-        id: authPayment.id,
-        status: statusConsulted,
-        externalReference,
-        payerEmail
-      });
-
-      // Status of paid cycles
-      if (statusConsulted === 'approved' || statusConsulted === 'active') {
-        subscriptionStatus = 'active';
-      } else {
-        subscriptionStatus = 'inactive';
+        return res.status(200).json({
+          received: true,
+          processed: true,
+          idempotent: true,
+          userId: data.userId || null,
+          plan: data.plan || null,
+          status: 'approved'
+        });
       }
     }
 
-    // Safe Logs Requirement: tipo do evento, id recebido, data, status consultado
-    console.log("[MERCADOPAGO WEBHOOK SECURE LOG - SUCCESS]", {
-      eventType,
-      resourceId,
-      date: new Date().toISOString(),
-      statusConsulted,
-      parsedUserIdAndPlan: externalReference || "none"
+    // Consult the actual payment details directly using Mercado Pago V1 GET Payment API
+    const mpUrl = `https://api.mercadopago.com/v1/payments/${resourceId}`;
+    const mpResponse = await fetch(mpUrl, {
+      headers: { "Authorization": `Bearer ${accessToken}` }
     });
 
-    // 5. Setup PLANS_MAP
-    const PLANS_MAP: Record<string, {
-      plan: 'pro' | 'premium';
-      billingCycle: 'monthly' | 'annual';
-      musicLimit: number;
-      durationDays: number;
-    }> = {
-      pro_mensal: { plan: 'pro', billingCycle: 'monthly', musicLimit: 15, durationDays: 30 },
-      premium_mensal: { plan: 'premium', billingCycle: 'monthly', musicLimit: 50, durationDays: 30 },
-      pro_anual: { plan: 'pro', billingCycle: 'annual', musicLimit: 15, durationDays: 365 },
-      premium_anual: { plan: 'premium', billingCycle: 'annual', musicLimit: 50, durationDays: 365 }
-    };
-
-    // Attempt to find the specific user to update
-    let userId: string | null = null;
-    let explicitPlan: string | null = null;
-    let explicitCycle: string | null = null;
-    let planCode = '';
-
-    if (externalReference) {
-      if (externalReference.includes('|')) {
-        const parts = externalReference.split('|');
-        if (parts.length >= 1) {
-          userId = parts[0];
-        }
-        if (parts.length >= 2) {
-          planCode = parts[1]; // pro_mensal, premium_mensal, pro_anual, premium_anual
-          const config = PLANS_MAP[planCode];
-          if (config) {
-            explicitPlan = config.plan;
-            explicitCycle = config.billingCycle;
-          }
-        }
-      } else {
-        const parts = externalReference.split('___');
-        if (parts.length >= 1) {
-          userId = parts[0];
-        }
-        if (parts.length >= 2) {
-          explicitPlan = parts[1]; // pro or premium
-        }
-        if (parts.length >= 3) {
-          explicitCycle = parts[2]; // monthly or annual
-        }
-      }
+    if (!mpResponse.ok) {
+      errorMessage = `Mercado Pago API error. HTTP ${mpResponse.status}`;
+      console.warn(`[MercadoPago Webhook Warning] Failed to query payment details: ${errorMessage}`);
+      return res.status(200).json({ received: true, ignored: true, error: errorMessage });
     }
 
-    // Fallback lookups
-    if (!userId && payerEmail) {
-      console.log(`[MercadoPago Webhook] No userId inside external_reference. Querying Firestore by email: ${payerEmail}...`);
-      userId = await findUserByEmailInFirestore(payerEmail);
-    }
+    const payment = await mpResponse.json();
+    paymentFound = true;
+    statusConsulted = payment.status || 'unknown';
+    externalReference = payment.external_reference || '';
+    payerEmail = payment.payer?.email || '';
+    description = payment.description || '';
 
-    if (!userId) {
-      console.warn(`[MercadoPago Webhook] No userId or fallback found. Ignore or orphan.`);
-      // If it's a test or doesn't have an external_reference or user cannot be found, ignore with 200
-      if (isPaymentEvent || !externalReference) {
-         console.warn("[MercadoPago Webhook Warning] Payment event with no valid user association, ignored with 200 OK.");
-         return res.status(200).json({ received: true, ignored: true, reason: "no_valid_user_association" });
-      }
+    console.log("[MercadoPago Webhook] Retrieved payment data successfully:", {
+      id: payment.id,
+      status: statusConsulted,
+      externalReference,
+      payerEmail
+    });
 
-      console.warn(`[MercadoPago Webhook] Could not associate transaction ID ${resourceId} to any user system profile.`);
-      // We still record the transaction in the database so admins can manually review or activate it
-      const transactionRef = getDb().collection("mp_subscriptions").doc(resourceId);
-      await transactionRef.set({
-        id: resourceId,
+    const isNowActive = statusConsulted === 'approved';
+
+    if (!isNowActive) {
+      // Record transaction anyway for analytics or debugging pending/refund status
+      await subscriptionRecordRef.set({
+        id: String(resourceId),
         userId: "unknown",
         email: payerEmail || "unknown",
-        plan: explicitPlan || "unknown",
-        billingCycle: explicitCycle || "unknown",
         status: statusConsulted,
-        paymentId: mercadoPagoPaymentId || "",
-        subscriptionId: mercadoPagoSubscriptionId || "",
-        musicLimit: 15,
-        paidAt: new Date().toISOString(),
+        paymentId: String(resourceId),
+        amount: payment?.transaction_amount || 0,
+        paymentMethod: payment?.payment_method_id || "mercado_pago_checkout_pro",
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
-      return res.status(200).json({ 
-        received: true, 
-        warning: "Could not map transaction ID to any internal user profile, saved as orphan in mp_subscriptions." 
-      });
+      purchaseRecorded = true;
+
+      console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+        firebaseAdminInitialized: getApps().length > 0,
+        firebaseProjectConfigured: !!process.env.FIREBASE_PROJECT_ID,
+        paymentId: String(resourceId),
+        paymentStatus: statusConsulted,
+        resolvedUid: null,
+        resolvedPlanCode: null,
+        userFound: false,
+        firestoreUpdated: false,
+        purchaseRecorded: true,
+        alreadyProcessed: false,
+        errorMessage: `Payment status is ${statusConsulted}, not approved. Plan skipped.`,
+        timestamp: new Date().toISOString()
+      }));
+
+      return res.status(200).json({ received: true, processed: false, ignored: true, reason: `payment_status_${statusConsulted}` });
     }
 
-    // Match plan and cycle details
-    if (explicitPlan) {
-      finalPlan = explicitPlan;
+    // We have an approved payment, extract user ID (UID) and Plan Code
+    if (externalReference && externalReference.includes('|')) {
+      const parts = externalReference.split('|');
+      userId = parts[0] ? parts[0].trim() : null;
+      if (parts[1]) {
+        planCode = parts[1].trim();
+      }
+    }
+
+    // Fallback: If externalReference is missing userId or planCode, retrieve from the payment metadata block
+    if (!userId || !planCode) {
+      const meta = payment.metadata || {};
+      const metadataUid = meta.uid || meta.user_id || meta.userId || '';
+      const metadataPlanCode = meta.plan_code || meta.planCode || '';
+
+      if (!userId && metadataUid) {
+        userId = String(metadataUid).trim();
+      }
+      if (!planCode && metadataPlanCode) {
+        planCode = String(metadataPlanCode).trim();
+      }
+    }
+
+    // If userId is still missing, lookup user document by email
+    const resolvedEmail = payerEmail || payment.payer?.email || '';
+    if (!userId && resolvedEmail) {
+      console.log(`[MercadoPago Webhook] Recovering UID by email lookup: ${resolvedEmail}...`);
+      userId = await findUserByEmailInFirestore(resolvedEmail);
+    }
+
+    if (!userId) {
+      errorMessage = "Could not map transaction payment to any user UID";
+      console.warn(`[MercadoPago Webhook Warning] ${errorMessage}`);
+
+      // Save as orphan record so that admins can synchronize or bind it manually in the Future
+      await subscriptionRecordRef.set({
+        id: String(resourceId),
+        userId: "unknown",
+        email: resolvedEmail || "unknown",
+        status: statusConsulted,
+        paymentId: String(resourceId),
+        amount: payment?.transaction_amount || 0,
+        paymentMethod: payment?.payment_method_id || "mercado_pago_checkout_pro",
+        description,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      purchaseRecorded = true;
+
+      console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+        firebaseAdminInitialized: getApps().length > 0,
+        firebaseProjectConfigured: !!process.env.FIREBASE_PROJECT_ID,
+        paymentId: String(resourceId),
+        paymentStatus: statusConsulted,
+        resolvedUid: null,
+        resolvedPlanCode: planCode || null,
+        userFound: false,
+        firestoreUpdated: false,
+        purchaseRecorded: true,
+        alreadyProcessed: false,
+        errorMessage,
+        timestamp: new Date().toISOString()
+      }));
+
+      return res.status(200).json({ received: true, processed: false, error: errorMessage });
+    }
+
+    // Map plans exactly as required by Etapa 2 and Etapa 5
+    const PLANS_MAP: Record<string, {
+      plan: 'PRO' | 'PREMIUM';
+      musicLimit: number;
+      durationDays: number;
+      billingCycle: 'monthly' | 'annual';
+    }> = {
+      pro_mensal: { plan: 'PRO', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
+      premium_mensal: { plan: 'PREMIUM', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
+      pro_anual: { plan: 'PRO', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
+      premium_anual: { plan: 'PREMIUM', musicLimit: 50, durationDays: 365, billingCycle: 'annual' },
+      
+      // Fallbacks
+      pro_monthly: { plan: 'PRO', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
+      premium_monthly: { plan: 'PREMIUM', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
+      pro_yearly: { plan: 'PRO', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
+      premium_yearly: { plan: 'PREMIUM', musicLimit: 50, durationDays: 365, billingCycle: 'annual' }
+    };
+
+    let finalPlan: 'PRO' | 'PREMIUM' = 'PRO';
+    let musicLimit = 15;
+    let billingCycle = 'monthly';
+    let durationDays = 30;
+
+    let resolvedPlanCode = (planCode || '').toLowerCase().trim();
+    // Normalize code variations
+    if (resolvedPlanCode.includes('premium')) {
+      if (resolvedPlanCode.includes('anual') || resolvedPlanCode.includes('annual') || resolvedPlanCode.includes('yearly')) {
+        resolvedPlanCode = 'premium_anual';
+      } else {
+        resolvedPlanCode = 'premium_mensal';
+      }
     } else {
-      // Map based on description/reason
+      if (resolvedPlanCode.includes('anual') || resolvedPlanCode.includes('annual') || resolvedPlanCode.includes('yearly')) {
+        resolvedPlanCode = 'pro_anual';
+      } else {
+        resolvedPlanCode = 'pro_mensal';
+      }
+    }
+
+    const matchedConfig = PLANS_MAP[resolvedPlanCode];
+    if (matchedConfig) {
+      finalPlan = matchedConfig.plan;
+      musicLimit = matchedConfig.musicLimit;
+      durationDays = matchedConfig.durationDays;
+      billingCycle = matchedConfig.billingCycle;
+    } else {
+      // Fallback
       const dLower = description.toLowerCase();
       if (dLower.includes('premium')) {
-        finalPlan = 'premium';
-      } else if (dLower.includes('pro')) {
-        finalPlan = 'pro';
-      } else {
-        finalPlan = 'pro'; // Default fallback upgrade
+        finalPlan = 'PREMIUM';
+        musicLimit = 50;
       }
-    }
-
-    if (explicitCycle) {
-      billingCycle = explicitCycle;
-    } else {
-      const dLower = description.toLowerCase();
-      if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('ano')) {
+      if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('yearly') || dLower.includes('ano')) {
         billingCycle = 'annual';
-      } else {
-        billingCycle = 'monthly';
+        durationDays = 365;
       }
     }
 
-    // Limits
-    if (finalPlan === 'premium') {
-      musicLimit = 50;
-    } else if (finalPlan === 'pro') {
-      musicLimit = 15;
-    } else {
-      musicLimit = 3;
-    }
+    const now = new Date();
+    const expires = new Date();
+    expires.setDate(now.getDate() + durationDays);
 
-    if (!planCode) {
-      planCode = `${finalPlan}_${billingCycle === 'annual' ? 'anual' : 'mensal'}`;
-    }
+    // Formulate database update payload
+    const updatePayload = {
+      plan: finalPlan, // "PRO" or "PREMIUM"
+      musicLimit: musicLimit,
+      billingCycle: billingCycle,
+      subscriptionStatus: "active",
+      planStatus: "active",
+      paymentStatus: "approved",
+      mercadoPagoPaymentId: String(resourceId),
+      planActivatedAt: FieldValue.serverTimestamp(),
+      planStartedAt: FieldValue.serverTimestamp(),
+      planExpiresAt: expires,
+      accessType: "subscriber",
+      subscriptionStartedAt: now.toISOString(),
+      subscriptionEndsAt: expires.toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    };
 
-    // Prepare matching payload variables
-    const isNowActive = subscriptionStatus === 'active';
-    const updatedPlan = isNowActive ? finalPlan : 'free';
-    const updatedLimit = isNowActive ? musicLimit : 3;
-
-    // 7. Update User profile in Firestore dual sync targets
     const userRef = getDb().collection("users").doc(userId);
     const artistRef = getDb().collection("artists").doc(userId);
 
-    let updatePayload: any = {};
-
-    if (isNowActive) {
-      const now = new Date();
-      const durationDays = PLANS_MAP[planCode]?.durationDays || 30;
-      const expires = new Date();
-      expires.setDate(now.getDate() + durationDays);
-
-      updatePayload = {
-        plan: finalPlan,
-        billingCycle: billingCycle,
-        musicLimit: musicLimit,
-        subscriptionStatus: "active",
-        paymentMethod: "mercado_pago_checkout_pro",
-        planActivatedAt: FieldValue.serverTimestamp(),
-        planExpiresAt: expires,
-        mercadoPagoPaymentId: mercadoPagoPaymentId || resourceId,
-        updatedAt: FieldValue.serverTimestamp()
-      };
-    } else {
-      updatePayload = {
-        plan: "free",
-        billingCycle: null,
-        musicLimit: 3,
-        subscriptionStatus: statusConsulted,
-        updatedAt: FieldValue.serverTimestamp()
-      };
-    }
-
-    if (mercadoPagoPaymentId) {
-      updatePayload.mercadoPagoPaymentId = mercadoPagoPaymentId;
-    }
-
-    console.log(`[MercadoPago Webhook] Updating user ${userId} profiles in Firestore...`, updatePayload);
-
+    // Write to dual targets
     await userRef.set(updatePayload, { merge: true });
     await artistRef.set(updatePayload, { merge: true });
+    firestoreUpdated = true;
 
-    // 8. Register/Save subscription record for the admin area list
-    const subscriptionRecordRef = getDb().collection("mp_subscriptions").doc(resourceId);
+    // Record correct transaction in mp_subscriptions
     await subscriptionRecordRef.set({
-      id: resourceId,
+      id: String(resourceId),
       userId: userId,
-      email: payerEmail || "unknown",
-      plan: updatedPlan,
-      billingCycle: isNowActive ? billingCycle : null,
+      uid: userId,
+      email: resolvedEmail || payerEmail || "unknown",
+      plan: finalPlan, // "PRO" or "PREMIUM"
+      planCode: resolvedPlanCode,
+      billingCycle: billingCycle,
       status: statusConsulted,
-      paymentId: mercadoPagoPaymentId || "",
-      subscriptionId: mercadoPagoSubscriptionId || "",
-      musicLimit: updatedLimit,
+      paymentId: String(resourceId),
+      subscriptionId: "",
+      musicLimit: musicLimit,
+      amount: payment?.transaction_amount || 19.90,
+      paymentMethod: payment?.payment_method_id || "mercado_pago_checkout_pro",
+      externalReference: externalReference,
+      createdAt: payment?.date_created || now.toISOString(),
+      approvedAt: payment?.date_approved || now.toISOString(),
+      processedAt: now.toISOString(),
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
 
-    console.log(`[MercadoPago Webhook] Successfully processed and authorized user plan update.`);
+    purchaseRecorded = true;
+
+    // Structured security search logging
+    console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+      firebaseAdminInitialized: getApps().length > 0,
+      firebaseProjectConfigured: !!process.env.FIREBASE_PROJECT_ID,
+      paymentId: String(resourceId),
+      paymentStatus: statusConsulted,
+      resolvedUid: userId,
+      resolvedPlanCode: resolvedPlanCode,
+      userFound: true,
+      firestoreUpdated: true,
+      purchaseRecorded: true,
+      alreadyProcessed: false,
+      errorMessage: null,
+      timestamp: now.toISOString()
+    }));
 
     return res.status(200).json({
       received: true,
       processed: true,
       userId,
-      plan: updatedPlan,
+      plan: finalPlan.toLowerCase(),
       status: statusConsulted
     });
 
   } catch (err: any) {
+    errorMessage = err?.message || String(err);
     console.error("[MercadoPago Webhook] Fatal error in processing webhook: ", err);
-    return res.status(200).json({ 
-      received: true, 
-      ignored: true, 
+
+    console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+      firebaseAdminInitialized: getApps().length > 0,
+      firebaseProjectConfigured: !!process.env.FIREBASE_PROJECT_ID,
+      paymentId: String(resourceId) || "unknown",
+      paymentStatus: statusConsulted,
+      resolvedUid: userId,
+      resolvedPlanCode: planCode || null,
+      userFound: !!userId,
+      firestoreUpdated,
+      purchaseRecorded,
+      alreadyProcessed: purchaseAlreadyProcessed,
+      errorMessage,
+      timestamp: new Date().toISOString()
+    }));
+
+    // Return HTTP 500 for non-successful processing so Mercado Pago can retry
+    return res.status(500).json({
+      received: true,
       error: true,
-      message: err?.message || String(err),
-      reason: "error_prevent_crash_status_200" 
+      message: errorMessage,
+      reason: "error_prevent_crash_status_500"
     });
   }
 }

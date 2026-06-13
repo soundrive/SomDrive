@@ -90,6 +90,11 @@ export default async function handler(req: any, res: any) {
         ]
       },
       external_reference: externalReference,
+      metadata: {
+        uid,
+        planCode,
+        purchaseType: "checkout_pro"
+      },
       notification_url: "https://www.somdrive.com.br/api/mercadopago-webhook",
       back_urls: {
         success: backUrl,

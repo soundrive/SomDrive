@@ -432,7 +432,11 @@ export default function AdminArea({
       const snap = await getDocs(collection(db, 'mp_subscriptions'));
       const list: any[] = [];
       snap.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        if (data.plan && typeof data.plan === 'string') {
+          data.plan = data.plan.toLowerCase();
+        }
+        list.push({ id: doc.id, ...data });
       });
       list.sort((a, b) => {
         const timeA = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : new Date(a.updatedAt || a.paidAt || 0).getTime();
@@ -449,7 +453,33 @@ export default function AdminArea({
   };
 
   const handleVerifySubscription = async (id: string) => {
-    triggerNotification("Este pagamento utiliza Checkout Pro de pagamento único. A sincronização e o vencimento são controlados automaticamente por Webhooks.");
+    try {
+      setVerifyingId(id);
+      triggerNotification("Processando sincronização com Mercado Pago...", false);
+      const res = await fetch('/api/mercadopago-webhook?reprocess=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'payment',
+          data: { id: id }
+        })
+      });
+      const data = await res.json();
+      if (data.processed) {
+        triggerNotification(`Sincronizado! Plano ${data.plan?.toUpperCase()} ativado para o usuário.`);
+        loadSubscriptions();
+        loadData();
+      } else if (data.ignored) {
+        triggerNotification(`Ignorado: ${data.reason || 'Não aprovado ou simulação'}`, true);
+      } else {
+        triggerNotification(`Divergência: ${data.error || 'Erro inesperado'}`, true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      triggerNotification(`Erro ao consultar webhook: ${err.message || String(err)}`, true);
+    } finally {
+      setVerifyingId(null);
+    }
   };
 
   const handleSaveSubEdit = async (e: React.FormEvent) => {
