@@ -15,6 +15,19 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: "Mercado Pago credentials not configured on the server." });
   }
 
+  // Diagnostic log (Security-Safe)
+  const isTokenConfigured = !!accessToken;
+  const tokenLength = accessToken ? accessToken.length : 0;
+  const tokenPrefix = accessToken ? accessToken.substring(0, 7) : "";
+  const environment = process.env.MERCADOPAGO_ENV === "test" ? "test" : "production";
+
+  console.log("[MercadoPago Diagnostic] Security configuration check:", {
+    tokenConfigured: isTokenConfigured,
+    tokenPrefix,
+    tokenLength,
+    environment
+  });
+
   try {
     const { uid, email, planCode } = req.body || {};
 
@@ -118,11 +131,29 @@ export default async function handler(req: any, res: any) {
     }
 
     const preference = await mpResponse.json();
-    const checkoutUrl = preference.init_point || preference.sandbox_init_point || '';
+    
+    // Choose correct URL based on environment set explicitly
+    const isSandboxEnv = process.env.MERCADOPAGO_ENV === "test";
+    const checkoutUrl = isSandboxEnv 
+      ? (preference.sandbox_init_point || preference.init_point || "") 
+      : (preference.init_point || "");
 
-    console.log("[MercadoPago Create Checkout Preference] Successfully created preference:", {
-      id: preference.id,
-      checkoutUrl
+    const returnedUrlType = isSandboxEnv ? "sandbox_init_point" : "init_point";
+    
+    let checkoutHost = "";
+    try {
+      if (checkoutUrl) {
+        const parsedUrl = new URL(checkoutUrl);
+        checkoutHost = parsedUrl.host;
+      }
+    } catch (urlErr) {
+      console.warn("[MercadoPago Diagnostic] Warning while parsing checkoutUrl:", urlErr);
+    }
+
+    console.log("[MercadoPago Diagnostic] Checkout preference result:", {
+      returnedUrlType,
+      checkoutHost,
+      checkoutUrlPlaceholder: checkoutUrl ? `${checkoutUrl.substring(0, 30)}...` : ""
     });
 
     return res.json({
