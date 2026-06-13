@@ -99,6 +99,7 @@ export default function AdminArea({
 
   // Manual payment verification panel states
   const [manualPaymentId, setManualPaymentId] = useState('');
+  const [selectedForcePlan, setSelectedForcePlan] = useState<'pro_mensal' | 'premium_mensal' | 'pro_anual' | 'premium_anual'>('pro_mensal');
   const [manualVerifying, setManualVerifying] = useState(false);
   const [manualVerifyResult, setManualVerifyResult] = useState<{
     success: boolean;
@@ -494,38 +495,50 @@ export default function AdminArea({
     }
   };
 
-  const handleManualVerifyPayment = async () => {
-    if (!manualPaymentId.trim()) {
+  const handleManualVerifyPayment = async (forcePlanParam?: any) => {
+    const rawId = String(manualPaymentId || '').trim();
+    if (!rawId) {
       triggerNotification("Por favor, digite um ID de pagamento válido.", true);
       return;
     }
 
+    const finalForcePlan = (typeof forcePlanParam === 'string') ? forcePlanParam : undefined;
+    const isForced = !!finalForcePlan;
+
     try {
       setManualVerifying(true);
-      setManualVerifyResult(null);
-      triggerNotification("Iniciando verificação manual de pagamento...", false);
+      if (!isForced) {
+        setManualVerifyResult(null);
+      }
+      triggerNotification(isForced ? "Ativando plano diretamente no banco de dados..." : "Iniciando verificação manual de pagamento...", false);
+
+      const payload: { action: string; paymentId: string; forcePlan?: string } = {
+        action: 'verify_payment',
+        paymentId: rawId
+      };
+
+      if (finalForcePlan) {
+        payload.forcePlan = finalForcePlan;
+      }
 
       const res = await fetch('/api/mercadopago-webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'verify_payment',
-          paymentId: manualPaymentId.trim()
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
       
       setManualVerifyResult({
         success: !!data.success,
-        paymentId: data.paymentId || manualPaymentId.trim(),
+        paymentId: data.paymentId || rawId,
         status: data.status || 'unknown',
         planActivated: !!data.planActivated,
         message: data.message || 'Resultado sem mensagem descritiva.'
       });
 
       if (data.success) {
-        triggerNotification("Pagamento reprocessado e plano ativado com sucesso!");
+        triggerNotification(isForced ? "Plano ativado com sucesso!" : "Pagamento reprocessado e plano ativado com sucesso!");
         loadSubscriptions();
         loadData();
       } else {
@@ -533,12 +546,13 @@ export default function AdminArea({
       }
     } catch (err: any) {
       console.error(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
       setManualVerifyResult({
         success: false,
-        paymentId: manualPaymentId.trim(),
+        paymentId: rawId,
         status: 'error',
         planActivated: false,
-        message: `Erro de rede/servidor ao enviar requisição: ${err.message || String(err)}`
+        message: `Erro de rede/servidor ao enviar requisição: ${errMsg}`
       });
       triggerNotification("Erro ao conectar com servidor para verificação.", true);
     } finally {
@@ -2325,7 +2339,7 @@ export default function AdminArea({
                       className="flex-1 bg-slate-950 px-4 py-3 rounded-xl border border-slate-850 text-slate-200 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
                     />
                     <button
-                      onClick={handleManualVerifyPayment}
+                      onClick={() => handleManualVerifyPayment()}
                       disabled={manualVerifying}
                       className="px-5 py-3 bg-orange-600 hover:bg-orange-500 text-slate-955 hover:text-slate-950 font-bold rounded-xl transition text-xs shrink-0 disabled:opacity-40 disabled:cursor-not-allowed select-none flex items-center justify-center gap-1.5 cursor-pointer"
                     >
@@ -2342,10 +2356,16 @@ export default function AdminArea({
 
                   {/* Manual verification result display */}
                   {manualVerifyResult && (
-                    <div className={`p-4 rounded-xl text-xs font-sans border animate-fade-in ${manualVerifyResult.success ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                    <div className={`p-4 rounded-xl text-xs font-sans border animate-fade-in ${
+                      manualVerifyResult.success 
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                        : manualVerifyResult.status === 'user_found'
+                          ? 'bg-amber-500/10 border-amber-500/20 text-text-amber-300'
+                          : 'bg-red-500/10 border-red-500/20 text-red-500'
+                    }`} style={{ color: manualVerifyResult.status === 'user_found' ? '#fcd34d' : undefined }}>
                       <div className="font-bold flex items-center justify-between mb-1.5">
                         <span className="uppercase tracking-wider">
-                          Resultado da Verificação: {manualVerifyResult.success ? 'SUCESSO' : 'ERRO / ALERTA'}
+                          Resultado da Verificação: {manualVerifyResult.success ? 'SUCESSO' : manualVerifyResult.status === 'user_found' ? 'USUÁRIO LOCALIZADO' : 'ERRO / ALERTA'}
                         </span>
                         <button 
                           onClick={() => setManualVerifyResult(null)} 
@@ -2356,12 +2376,37 @@ export default function AdminArea({
                       </div>
                       <p className="leading-relaxed whitespace-pre-wrap">{manualVerifyResult.message}</p>
                       
+                      {manualVerifyResult.status === 'user_found' && (
+                        <div className="mt-3.5 p-3 bg-slate-950/85 rounded-xl border border-slate-800 space-y-3">
+                          <p className="text-[11px] font-semibold text-slate-200">Selecione o plano para ativação direta:</p>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <select
+                              value={selectedForcePlan}
+                              onChange={(e: any) => setSelectedForcePlan(e.target.value)}
+                              className="bg-slate-900 border border-slate-800 text-xs text-slate-200 px-3 py-2 rounded-lg outline-none flex-1 focus:ring-1 focus:ring-orange-500"
+                            >
+                              <option value="pro_mensal">SomDrive PRO - Mensal (R$ 19,90)</option>
+                              <option value="pro_anual">SomDrive PRO - Anual (R$ 199,00)</option>
+                              <option value="premium_mensal">SomDrive PREMIUM - Mensal (R$ 39,90)</option>
+                              <option value="premium_anual">SomDrive PREMIUM - Anual (R$ 399,00)</option>
+                            </select>
+                            <button
+                              onClick={() => handleManualVerifyPayment(selectedForcePlan)}
+                              disabled={manualVerifying}
+                              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold rounded-lg transition text-xs shrink-0 cursor-pointer select-none"
+                            >
+                              {manualVerifying ? 'ATIVANDO...' : 'FORÇAR ATIVAÇÃO'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-2 pt-2 border-t border-slate-850/40 grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
                         <div>
                           <span className="text-slate-400">ID Fornecido:</span> {manualVerifyResult.paymentId}
                         </div>
                         <div>
-                          <span className="text-slate-400">Status API:</span> <span className={`uppercase font-bold ${manualVerifyResult.status === 'approved' ? 'text-emerald-400' : 'text-amber-500'}`}>{manualVerifyResult.status}</span>
+                          <span className="text-slate-400">Status API:</span> <span className={`uppercase font-bold ${manualVerifyResult.success ? 'text-emerald-400' : manualVerifyResult.status === 'user_found' ? 'text-amber-400' : 'text-amber-500'}`}>{manualVerifyResult.status}</span>
                         </div>
                         <div className="col-span-2">
                           <span className="text-slate-400">Plano Ativado no Firestore:</span> {manualVerifyResult.planActivated ? <span className="text-emerald-400 font-bold">SIM ✅</span> : <span className="text-slate-500 font-bold">NÃO ❌</span>}

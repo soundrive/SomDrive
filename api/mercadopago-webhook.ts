@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
@@ -150,7 +153,8 @@ async function findUserByEmailInFirestore(email: string): Promise<string | null>
 
 // CORE FUNCTION: PROCESS SINGLE PAYMENT ID
 async function processSinglePayment(paymentId: string, merchantOrderId = "", forceUpdate = false) {
-  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const accessTokenRaw = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const accessToken = cleanEnvValue(accessTokenRaw);
   if (!accessToken) {
     throw new Error("Sem MERCADOPAGO_ACCESS_TOKEN no servidor");
   }
@@ -164,8 +168,8 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
   });
 
   if (!mpResponse.ok) {
-    if (mpResponse.status === 404) {
-      return { success: false, status: "not_found", message: "Sem correspondencia para este ID na API do MP (404)" };
+    if (mpResponse.status === 404 || mpResponse.status === 400 || mpResponse.status === 403) {
+      return { success: false, status: "not_found", message: `ID não encontrado ou sem correspondência na API do MP (Status ${mpResponse.status})` };
     }
     throw new Error(`Retorno HTTP ${mpResponse.status} na API do Mercado Pago`);
   }
@@ -312,6 +316,20 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
     await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
     await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
     planActivated = true;
+  } else if (status === 'refunded' && resolvedUid) {
+    // Revert user/artist to FREE tier if the payment has been refunded
+    const updatePayload = {
+      plan: "FREE",
+      musicLimit: 5,
+      subscriptionStatus: "refunded",
+      planStatus: "refunded",
+      paymentStatus: "refunded",
+      accessType: "free",
+      planExpiresAt: null,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
+    await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
   }
 
   // Save the record in mp_subscriptions
@@ -365,6 +383,387 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
   };
 }
 
+// CORE FUNCTION: PROCESS SINGLE PREAPPROVAL (SUBSCRIPTION) ID
+async function processSinglePreapproval(preapprovalId: string, forceUpdate = false) {
+  const accessTokenRaw = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const accessToken = cleanEnvValue(accessTokenRaw);
+  if (!accessToken) {
+    throw new Error("Sem MERCADOPAGO_ACCESS_TOKEN no servidor");
+  }
+
+  const dbInstanceLocal = getDb();
+
+  // Fetch preapproval from MP API
+  const mpUrl = `https://api.mercadopago.com/preapproval/${preapprovalId}`;
+  const mpResponse = await fetch(mpUrl, {
+    headers: { "Authorization": `Bearer ${accessToken}` }
+  });
+
+  if (!mpResponse.ok) {
+    if (mpResponse.status === 404 || mpResponse.status === 400 || mpResponse.status === 403) {
+      return { success: false, status: "not_found", message: `Assinatura não encontrada ou formato de ID inválido na API de Assinaturas do MP (Status ${mpResponse.status})` };
+    }
+    throw new Error(`Retorno HTTP ${mpResponse.status} na API de Assinaturas do Mercado Pago`);
+  }
+
+  const preapproval = await mpResponse.json();
+  const status = preapproval.status || 'unknown'; // authorized, paused, etc.
+  const payerEmail = preapproval.payer_email || '';
+  const externalReference = preapproval.external_reference || '';
+  const description = preapproval.reason || 'Assinatura SomDrive';
+  const amount = preapproval.auto_recurring?.transaction_amount || 0;
+  const dateCreated = preapproval.date_created || '';
+  const dateApproved = preapproval.last_modified || ''; 
+
+  // Check idempotency with identical status unless forced
+  const subscriptionRecordRef = dbInstanceLocal.collection("mp_subscriptions").doc(String(preapprovalId));
+  const existingDoc = await subscriptionRecordRef.get();
+  if (existingDoc.exists && !forceUpdate) {
+    const docData = existingDoc.data();
+    if (docData && docData.status === status && docData.processedAt) {
+      return {
+        success: true,
+        paymentId: String(preapprovalId),
+        status: status,
+        planActivated: !!docData.planActivated,
+        message: status === 'authorized'
+          ? "Assinatura já foi processada anteriormente e o plano está ativo."
+          : `Assinatura já foi registrada anteriormente com o status '${status}'.`,
+        alreadyProcessed: true
+      };
+    }
+  }
+
+  // Resolve UID and Plan Code
+  let resolvedUid: string | null = null;
+  let resolvedPlanCode = '';
+
+  if (externalReference && externalReference.includes('|')) {
+    const parts = externalReference.split('|');
+    resolvedUid = parts[0] ? parts[0].trim() : null;
+    if (parts[1]) {
+      resolvedPlanCode = parts[1].trim();
+    }
+  }
+
+  if (!resolvedUid || !resolvedPlanCode) {
+    const meta = preapproval.metadata || {};
+    const metadataUid = meta.uid || meta.user_id || meta.userId || '';
+    const metadataPlanCode = meta.plan_code || meta.planCode || '';
+
+    if (!resolvedUid && metadataUid) {
+      resolvedUid = String(metadataUid).trim();
+    }
+    if (!resolvedPlanCode && metadataPlanCode) {
+      resolvedPlanCode = String(metadataPlanCode).trim();
+    }
+  }
+
+  if (!resolvedUid && payerEmail) {
+    resolvedUid = await findUserByEmailInFirestore(payerEmail);
+  }
+
+  let planKey = (resolvedPlanCode || '').toLowerCase().trim();
+  if (planKey.includes('premium')) {
+    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
+      planKey = 'premium_anual';
+    } else {
+      planKey = 'premium_mensal';
+    }
+  } else {
+    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
+      planKey = 'pro_anual';
+    } else {
+      planKey = 'pro_mensal';
+    }
+  }
+
+  const PLANS_MAP: Record<string, {
+    plan: 'PRO' | 'PREMIUM';
+    musicLimit: number;
+    durationDays: number;
+    billingCycle: 'monthly' | 'annual';
+  }> = {
+    pro_mensal: { plan: 'PRO', musicLimit: 15, durationDays: 31, billingCycle: 'monthly' },
+    premium_mensal: { plan: 'PREMIUM', musicLimit: 50, durationDays: 31, billingCycle: 'monthly' },
+    pro_anual: { plan: 'PRO', musicLimit: 15, durationDays: 366, billingCycle: 'annual' },
+    premium_anual: { plan: 'PREMIUM', musicLimit: 50, durationDays: 366, billingCycle: 'annual' },
+  };
+
+  let finalPlan: 'PRO' | 'PREMIUM' = 'PRO';
+  let musicLimit = 15;
+  let durationDays = 31;
+  let billingCycle = 'monthly';
+
+  const matchedConfig = PLANS_MAP[planKey];
+  if (matchedConfig) {
+    finalPlan = matchedConfig.plan;
+    musicLimit = matchedConfig.musicLimit;
+    durationDays = matchedConfig.durationDays;
+    billingCycle = matchedConfig.billingCycle;
+  } else {
+    const dLower = description.toLowerCase();
+    if (dLower.includes('premium')) {
+      finalPlan = 'PREMIUM';
+      musicLimit = 50;
+    }
+    if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('yearly') || dLower.includes('ano')) {
+      billingCycle = 'annual';
+      durationDays = 366;
+    }
+  }
+
+  let planActivated = false;
+  const isApproved = status === 'authorized' || status === 'active';
+
+  if (isApproved && resolvedUid) {
+    const now = new Date();
+    const expires = new Date();
+    expires.setDate(now.getDate() + durationDays);
+
+    const updatePayload = {
+      plan: finalPlan,
+      musicLimit: musicLimit,
+      billingCycle: billingCycle,
+      subscriptionStatus: "active",
+      planStatus: "active",
+      paymentStatus: "approved",
+      mercadoPagoSubscriptionId: String(preapprovalId),
+      planActivatedAt: FieldValue.serverTimestamp(),
+      planStartedAt: FieldValue.serverTimestamp(),
+      planExpiresAt: expires,
+      accessType: "subscriber",
+      subscriptionStartedAt: now.toISOString(),
+      subscriptionEndsAt: expires.toISOString(),
+      updatedAt: FieldValue.serverTimestamp()
+    };
+
+    await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
+    await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
+    planActivated = true;
+  }
+
+  const finalSubMap: any = {
+    id: String(preapprovalId),
+    userId: resolvedUid || "unknown",
+    uid: resolvedUid || "unknown",
+    email: payerEmail || "unknown",
+    plan: finalPlan.toLowerCase(),
+    planCode: planKey,
+    billingCycle: billingCycle,
+    status: status,
+    paymentId: "",
+    subscriptionId: String(preapprovalId),
+    transactionNumber: String(preapprovalId),
+    musicLimit: musicLimit,
+    amount: amount,
+    externalReference: externalReference,
+    createdAt: dateCreated,
+    processedAt: new Date().toISOString(),
+    planActivated: planActivated,
+    paidAt: dateApproved || dateCreated || new Date().toISOString(),
+    updatedAt: FieldValue.serverTimestamp()
+  };
+
+  await subscriptionRecordRef.set(finalSubMap, { merge: true });
+
+  let displayMessage = `Assinatura gravada com status '${status}' (plano não ativado).`;
+  if (isApproved) {
+    if (resolvedUid) {
+      displayMessage = `Assinatura verificada com sucesso! Plano ${finalPlan} liberado para o e-mail: ${payerEmail}.`;
+    } else {
+      displayMessage = `Assinatura autorizada, mas nenhum usuário associado (e-mail: ${payerEmail}) foi encontrado.`;
+    }
+  }
+
+  return {
+    success: isApproved && resolvedUid !== null,
+    paymentId: String(preapprovalId),
+    status: status,
+    planActivated: planActivated,
+    message: displayMessage
+  };
+}
+
+// Fallback search to find payments by external_reference, preference_id, payer.email, order.id, or scanner in Mercado Pago API
+async function searchPaymentsAndProcess(targetId: string, accessToken: string) {
+  try {
+    const foundPayments: any[] = [];
+    const addUniquePayments = (payments: any[]) => {
+      for (const p of payments) {
+        if (p && p.id) {
+          const pIdStr = String(p.id);
+          if (!foundPayments.some(fp => String(fp.id) === pIdStr)) {
+            foundPayments.push(p);
+          }
+        }
+      }
+    };
+
+    const targetClean = targetId.trim();
+    if (!targetClean) return { found: false, paymentIds: [], status: 'unknown', planActivated: false };
+
+    // 1. Search by external_reference
+    try {
+      const extRefUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(targetClean)}`;
+      const extRefRes = await fetch(extRefUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+      if (extRefRes.ok) {
+        const data = await extRefRes.json();
+        if (data.results && data.results.length > 0) {
+          addUniquePayments(data.results);
+        }
+      }
+    } catch (e) {
+      console.warn("Error search by external_reference:", e);
+    }
+
+    // 2. Search by preference_id
+    try {
+      const prefUrl = `https://api.mercadopago.com/v1/payments/search?preference_id=${encodeURIComponent(targetClean)}`;
+      const prefRes = await fetch(prefUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+      if (prefRes.ok) {
+        const data = await prefRes.json();
+        if (data.results && data.results.length > 0) {
+          addUniquePayments(data.results);
+        }
+      }
+    } catch (e) {
+      console.warn("Error search by preference_id:", e);
+    }
+
+    // 3. Search by order.id
+    try {
+      const orderUrl = `https://api.mercadopago.com/v1/payments/search?order.id=${encodeURIComponent(targetClean)}`;
+      const orderRes = await fetch(orderUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+      if (orderRes.ok) {
+        const data = await orderRes.json();
+        if (data.results && data.results.length > 0) {
+          addUniquePayments(data.results);
+        }
+      }
+    } catch (e) {
+      console.warn("Error search by order.id:", e);
+    }
+
+    // 4. Search by payer.email if email matches pattern
+    if (targetClean.includes('@')) {
+      try {
+        const emailUrl = `https://api.mercadopago.com/v1/payments/search?payer.email=${encodeURIComponent(targetClean.toLowerCase())}`;
+        const emailRes = await fetch(emailUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        if (emailRes.ok) {
+          const data = await emailRes.json();
+          if (data.results && data.results.length > 0) {
+            addUniquePayments(data.results);
+          }
+        }
+      } catch (e) {
+        console.warn("Error search by email:", e);
+      }
+    }
+
+    // 5. Scan last 100 payments as a bulletproof safety net
+    try {
+      const scanUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=100`;
+      const scanRes = await fetch(scanUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+      if (scanRes.ok) {
+        const data = await scanRes.json();
+        const results = data.results || [];
+        const matchLower = targetClean.toLowerCase();
+        const matchedRecent = results.filter((p: any) => {
+          if (!p) return false;
+          // Direct ID match
+          if (String(p.id) === matchLower) return true;
+          // order ID match
+          if (p.order && String(p.order.id) === matchLower) return true;
+          // external_reference starts with, contains, or equals
+          const extRef = String(p.external_reference || '').toLowerCase();
+          if (extRef === matchLower || extRef.includes(matchLower)) return true;
+          // preference_id match
+          const prefId = String(p.preference_id || '').toLowerCase();
+          if (prefId === matchLower || prefId.includes(matchLower)) return true;
+          // description match
+          if (String(p.description || '').toLowerCase().includes(matchLower)) return true;
+          // transaction number
+          const txNum = String(p.transaction_number || '').toLowerCase();
+          const detailsTxId = String(p.transaction_details?.transaction_id || '').toLowerCase();
+          const detailsInstitutionTxId = String(p.transaction_details?.financial_institution || '').toLowerCase();
+          if (txNum === matchLower || detailsTxId === matchLower || detailsInstitutionTxId === matchLower) return true;
+          // Payer email match
+          if (p.payer && String(p.payer.email || '').toLowerCase() === matchLower) return true;
+          // Metadata comparison
+          if (p.metadata) {
+            const metaUid = String(p.metadata.uid || p.metadata.user_id || p.metadata.userId || '').toLowerCase();
+            const metaEmail = String(p.metadata.email || '').toLowerCase();
+            if (metaUid === matchLower || metaEmail === matchLower) return true;
+          }
+          return false;
+        });
+
+        if (matchedRecent.length > 0) {
+          addUniquePayments(matchedRecent);
+        }
+      }
+    } catch (e) {
+      console.warn("Error scanning last 100 payments:", e);
+    }
+
+    // 6. Search preapprovals by external_reference as fallback
+    try {
+      const preappSearchUrl = `https://api.mercadopago.com/preapproval/search?external_reference=${encodeURIComponent(targetClean)}`;
+      const preappSearchRes = await fetch(preappSearchUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+      if (preappSearchRes.ok) {
+        const data = await preappSearchRes.json();
+        const preappResults = data.results || [];
+        for (const item of preappResults) {
+          if (item && item.id) {
+            const pRes = await processSinglePreapproval(String(item.id), true);
+            if (pRes.success || pRes.planActivated) {
+              return {
+                found: true,
+                paymentIds: [String(item.id)],
+                status: pRes.status,
+                planActivated: pRes.planActivated
+              };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Error search preapprovals by external_reference in comprehensive search:", e);
+    }
+
+    // Process all found payments through our core logic
+    if (foundPayments.length > 0) {
+      let atLeastOneActivated = false;
+      let lastStatus = 'unknown';
+      const foundIds: string[] = [];
+
+      for (const p of foundPayments) {
+        if (p.id) {
+          const pIdStr = String(p.id);
+          foundIds.push(pIdStr);
+          const pResult = await processSinglePayment(pIdStr, "", true);
+          if (pResult.planActivated) {
+            atLeastOneActivated = true;
+          }
+          lastStatus = pResult.status;
+        }
+      }
+
+      return {
+        found: true,
+        paymentIds: foundIds,
+        status: lastStatus,
+        planActivated: atLeastOneActivated
+      };
+    }
+
+  } catch (err) {
+    console.warn("[MercadoPago Search Warning] error doing comprehensive payments search:", err);
+  }
+  return { found: false, paymentIds: [], status: 'unknown', planActivated: false };
+}
+
 export default async function handler(req: any, res: any) {
   const action = req.body?.action || req.query?.action;
 
@@ -384,7 +783,7 @@ export default async function handler(req: any, res: any) {
     const targetId = String(manualPaymentId).trim();
 
     try {
-      const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+      const accessToken = cleanEnvValue(process.env.MERCADOPAGO_ACCESS_TOKEN);
       if (!accessToken) {
         return res.status(200).json({
           success: false,
@@ -395,11 +794,15 @@ export default async function handler(req: any, res: any) {
         });
       }
 
+      let paymentFound = false;
+      let finalStatus = 'unknown';
+      let atLeastOneActivated = false;
+      let processedPaymentIds: string[] = [];
+
       // Step A: Attempt processing as direct paymentId
       const paymentResult = await processSinglePayment(targetId, "", true);
       
       if (paymentResult.status !== 'not_found' && paymentResult.success !== undefined) {
-        // Log SECURE JSON trace
         console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
           manualVerificationRequested: true,
           paymentId: targetId,
@@ -416,7 +819,37 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json(paymentResult);
       }
 
-      // Step B: If payment ID returned 404, check as merchant_order
+      // Step B: Try searching payments by external_reference (matching additional reference)
+      const searchRefResult = await searchPaymentsAndProcess(targetId, accessToken);
+      if (searchRefResult.found) {
+        paymentFound = true;
+        finalStatus = searchRefResult.status;
+        atLeastOneActivated = searchRefResult.planActivated;
+        processedPaymentIds = searchRefResult.paymentIds;
+
+        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+          manualVerificationRequested: true,
+          paymentId: targetId,
+          paymentFound: true,
+          paymentStatus: finalStatus,
+          firebaseAdminInitialized: true,
+          resolvedUid: null,
+          resolvedPlanCode: null,
+          firestoreUpdated: atLeastOneActivated,
+          alreadyProcessed: false,
+          errorMessage: null
+        }));
+
+        return res.status(200).json({
+          success: true,
+          paymentId: processedPaymentIds[0] || targetId,
+          status: finalStatus,
+          planActivated: atLeastOneActivated,
+          message: `Código de Referência Adicional identificado via pesquisa! Sincronizado ${processedPaymentIds.length} pagamento(s).`
+        });
+      }
+
+      // Step C: Try fetching as merchant_order
       const orderUrl = `https://api.mercadopago.com/merchant_orders/${targetId}`;
       const orderResponse = await fetch(orderUrl, {
         headers: { "Authorization": `Bearer ${accessToken}` }
@@ -449,22 +882,20 @@ export default async function handler(req: any, res: any) {
           });
         }
 
-        let atLeastOneActivated = false;
-        let lastStatus = 'unknown';
-
         for (const p of paymentsList) {
           const pResult = await processSinglePayment(String(p.id), targetId, true);
+          processedPaymentIds.push(String(p.id));
           if (pResult.planActivated) {
             atLeastOneActivated = true;
           }
-          lastStatus = pResult.status;
+          finalStatus = pResult.status;
         }
 
         console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
           manualVerificationRequested: true,
           paymentId: targetId,
           paymentFound: true,
-          paymentStatus: lastStatus,
+          paymentStatus: finalStatus,
           firebaseAdminInitialized: true,
           resolvedUid: null,
           resolvedPlanCode: null,
@@ -476,13 +907,195 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({
           success: true,
           paymentId: targetId,
-          status: lastStatus,
+          status: finalStatus,
           planActivated: atLeastOneActivated,
           message: `Código de Ordem de Compra identificado com sucesso! Sincronizado ${paymentsList.length} pagamento(s).`
         });
       }
 
-      // Step C: If both are 404
+      // Step D: Try checking /v1/payments/search?order.id={targetId} as fallback for merchant order
+      try {
+        const searchOrderUrl = `https://api.mercadopago.com/v1/payments/search?order.id=${encodeURIComponent(targetId)}`;
+        const searchOrderResponse = await fetch(searchOrderUrl, {
+          headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        if (searchOrderResponse.ok) {
+          const respData = await searchOrderResponse.json();
+          const results = respData.results || [];
+          if (results.length > 0) {
+            for (const p of results) {
+              if (p.id) {
+                const pIdStr = String(p.id);
+                processedPaymentIds.push(pIdStr);
+                const pResult = await processSinglePayment(pIdStr, targetId, true);
+                if (pResult.planActivated) {
+                  atLeastOneActivated = true;
+                }
+                finalStatus = pResult.status;
+              }
+            }
+
+            console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+              manualVerificationRequested: true,
+              paymentId: targetId,
+              paymentFound: true,
+              paymentStatus: finalStatus,
+              firebaseAdminInitialized: true,
+              resolvedUid: null,
+              resolvedPlanCode: null,
+              firestoreUpdated: atLeastOneActivated,
+              alreadyProcessed: false,
+              errorMessage: null
+            }));
+
+            return res.status(200).json({
+              success: true,
+              paymentId: targetId,
+              status: finalStatus,
+              planActivated: atLeastOneActivated,
+              message: `Código de Ordem (Pesquisa) identificado com sucesso! Sincronizado ${results.length} pagamento(s).`
+            });
+          }
+        }
+      } catch (errQuery) {
+        console.warn("[MercadoPago Order Search Warning] Error searching by order.id:", errQuery);
+      }
+
+      // Step DA: Try searching/processing as preapproval subscription ID direct
+      try {
+        const preappResult = await processSinglePreapproval(targetId, true);
+        if (preappResult.status !== 'not_found' && preappResult.success !== undefined) {
+          console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+            manualVerificationRequested: true,
+            paymentId: targetId,
+            paymentFound: true,
+            paymentStatus: preappResult.status,
+            firebaseAdminInitialized: true,
+            resolvedUid: null,
+            resolvedPlanCode: null,
+            firestoreUpdated: preappResult.planActivated,
+            alreadyProcessed: !!preappResult.alreadyProcessed,
+            errorMessage: null
+          }));
+
+          return res.status(200).json(preappResult);
+        }
+      } catch (errPre) {
+        console.warn("[MercadoPago Preapproval Direct Warning] Error processing direct preapproval ID:", errPre);
+      }
+
+      // Step EA: Find if targetId matches any registered user's email or uid directly in our db as a fallback for direct release
+      let userDocId: string | null = null;
+      let userEmailFound = '';
+      
+      const dbInstanceLocal = getDb();
+      if (targetId.includes('@')) {
+        userDocId = await findUserByEmailInFirestore(targetId);
+        if (userDocId) {
+          userEmailFound = targetId.toLowerCase().trim();
+        }
+      } else {
+        // Try direct lookup of UID
+        const uDoc = await dbInstanceLocal.collection("users").doc(targetId).get();
+        if (uDoc.exists) {
+          userDocId = targetId;
+          userEmailFound = uDoc.data()?.email || '';
+        } else {
+          const aDoc = await dbInstanceLocal.collection("artists").doc(targetId).get();
+          if (aDoc.exists) {
+            userDocId = targetId;
+            userEmailFound = aDoc.data()?.email || '';
+          }
+        }
+      }
+
+      if (userDocId) {
+        const forcePlan = req.body?.forcePlan; // e.g. pro_mensal, premium_mensal, pro_anual, premium_anual
+        if (forcePlan) {
+          let finalPlan: 'PRO' | 'PREMIUM' = 'PRO';
+          let musicLimit = 15;
+          let durationDays = 31;
+          let billingCycle = 'monthly';
+          
+          if (String(forcePlan).includes('premium')) {
+            finalPlan = 'PREMIUM';
+            musicLimit = 50;
+          }
+          if (String(forcePlan).includes('anual')) {
+            billingCycle = 'annual';
+            durationDays = 366;
+          }
+          
+          const now = new Date();
+          const expires = new Date();
+          expires.setDate(now.getDate() + durationDays);
+
+          const updatePayload = {
+            plan: finalPlan,
+            musicLimit: musicLimit,
+            billingCycle: billingCycle,
+            subscriptionStatus: "active",
+            planStatus: "active",
+            paymentStatus: "approved",
+            mercadoPagoPaymentId: `MANUAL_FORCE_${Date.now()}`,
+            planActivatedAt: FieldValue.serverTimestamp(),
+            planStartedAt: FieldValue.serverTimestamp(),
+            planExpiresAt: expires,
+            accessType: "subscriber",
+            subscriptionStartedAt: now.toISOString(),
+            subscriptionEndsAt: expires.toISOString(),
+            updatedAt: FieldValue.serverTimestamp()
+          };
+
+          await dbInstanceLocal.collection("users").doc(userDocId).set(updatePayload, { merge: true });
+          await dbInstanceLocal.collection("artists").doc(userDocId).set(updatePayload, { merge: true });
+
+          // Record in mp_subscriptions as manual
+          const manualSubId = `sub_manual_${userDocId}_${Date.now().toString().slice(-6)}`;
+          await dbInstanceLocal.collection("mp_subscriptions").doc(manualSubId).set({
+            id: manualSubId,
+            userId: userDocId,
+            uid: userDocId,
+            email: userEmailFound,
+            plan: finalPlan.toLowerCase(),
+            planCode: forcePlan,
+            billingCycle: billingCycle,
+            status: "approved",
+            paymentId: "",
+            subscriptionId: "",
+            transactionNumber: "MANUAL_BY_ADMIN",
+            musicLimit: musicLimit,
+            amount: finalPlan === 'PREMIUM' ? 39.90 : 19.90,
+            externalReference: "MANUAL_OVERRIDE_BY_ADMIN",
+            processedAt: new Date().toISOString(),
+            planActivated: true,
+            paidAt: new Date().toISOString(),
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          return res.status(200).json({
+            success: true,
+            paymentId: manualSubId,
+            status: 'approved',
+            planActivated: true,
+            message: `Plano ${finalPlan} (${billingCycle === 'annual' ? 'Anual' : 'Mensal'}) ativado FORÇADAMENTE com sucesso pelo administrador para o usuário: ${userEmailFound}`
+          });
+        }
+
+        return res.status(200).json({
+          success: false,
+          paymentId: targetId,
+          status: 'user_found',
+          planActivated: false,
+          userFound: {
+            uid: userDocId,
+            email: userEmailFound
+          },
+          message: `Identificador não localizado no Mercado Pago. Porém, localizamos o usuário '${userEmailFound}' no banco de dados! Deseja fazer a liberação manual direta para este usuário?`
+        });
+      }
+
+      // Step E: If both are 404
       console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
         manualVerificationRequested: true,
         paymentId: targetId,
@@ -501,7 +1114,7 @@ export default async function handler(req: any, res: any) {
         paymentId: targetId,
         status: 'not_found',
         planActivated: false,
-        message: "Identificador não encontrado como paymentId nem merchantOrderId."
+        message: "Identificador não encontrado como paymentId, subscriptionId ou email no Mercado Pago, e nenhum usuário cadastrado com este e-mail/ID foi localizado no banco."
       });
 
     } catch (err: any) {
@@ -517,12 +1130,24 @@ export default async function handler(req: any, res: any) {
   }
 
   // 2. WEBHOOK NOTIFICATIONS INCOMING FLOW
-  const eventType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || 'payment';
+  let eventType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || '';
+  const actionField = req.body?.action || '';
+
+  if (!eventType) {
+    if (actionField.startsWith('payment.')) {
+      eventType = 'payment';
+    } else if (actionField.startsWith('merchant_order.')) {
+      eventType = 'merchant_order';
+    } else {
+      eventType = 'payment';
+    }
+  }
+
   const resourceId = req.body?.data?.id || req.body?.id || req.query?.['data.id'] || req.query?.data?.id || req.query?.id || '';
 
   try {
-    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+    const accessToken = cleanEnvValue(process.env.MERCADOPAGO_ACCESS_TOKEN);
+    const webhookSecret = cleanEnvValue(process.env.MERCADOPAGO_WEBHOOK_SECRET);
     const isManualReprocess = req.query?.reprocess === 'true';
 
     if (!accessToken) {
