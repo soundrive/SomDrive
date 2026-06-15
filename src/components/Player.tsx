@@ -362,7 +362,8 @@ export default function Player({
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
         const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.somdrive.com.br';
-        const brandVersion = "v=2";
+        const brandVersion = "v=3";
+        const SOMDRIVE_DEFAULT_ARTWORK = "https://www.somdrive.com.br/somdrive-player-artwork-512.png?v=3";
 
         const isValidArtworkUrl = (url: any): boolean => {
           if (typeof url !== 'string') return false;
@@ -379,32 +380,32 @@ export default function Player({
 
         const artwork = [
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-96.png?${brandVersion}`,
+            src: hasValidCover ? currentTrack.coverUrl! : `https://www.somdrive.com.br/somdrive-player-96.png?${brandVersion}`,
             sizes: "96x96",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-128.png?${brandVersion}`,
+            src: hasValidCover ? currentTrack.coverUrl! : `https://www.somdrive.com.br/somdrive-player-128.png?${brandVersion}`,
             sizes: "128x128",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-192.png?${brandVersion}`,
+            src: hasValidCover ? currentTrack.coverUrl! : `https://www.somdrive.com.br/somdrive-player-192.png?${brandVersion}`,
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-256.png?${brandVersion}`,
+            src: hasValidCover ? currentTrack.coverUrl! : `https://www.somdrive.com.br/somdrive-player-256.png?${brandVersion}`,
             sizes: "256x256",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-384.png?${brandVersion}`,
+            src: hasValidCover ? currentTrack.coverUrl! : `https://www.somdrive.com.br/somdrive-player-384.png?${brandVersion}`,
             sizes: "384x384",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-512.png?${brandVersion}`,
+            src: hasValidCover ? currentTrack.coverUrl! : SOMDRIVE_DEFAULT_ARTWORK,
             sizes: "512x512",
             type: "image/png",
           },

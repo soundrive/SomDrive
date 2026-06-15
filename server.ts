@@ -952,21 +952,21 @@ async function startServer() {
 
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Home Metadata -->
-  <title>SomDrive | Divulgue seu Repertório Musical</title>
-  <meta name="description" content="A plataforma definitiva para compositores, artistas e bandas gerenciarem seus catálogos musicais." />
+  <title>SomDrive — Catálogo musical privado para compositores e artistas</title>
+  <meta name="description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="SomDrive - Catálogo Musical" />
-  <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
+  <meta property="og:title" content="SomDrive — Seu repertório na mão do cantor certo" />
+  <meta property="og:description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
   <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${appBaseUrl}/" />
+  <meta property="og:url" content="https://www.somdrive.com.br/" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
-  <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
+  <meta name="twitter:title" content="SomDrive — Seu repertório na mão do cantor certo" />
+  <meta name="twitter:description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <link rel="image_src" href="${ogImageToUse}" />
   <meta itemprop="image" content="${ogImageToUse}" />
@@ -1628,9 +1628,178 @@ async function startServer() {
     });
   });
 
-  // Support /favicon.ico queries by serving the SVG with the right content-type or redirecting
-  app.get("/favicon.ico", (req, res) => {
-    return res.redirect("/favicon.svg");
+  // Support favicon and apple/android icon files by dynamically generating them with sharp to be crisp and robust
+  app.get("/favicon.ico", async (req, res) => {
+    try {
+      const faviconContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#36eb18" />
+      <stop offset="42%" stop-color="#1db954" />
+      <stop offset="100%" stop-color="#05591c" />
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="url(#yellow-gold-grad)" />
+  <circle cx="256" cy="256" r="252" stroke="rgba(255, 255, 255, 0.22)" stroke-width="6" fill="none" />
+  <circle cx="256" cy="256" r="249" stroke="rgba(0, 0, 0, 0.12)" stroke-width="2" fill="none" />
+  <g fill="#FFFFFF">
+    <rect x="100" y="215" width="24" height="82" rx="12" />
+    <rect x="134" y="165" width="24" height="182" rx="12" />
+    <rect x="168" y="230" width="24" height="52" rx="12" />
+  </g>
+  <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
+  <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+</svg>`;
+      const buffer = await sharp(Buffer.from(faviconContent)).resize(48, 48).png().toBuffer();
+      res.setHeader("Content-Type", "image/x-icon");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.redirect("/favicon.svg");
+    }
+  });
+
+  app.get("/favicon-48x48.png", async (req, res) => {
+    try {
+      const faviconContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="yellow-gold-grad-48" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#36eb18" />
+      <stop offset="42%" stop-color="#1db954" />
+      <stop offset="100%" stop-color="#05591c" />
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="url(#yellow-gold-grad-48)" />
+  <circle cx="256" cy="256" r="252" stroke="rgba(255, 255, 255, 0.22)" stroke-width="6" fill="none" />
+  <circle cx="256" cy="256" r="249" stroke="rgba(0, 0, 0, 0.12)" stroke-width="2" fill="none" />
+  <g fill="#FFFFFF">
+    <rect x="100" y="215" width="24" height="82" rx="12" />
+    <rect x="134" y="165" width="24" height="182" rx="12" />
+    <rect x="168" y="230" width="24" height="52" rx="12" />
+  </g>
+  <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
+  <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+</svg>`;
+      const buffer = await sharp(Buffer.from(faviconContent)).resize(48, 48).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.status(500).send("Error generating favicon");
+    }
+  });
+
+  app.get("/favicon-96x96.png", async (req, res) => {
+    try {
+      const faviconContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="yellow-gold-grad-96" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#36eb18" />
+      <stop offset="42%" stop-color="#1db954" />
+      <stop offset="100%" stop-color="#05591c" />
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="url(#yellow-gold-grad-96)" />
+  <circle cx="256" cy="256" r="252" stroke="rgba(255, 255, 255, 0.22)" stroke-width="6" fill="none" />
+  <circle cx="256" cy="256" r="249" stroke="rgba(0, 0, 0, 0.12)" stroke-width="2" fill="none" />
+  <g fill="#FFFFFF">
+    <rect x="100" y="215" width="24" height="82" rx="12" />
+    <rect x="134" y="165" width="24" height="182" rx="12" />
+    <rect x="168" y="230" width="24" height="52" rx="12" />
+  </g>
+  <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
+  <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+</svg>`;
+      const buffer = await sharp(Buffer.from(faviconContent)).resize(96, 96).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.status(500).send("Error generating favicon");
+    }
+  });
+
+  const generateSquareLogoSvg = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="yellow-gold-grad-sq" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#36eb18" />
+      <stop offset="42%" stop-color="#1db954" />
+      <stop offset="100%" stop-color="#05591c" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#yellow-gold-grad-sq)" />
+  <circle cx="256" cy="256" r="236" fill="rgba(255, 255, 255, 0.03)" stroke="rgba(255, 255, 255, 0.15)" stroke-width="4" />
+  <g fill="#FFFFFF">
+    <rect x="100" y="215" width="24" height="82" rx="12" />
+    <rect x="134" y="165" width="24" height="182" rx="12" />
+    <rect x="168" y="230" width="24" height="52" rx="12" />
+  </g>
+  <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
+  <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+</svg>`;
+
+  app.get("/apple-touch-icon.png", async (req, res) => {
+    try {
+      const buffer = await sharp(Buffer.from(generateSquareLogoSvg())).resize(180, 180).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.status(500).send("Error generating icon");
+    }
+  });
+
+  app.get("/android-chrome-192x192.png", async (req, res) => {
+    try {
+      const buffer = await sharp(Buffer.from(generateSquareLogoSvg())).resize(192, 192).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.status(500).send("Error generating icon");
+    }
+  });
+
+  app.get("/android-chrome-512x512.png", async (req, res) => {
+    try {
+      const buffer = await sharp(Buffer.from(generateSquareLogoSvg())).resize(512, 512).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.status(500).send("Error generating icon");
+    }
+  });
+
+  app.get(["/somdrive-player-artwork-512.png", "/public/somdrive-player-artwork-512.png"], async (req, res) => {
+    try {
+      const buffer = await sharp(Buffer.from(generateSquareLogoSvg())).resize(512, 512).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.status(200).send(buffer);
+    } catch (e) {
+      return res.status(500).send("Error generating artwork");
+    }
   });
 
   // Helper to escape special XML characters securely inside generated SVG
@@ -2089,7 +2258,7 @@ async function startServer() {
       // Fallback response with basic generic SVG graphic
       const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
         <rect width="1200" height="630" fill="#081224" />
-        <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOUNDRIVE</text>
+        <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOMDRIVE</text>
       </svg>`;
       try {
         const fall = await sharp(Buffer.from(errorSvg)).png().toBuffer();
@@ -2114,7 +2283,7 @@ async function startServer() {
       console.error("Erro crítico na rota /api/og-artista:", err);
       const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
         <rect width="1200" height="630" fill="#081224" />
-        <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOUNDRIVE</text>
+        <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOMDRIVE</text>
       </svg>`;
       try {
         const fall = await sharp(Buffer.from(errorSvg)).png().toBuffer();
