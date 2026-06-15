@@ -36,7 +36,8 @@ import {
   ListChecks,
   Square,
   CheckSquare,
-  X
+  X,
+  Lock
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
@@ -183,6 +184,114 @@ export default function Dashboard({
   const [selectedTracksForCustomShare, setSelectedTracksForCustomShare] = useState<string[]>([]);
 
 
+
+  // Warnings system for upcoming or post expiration cases
+  const getPlanExpiryWarnings = () => {
+    const endsAtStr = profile.subscriptionEndsAt || profile.trialEndsAt || profile.manualAccessEndsAt;
+    if (!endsAtStr) return null;
+
+    const now = new Date();
+    const endsAt = new Date(endsAtStr);
+    const diffMs = endsAt.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    const isExpired = diffMs < 0;
+    const elapsedDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+    const daysUntilDeletion = 30 - elapsedDays;
+
+    if (!isExpired) {
+      if (diffDays <= 7 && diffDays >= 0) {
+        let warnText = "";
+        if (diffDays === 7) warnText = "Faltam exatamente 7 dias para o vencimento do seu plano.";
+        else if (diffDays === 3) warnText = "Faltam exatamente 3 dias para o vencimento do seu plano.";
+        else if (diffDays === 1) warnText = "Falta exatamente 1 dia para o vencimento do seu plano (Vence amanhã!).";
+        else if (diffDays === 0) warnText = "Seu plano vence HOJE! Renove agora para evitar o bloqueio do seu catálogo.";
+        else warnText = `Seu plano está próximo do vencimento (restam ${diffDays} dias).`;
+
+        return {
+          type: 'warn_near_expiry',
+          title: "Aviso importante de vencimento ⚠️",
+          message: `${warnText} Escolha as 3 músicas que deseja manter ativas caso não renove.`,
+          showSelector: true,
+          actionButton: true,
+          buttonText: "RENOVAR PLANO"
+        };
+      }
+    } else {
+      if (elapsedDays <= 5) {
+        let deletionCountdown = "";
+        if (daysUntilDeletion === 15) deletionCountdown = " Faltam 15 dias para a exclusão definitiva de seus arquivos.";
+        else if (daysUntilDeletion === 5) deletionCountdown = " ATENÇÃO: Restam apenas 5 dias para a exclusão definitiva!";
+        else if (daysUntilDeletion === 1) deletionCountdown = " CRÍTICO: Resta apenas 1 dia para a exclusão definitiva!";
+
+        return {
+          type: 'expired_1_to_5',
+          title: "Seu plano venceu ⚠️",
+          message: `Seu plano venceu. As músicas acima do limite gratuito estão temporariamente indisponíveis. Renove para restaurar todo o seu catálogo.${deletionCountdown}`,
+          showSelector: true,
+          actionButton: true,
+          buttonText: "RENOVAR PLANO"
+        };
+      } else if (elapsedDays < 30) {
+        let deletionCountdown = "";
+        if (daysUntilDeletion === 15) deletionCountdown = " Faltam exatamente 15 dias para a exclusão definitiva.";
+        else if (daysUntilDeletion === 5) deletionCountdown = " IMPORTANTE: Faltam exatamente 5 dias para a exclusão definitiva.";
+        else if (daysUntilDeletion === 1) deletionCountdown = " URGENTE: Falta apenas 1 dia para a exclusão definitiva!";
+
+        const deletionDate = new Date(endsAt.getTime() + 30 * 24 * 3600 * 1000).toLocaleDateString('pt-BR');
+
+        return {
+          type: 'expired_6_to_29',
+          title: "Músicas Excedentes Bloqueadas 🔒",
+          message: `Seis arquivos excedentes estão armazenados temporariamente. Renove até ${deletionDate} para evitar a exclusão definitiva de seus arquivos em MP3.${deletionCountdown}`,
+          showSelector: true,
+          actionButton: true,
+          buttonText: "RENOVAR PLANO"
+        };
+      } else {
+        return {
+          type: 'expired_over_30',
+          title: "Músicas Excedentes Removidas 🗑️",
+          message: `O prazo de 30 dias de segurança terminou e seus arquivos excedentes foram excluídos permanentemente por falta de renovação. Seus dados cadastrais e as 3 faixas mantidas permanecem totalmente ativos e preservados.`,
+          showSelector: false,
+          actionButton: false
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const handleToggleTrackPreference = async (trackId: string) => {
+    const currentPreferred = profile.preferredFreeTracks || [];
+    let nextPreferred = [...currentPreferred];
+    
+    if (nextPreferred.includes(trackId)) {
+      nextPreferred = nextPreferred.filter(id => id !== trackId);
+    } else {
+      if (nextPreferred.length >= 3) {
+        setToastMessage("Você pode selecionar no máximo 3 músicas.");
+        setTimeout(() => setToastMessage(null), 3000);
+        return;
+      }
+      nextPreferred.push(trackId);
+    }
+    
+    const updatedProfile = { ...profile, preferredFreeTracks: nextPreferred };
+    setProfile(updatedProfile);
+    
+    try {
+      await dbService.updateArtistProfileLocallyAndFirestore(profile.userId, updatedProfile);
+      const evaluated = dbService.checkAndRevertExpiredAccess(updatedProfile);
+      setProfile(evaluated);
+      const freshTracks = dbService.getArtistMusics(profile.userId);
+      setTracks(freshTracks);
+      setToastMessage("Seleção de preferência atualizada com sucesso!");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (e) {
+      console.error("Error saving preferred free tracks:", e);
+    }
+  };
 
   const handleOpenProfileModal = () => {
     setProfName(profile.name || '');
@@ -1128,6 +1237,71 @@ export default function Dashboard({
 
       {/* Main dashboard content container */}
       <main className="max-w-7xl mx-auto p-6 space-y-8">
+
+        {/* EXPIRED PLAN STATE / EXPIRY WARNING NOTIFICATIONS AND SELECTOR BAR */}
+        {(() => {
+          const warning = getPlanExpiryWarnings();
+          if (!warning) return null;
+          
+          return (
+            <div className="bg-[#0b0e14] border border-orange-500/20 p-6 rounded-3xl relative overflow-hidden space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="space-y-1 text-left">
+                  <h4 className="font-heading font-black text-sm uppercase text-white tracking-wide flex items-center gap-1.5">
+                    {warning.title}
+                  </h4>
+                  <p className="text-xs text-slate-350 leading-relaxed max-w-2xl">
+                    {warning.message}
+                  </p>
+                </div>
+                {warning.actionButton && (
+                  <button 
+                    onClick={() => setShowPlans(true)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl hover:brightness-110 shrink-0 transition"
+                  >
+                    {warning.buttonText || "Assinar Agora"}
+                  </button>
+                )}
+              </div>
+
+              {/* Tracks selection panel if selector is permitted */}
+              {warning.showSelector && (
+                <div className="bg-slate-950/60 rounded-2xl border border-slate-900/80 p-4 space-y-3 text-left">
+                  <p className="text-[10px] uppercase font-mono tracking-wider text-orange-400 font-bold">
+                    Suas 3 Músicas Ativas Escolhidas ({profile.preferredFreeTracks?.length || 0}/3)
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-sans leading-normal">
+                    Selecione abaixo as 3 músicas que você deseja que fiquem ativas e disponíveis no seu plano Free caso não renove. As não selecionadas ficarão guardadas de forma segura por até 30 dias.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {tracks.map((t) => {
+                      const isSelected = (profile.preferredFreeTracks || []).includes(t.trackId);
+                      return (
+                        <div 
+                          key={t.trackId}
+                          onClick={() => handleToggleTrackPreference(t.trackId)}
+                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition select-none ${
+                            isSelected 
+                              ? 'bg-orange-950/25 border-orange-500/50 text-orange-200' 
+                              : 'bg-slate-900/40 border-slate-850 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                          }`}
+                        >
+                          <span className="text-xs font-semibold truncate max-w-[180px]">
+                            {t.title}
+                          </span>
+                          <div className="shrink-0 font-mono text-[9px] uppercase font-black tracking-widest px-2 py-0.5 rounded border">
+                            {isSelected ? '✓ Ativa' : 'Bloqueada'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         
         {/* Welcome Block + Share URL */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 bg-slate-900 border border-slate-850 p-6 rounded-3xl relative overflow-hidden">
@@ -1651,27 +1825,41 @@ export default function Dashboard({
                       </div>
 
                       {/* Interactive Link Status Toggler */}
-                      <button
-                        onClick={(e) => handleToggleMusicStatus(track, e)}
-                        className={`px-2.5 py-1 border text-[9px] font-mono rounded-lg uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1.5 ${
-                          isPublicActive
-                            ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400 hover:bg-emerald-955'
-                            : 'bg-rose-950/40 border-rose-500/30 text-rose-450 hover:bg-rose-955'
-                        }`}
-                        title={isPublicActive ? "Desativar escuta pública (Link Ativo)" : "Ativar escuta pública (Link Inativo)"}
-                      >
-                        {isPublicActive ? (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span>Ativo</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                            <span>Inativo</span>
-                          </>
-                        )}
-                      </button>
+                      {track.status === 'locked_by_expired_plan' ? (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPlans(true);
+                          }}
+                          className="px-2.5 py-1 bg-amber-950/40 border border-amber-500/30 text-amber-400 text-[9px] font-mono rounded-lg uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1.5"
+                          title="Música bloqueada devido ao vencimento do plano. Clique para assinar e liberar."
+                        >
+                          <Lock className="w-3 h-3 text-amber-500 animate-pulse" />
+                          <span>Bloqueada</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => handleToggleMusicStatus(track, e)}
+                          className={`px-2.5 py-1 border text-[9px] font-mono rounded-lg uppercase font-black tracking-wider transition-all cursor-pointer select-none flex items-center gap-1.5 ${
+                            isPublicActive
+                              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400 hover:bg-emerald-955'
+                              : 'bg-rose-950/40 border-rose-500/30 text-rose-450 hover:bg-rose-955'
+                          }`}
+                          title={isPublicActive ? "Desativar escuta pública (Link Ativo)" : "Ativar escuta pública (Link Inativo)"}
+                        >
+                          {isPublicActive ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                              <span>Ativo</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                              <span>Inativo</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                     {/* Row of actionable control buttons */}

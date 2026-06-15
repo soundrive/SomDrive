@@ -249,7 +249,7 @@ export const dbService = {
 
     const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
     const cleanPlan = (rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'pro' | 'premium';
-    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 5 : (cleanPlan === 'pro' ? 15 : 50));
+    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'pro' ? 15 : 50));
     const isMainAdmin = (d.email || '').toLowerCase().trim() === 'videopremieroficial@gmail.com' || (d.email || '').toLowerCase().trim() === 'sertanejopremier@gmail.com';
     const role = isMainAdmin ? 'admin' : (d.role || 'user');
 
@@ -313,7 +313,7 @@ export const dbService = {
   getNormalizedUserData(artist: Artist, songsCount = 0) {
     const planRaw = (artist.plan || 'free').toLowerCase();
     const plan = planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
-    const defaultLimit = plan === 'free' ? 5 : (plan === 'pro' ? 15 : 50);
+    const defaultLimit = plan === 'free' ? 3 : (plan === 'pro' ? 15 : 50);
     const emailLower = (artist.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
 
@@ -383,7 +383,7 @@ export const dbService = {
     if (updated.accessType === 'trial' && updated.trialEndsAt) {
       if (new Date(updated.trialEndsAt) < now) {
         updated.plan = 'free';
-        updated.musicLimit = 5;
+        updated.musicLimit = 3;
         updated.paymentStatus = 'inactive';
         updated.accessType = 'free';
         updated.updatedAt = now.toISOString();
@@ -392,7 +392,17 @@ export const dbService = {
     } else if (updated.accessType === 'manual' && updated.manualAccessEndsAt) {
       if (new Date(updated.manualAccessEndsAt) < now) {
         updated.plan = 'free';
-        updated.musicLimit = 5;
+        updated.musicLimit = 3;
+        updated.paymentStatus = 'inactive';
+        updated.accessType = 'free';
+        updated.updatedAt = now.toISOString();
+        changed = true;
+      }
+    } else if (updated.plan !== 'free') {
+      const endsAt = updated.subscriptionEndsAt || updated.trialEndsAt || updated.manualAccessEndsAt;
+      if (endsAt && new Date(endsAt) < now) {
+        updated.plan = 'free';
+        updated.musicLimit = 3;
         updated.paymentStatus = 'inactive';
         updated.accessType = 'free';
         updated.updatedAt = now.toISOString();
@@ -404,7 +414,97 @@ export const dbService = {
       this.updateArtistProfileLocallyAndFirestore(updated.userId, updated);
     }
 
+    try {
+      this.enforceTracksByPlanValidity(updated);
+    } catch (e) {
+      console.error("error in local enforcement caller:", e);
+    }
+
     return updated;
+  },
+
+  // Enforces plan limits and locks excess tracks or restores them upon renewal
+  enforceTracksByPlanValidity(artist: Artist) {
+    try {
+      const artistId = artist.userId;
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const tracks: Music[] = musicsMap[artistId] || [];
+      if (tracks.length === 0) return;
+
+      let changed = false;
+      const cleanPlan = artist.plan || 'free';
+
+      if (cleanPlan === 'free') {
+        const candidates = tracks.filter(t => t.status === 'active' || t.status === 'locked_by_expired_plan');
+        const preferredIds = artist.preferredFreeTracks || [];
+        const selectedTracks: Music[] = [];
+
+        // 1. Recover from selectedTracks
+        preferredIds.forEach(pId => {
+          const found = candidates.find(t => t.trackId === pId);
+          if (found && selectedTracks.length < 3) {
+            selectedTracks.push(found);
+          }
+        });
+
+        // 2. Fallback to order sorting candidates
+        const sortedCandidates = [...candidates].sort((a, b) => {
+          const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
+          const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
+          if (posA !== posB) return posA - posB;
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeA - timeB;
+        });
+
+        sortedCandidates.forEach(cand => {
+          if (selectedTracks.length < 3 && !selectedTracks.some(s => s.trackId === cand.trackId)) {
+            selectedTracks.push(cand);
+          }
+        });
+
+        const updatedTracks = tracks.map(track => {
+          if (track.status === 'active' || track.status === 'locked_by_expired_plan') {
+            const isSelected = selectedTracks.some(s => s.trackId === track.trackId);
+            const targetStatus = isSelected ? 'active' : 'locked_by_expired_plan';
+            if (track.status !== targetStatus) {
+              changed = true;
+              const songDocRef = doc(db, 'songs', track.trackId);
+              updateDoc(songDocRef, { status: targetStatus }).catch(e => {
+                console.error("Error syncing track locked state to Firestore:", e);
+              });
+              return { ...track, status: targetStatus, updatedAt: new Date().toISOString() };
+            }
+          }
+          return track;
+        });
+
+        if (changed) {
+          musicsMap[artistId] = updatedTracks;
+          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        }
+      } else {
+        // Active Pro/Premium: restore locked ones
+        const updatedTracks = tracks.map(track => {
+          if (track.status === 'locked_by_expired_plan') {
+            changed = true;
+            const songDocRef = doc(db, 'songs', track.trackId);
+            updateDoc(songDocRef, { status: 'active' }).catch(e => {
+              console.error("Error restoring track active state on Firestore:", e);
+            });
+            return { ...track, status: 'active', updatedAt: new Date().toISOString() };
+          }
+          return track;
+        });
+
+        if (changed) {
+          musicsMap[artistId] = updatedTracks;
+          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        }
+      }
+    } catch (e) {
+      console.error("Error in enforceTracksByPlanValidity:", e);
+    }
   },
 
   // Active signed-in artist session state
@@ -509,7 +609,7 @@ export const dbService = {
   },
 
   async registerUserInFirestore(uid: string, data: Partial<Artist>): Promise<Artist> {
-    const defaultLimit = 5; // free limit
+    const defaultLimit = 3; // free limit
     const nowISO = new Date().toISOString();
     const emailLower = (data.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
@@ -575,7 +675,7 @@ export const dbService = {
         instagram: newProfile.instagram,
         role: role,
         plan: "free",
-        musicLimit: 5,
+        musicLimit: 3,
         songsCount: 0,
         totalPlays: 0,
         totalViews: 0,
@@ -773,7 +873,7 @@ export const dbService = {
         if (p.accessType === 'trial' && p.trialEndsAt) {
           if (new Date(p.trialEndsAt) < now) {
             p.plan = 'free';
-            p.musicLimit = 5;
+            p.musicLimit = 3;
             p.paymentStatus = 'inactive';
             p.accessType = 'free';
             p.updatedAt = now.toISOString();
@@ -782,7 +882,7 @@ export const dbService = {
         } else if (p.accessType === 'manual' && p.manualAccessEndsAt) {
           if (new Date(p.manualAccessEndsAt) < now) {
             p.plan = 'free';
-            p.musicLimit = 5;
+            p.musicLimit = 3;
             p.paymentStatus = 'inactive';
             p.accessType = 'free';
             p.updatedAt = now.toISOString();

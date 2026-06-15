@@ -1168,7 +1168,7 @@ export default function AdminArea({
                         {filteredUsers.map((user, idx) => {
                           const isBlocked = user.isBlocked || false;
                           const songsCount = dbService.getArtistMusics(user.userId).length;
-                          const limit = user.musicLimit !== undefined ? user.musicLimit : (user.plan === 'free' ? 5 : (user.plan === 'pro' ? 15 : 50));
+                          const limit = user.musicLimit !== undefined ? user.musicLimit : (user.plan === 'free' ? 3 : (user.plan === 'pro' ? 15 : 50));
                           
                           return (
                             <tr key={user.userId || `user-row-${idx}`} className="hover:bg-slate-850/30 transition">
@@ -1379,7 +1379,7 @@ export default function AdminArea({
                     <label className="block text-xs font-medium text-slate-400 mb-1">Limite Manual de Músicas</label>
                     <input
                       type="number"
-                      value={selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : 5}
+                      value={selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : 3}
                       onChange={(e) => setSelectedUser({ ...selectedUser, musicLimit: Number(e.target.value) })}
                       className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500 font-mono"
                     />

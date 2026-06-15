@@ -51,6 +51,7 @@ export interface Artist {
   userType?: string;
   mainGenre?: string;
   slug?: string;
+  preferredFreeTracks?: string[];
 }
 
 export interface Music {
