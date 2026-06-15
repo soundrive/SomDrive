@@ -6,18 +6,18 @@
   --font-heading: "Outfit", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* --- PALETA PREMIUM SOMDRIVE BRILHANTE (NAVY, VERDE, AMARELO, AZUL) --- */
-  --color-fundo-principal: #07111F;      /* Fundo principal: #07111F */
-  --color-fundo-secundario: #0B1628;     /* Fundo secundário: #0B1628 */
-  --color-fundo-cards: #101C2F;          /* Fundo dos cards: #101C2F */
-  --color-fundo-blocos: #132238;         /* Fundo dos blocos / sessões: #132238 */
+  /* --- PALETA PREMIUM SOMDRIVE BRILHANTE (GRAFITE ESCURO PREMIUM) --- */
+  --color-fundo-principal: #121212;      /* Fundo principal: #121212 */
+  --color-fundo-secundario: #1E1E1E;     /* Fundo secundário: #1E1E1E */
+  --color-fundo-cards: #181818;          /* Fundo dos cards: #181818 */
+  --color-fundo-blocos: #181818;         /* Fundo dos blocos / sessões: #181818 */
 
-  --color-borda-suave: #22344A;          /* Borda suave: #22344A */
-  --color-borda-destaque: #2E4B66;       /* Borda destaque: #2E4B66 */
+  --color-borda-suave: #2A2A2A;          /* Borda suave: #2A2A2A */
+  --color-borda-destaque: #2A2A2A;       /* Borda destaque: #2A2A2A */
 
-  --color-texto-principal: #F5F7FB;      /* Texto principal: #F5F7FB */
-  --color-texto-secundario: #C6D0DB;     /* Texto secundário: #C6D0DB */
-  --color-texto-apoio: #8E9BAA;          /* Texto de apoio: #8E9BAA */
+  --color-texto-principal: #F5F5F5;      /* Texto principal: #F5F7FB */
+  --color-texto-secundario: #B3B3B3;     /* Texto secundário: #C6D0DB */
+  --color-texto-apoio: #757575;          /* Texto de apoio: #8E9BAA */
 
   --color-verde-principal: #1ED760;      /* Verde principal: #1ED760 */
   --color-verde-hover: #22C55E;          /* Verde hover: #22C55E */
@@ -164,6 +164,22 @@
 .bg-\[\#070b12\]\/95 {
   background-color: var(--color-fundo-cards) !important;
 }
+.bg-\[\#0d0f14\], .bg-\[\#111625\], .bg-\[\#04060f\] {
+  background-color: var(--color-fundo-principal) !important;
+}
+.bg-\[\#0c101d\], .bg-\[\#0a0f1d\] {
+  background-color: var(--color-fundo-secundario) !important;
+}
+.bg-\[\#182033\], .bg-\[\#162035\], .bg-\[\#141b2e\], .bg-\[\#141c2d\], .bg-\[\#1c253b\], .bg-\[\#1a253e\], .bg-\[\#141b2d\], .bg-\[\#162035\]\/70, .bg-\[\#162035\]\/50 {
+  background-color: var(--color-fundo-cards) !important;
+}
+.border-\[\#273554\], .border-\[\#263554\], .border-\[\#1b2b4d\], .border-\[\#1c273d\], .border-\[\#16233e\], .border-\[\#2c3a5c\], .border-\[\#1b2d4f\], .border-\[\#1b2a47\], .border-zinc-700\/50, .border-zinc-700\/60, .border-\[\#22344A\] {
+  border-color: var(--color-borda-suave) !important;
+}
+.hover\:bg-\[\#1b2438\]\/65:hover, .hover\:bg-\[\#1a233d\]:hover, .hover\:bg-\[\#111e3b\]:hover, .hover\:bg-\[\#1f283d\]:hover {
+  background-color: var(--color-borda-suave) !important;
+}
+
 .bg-\[\#0c0f19\]\/80 {
   background-color: var(--color-fundo-cards) !important;
 }

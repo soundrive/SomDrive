@@ -1528,20 +1528,43 @@ async function startServer() {
 
   // Serve dynamic and cached favicon.svg
   app.get("/favicon.svg", (req, res) => {
-    const faviconContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+    const faviconContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="fav-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffe259" />
-      <stop offset="100%" stop-color="#ffa751" />
+    <!-- Seamless vibrant green gradient matching the gorgeous new logo -->
+    <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#36eb18" />    <!-- Luminant bright top green -->
+      <stop offset="42%" stop-color="#1db954" />   <!-- Classic Spotify brand green -->
+      <stop offset="100%" stop-color="#05591c" />  <!-- Premium deep glossy forest green -->
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="8" fill="#081224" />
-  <g transform="translate(4, 4)">
-    <path d="M16 6 L16 16" stroke="url(#fav-grad)" stroke-width="2.5" stroke-linecap="round" />
-    <path d="M16 7 C19 7, 21 9, 21 9" stroke="url(#fav-grad)" stroke-width="2.5" stroke-linecap="round" fill="none" />
-    <ellipse cx="12" cy="16" rx="4.5" ry="3.5" fill="url(#fav-grad)" transform="rotate(-15 12 16)" />
-    <text x="12" y="14" font-family="-apple-system, system-ui, sans-serif" font-size="7" font-weight="900" fill="#081224" text-anchor="middle" letter-spacing="-0.5">SD</text>
+
+  <!-- Main circle base - perfectly round and centered -->
+  <circle cx="256" cy="256" r="256" fill="url(#yellow-gold-grad)" />
+
+  <!-- Outer shiny bezel stroke for premium glossy sticker look -->
+  <circle cx="256" cy="256" r="252" stroke="rgba(255, 255, 255, 0.22)" stroke-width="6" fill="none" />
+  <circle cx="256" cy="256" r="249" stroke="rgba(0, 0, 0, 0.12)" stroke-width="2" fill="none" />
+
+  <!-- Symmetrical/Clean soundwave bars on left - slightly thicker for well-filled style -->
+  <g fill="#FFFFFF">
+    <!-- Short left bar -->
+    <rect x="100" y="215" width="24" height="82" rx="12" />
+    <!-- Tall middle bar -->
+    <rect x="134" y="165" width="24" height="182" rx="12" />
+    <!-- Short right bar -->
+    <rect x="168" y="230" width="24" height="52" rx="12" />
   </g>
+
+  <!-- Gorgeous solid white dot - beautifully integrated and clean -->
+  <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
+
+  <!-- Gorgeous stylized letter 'S' looping around - thicker stroke (48px) for bold premium look -->
+  <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
 </svg>`;
     res.setHeader("Content-Type", "image/svg+xml");
     res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");

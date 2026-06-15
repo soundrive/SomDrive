@@ -356,6 +356,38 @@ export default function Player({
     }
   }, [isPlaying, volume, isMuted]);
 
+  // Support mobile lock screen details and physical control buttons with navigator.mediaSession
+  useEffect(() => {
+    if (!currentTrack) return;
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title,
+          artist: currentTrack.singer || currentTrack.composer || "STARNEJO",
+          album: "SomDrive - Catálogo Musical",
+          artwork: [
+            { src: '/favicon.svg', sizes: '512x512', type: 'image/svg+xml' }
+          ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+          onPlayPause();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          onPlayPause();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          onPrev();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          onNext();
+        });
+      } catch (err) {
+        console.warn("navigator.mediaSession setup failed:", err);
+      }
+    }
+  }, [currentTrack, onPlayPause, onPrev, onNext]);
+
   if (!currentTrack) return null;
 
   const handleSeek = (value: number) => {

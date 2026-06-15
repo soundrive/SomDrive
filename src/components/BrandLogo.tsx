@@ -110,13 +110,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       style={styleObj}
     >
       {/* Brand Golden Logo Icon */}
-      <svg className={`${currentSize.icon} select-none shrink-0 rounded-xl overflow-hidden`} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg className={`${currentSize.icon} select-none shrink-0 rounded-full overflow-hidden`} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           {/* Seamless premium green gradient matching the new logo */}
-          <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#79D32E" />
-            <stop offset="45%" stopColor="#1DB954" />
-            <stop offset="100%" stopColor="#118F35" />
+          <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#36eb18" />    {/* Luminant bright top green */}
+            <stop offset="42%" stopColor="#1db954" />   {/* Classic Spotify brand green */}
+            <stop offset="100%" stopColor="#05591c" />  {/* Premium deep glossy forest green */}
           </linearGradient>
 
           {/* Glowing bright ambient reflection filter */}
@@ -129,24 +129,28 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           </filter>
         </defs>
 
-        {/* Squircle base */}
-        <rect width="512" height="512" rx="135" fill="url(#yellow-gold-grad)" />
+        {/* Circular base */}
+        <circle cx="256" cy="256" r="256" fill="url(#yellow-gold-grad)" />
 
-        {/* Three vertical soundwave bars (White) */}
+        {/* Outer shiny bezel stroke for premium glossy sticker look */}
+        <circle cx="256" cy="256" r="252" stroke="rgba(255, 255, 255, 0.22)" strokeWidth="6" fill="none" />
+        <circle cx="256" cy="256" r="249" stroke="rgba(0, 0, 0, 0.12)" strokeWidth="2" fill="none" />
+
+        {/* Three vertical soundwave bars (White) - slightly thicker for well-filled style */}
         <g fill="#FFFFFF">
-          <rect x="102" y="215" width="20" height="82" rx="10" />
-          <rect x="134" y="165" width="20" height="182" rx="10" />
-          <rect x="166" y="230" width="20" height="52" rx="10" />
+          <rect x="100" y="215" width="24" height="82" rx="12" />
+          <rect x="134" y="165" width="24" height="182" rx="12" />
+          <rect x="168" y="230" width="24" height="52" rx="12" />
         </g>
 
-        {/* Neon light green dot indicator */}
-        <circle cx="166" cy="318" r="12" fill="#00E676" filter="url(#glow-effect)" />
+        {/* Gorgeous solid white dot - beautifully integrated and clean */}
+        <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
 
-        {/* Curly elegant 'S' path stroke */}
+        {/* Curly elegant 'S' path stroke - thicker stroke (48px) for bold premium look */}
         <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
               fill="none" 
               stroke="#FFFFFF" 
-              strokeWidth="44" 
+              strokeWidth="48" 
               strokeLinecap="round" 
               strokeLinejoin="round" />
       </svg>
