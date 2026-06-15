@@ -300,6 +300,23 @@ export default function ArtistPublic({
     setTimeout(() => setInstaShareAlert(false), 2000);
   };
 
+  const handleGeneralProfileShare = () => {
+    const appBaseUrl = window.location.origin;
+    const pageUrl = `${appBaseUrl}/s/${artist.slug || artist.userId}`;
+    if (navigator.share) {
+      navigator.share({
+        title: `SomDrive - ${artist.name}`,
+        text: `Ouça o catálogo de composições de ${artist.name} no SomDrive!`,
+        url: pageUrl
+      }).catch((err) => {
+        console.log("Erro ao compartilhar", err);
+        handleCopyLinkDissemination();
+      });
+    } else {
+      handleCopyLinkDissemination();
+    }
+  };
+
   const handleSpeakWithArtist = () => {
     dbService.incrementAnalyticsView(artist.userId, false, false);
     const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
@@ -363,7 +380,7 @@ export default function ArtistPublic({
   };
 
   return (
-    <div className="min-h-screen bg-[#03060f] text-zinc-100 font-sans pb-32 relative overflow-hidden flex w-full">
+    <div className="min-h-screen bg-[#111625] text-zinc-100 font-sans pb-32 relative overflow-hidden flex w-full">
       
       {/* Decorative vertical particles & overlay blur of image reference style */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[160px] pointer-events-none z-0"></div>
@@ -371,7 +388,7 @@ export default function ArtistPublic({
       <div className="absolute inset-0 bg-[radial-gradient(#ffffff01_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none z-0"></div>
 
       {/* FAR-LEFT SIDEBAR NAV (Original system sidebar) */}
-      <aside className="w-56 bg-[#02040b] border-r border-[#121929] h-screen sticky top-0 px-5 py-8 flex flex-col justify-between shrink-0 hidden lg:flex z-30 select-none">
+      <aside className="w-56 bg-[#0c101d] border-r border-[#1b2438] h-screen sticky top-0 px-5 py-8 flex flex-col justify-between shrink-0 hidden lg:flex z-30 select-none">
         <div className="space-y-8">
           <div 
             onClick={() => onNavigate('landing')}
@@ -425,134 +442,150 @@ export default function ArtistPublic({
       </aside>
 
       {/* COMPREHENSIVE RESPONSIVE GRID LAYOUT (Exact Visual Organization from Reference) */}
-      <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 relative z-10 flex flex-col lg:flex-row gap-6">
+      <main className="flex-1 w-full min-w-0 px-4 sm:px-6 lg:px-8 py-6 relative z-10 flex flex-col lg:flex-row gap-6">
         
         {/* LEFT COLUMN: ARTIST PROFILE CARD (Fiel à imagem de referência) */}
         <section id="artist-profile-sidebar-card" className="w-full lg:w-72 shrink-0 flex flex-col">
-          <div className="bg-[#050914] border border-[#141f36] rounded-2.5xl p-5 md:p-6 text-left relative overflow-hidden sticky lg:top-6 shadow-[0_15px_35px_rgba(0,0,0,0.65)] select-none">
+          <div className="w-full bg-[#182033] border border-[#273554] rounded-2.5xl p-4 sm:p-5 md:p-6 text-left relative overflow-hidden sticky lg:top-6 shadow-[0_15px_35px_rgba(0,0,0,0.65)] select-none">
             
             <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-emerald-500 via-yellow-500 to-transparent"></div>
             
             {/* Visual Header & Verification Details */}
             <div className="mb-4 flex items-center justify-between">
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/25 rounded-md text-[9px] font-mono font-extrabold tracking-widest text-[#00e676] uppercase">
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#00e676]/10 border border-[#00e676]/25 rounded-lg text-[9px] font-mono font-extrabold tracking-widest text-[#00e676] uppercase">
                 <Check className="w-3 h-3 text-[#00e676] stroke-[3]" />
                 <span>{artist.customBadgeText || "VERIFICADO"}</span>
               </div>
-              <span className="text-[9px] font-mono text-zinc-400 uppercase">SomDrive ID</span>
+              <span className="text-[9px] font-mono text-zinc-400 uppercase">
+                SOMDRIVE ID #SDR-{(artist.userId || '7824').substring(0, 4).toUpperCase()}
+              </span>
             </div>
 
-            {/* Picture block */}
-            <div className="w-full aspect-square rounded-2xl bg-[#090e1a] border border-[#1b2b4d] overflow-hidden relative mb-4 group shadow-md">
-              {artist.avatarUrl || artist.photoURL || artist.profileImageUrl ? (
-                <img 
-                  src={artist.avatarUrl || artist.photoURL || artist.profileImageUrl} 
-                  alt={artist.name}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0c0f18] to-slate-950 font-black text-2xl text-zinc-650 font-mono">
-                  {(artist.name || 'S').substring(0, 1).toUpperCase()}
-                </div>
-              )}
-              {/* Overlay styling */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050914]/80 via-transparent to-transparent opacity-90"></div>
-            </div>
-
-            {/* Metadata Text Details */}
-            <div className="space-y-1 mb-5">
-              <h2 className="text-xl md:text-2xl font-heading font-black tracking-tight text-white uppercase flex items-center gap-1.5 flex-wrap">
-                {artist.name}
-                <svg className="w-5 h-5 text-emerald-400 fill-emerald-400 shrink-0" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </h2>
-              
-              <div className="text-[10px] font-mono font-bold text-yellow-500 tracking-wider uppercase mb-1">
-                {artist.userType || "COMPOSITOR"}
-              </div>
-
-              {/* Badges Info */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
-                <span className="px-2.5 py-1 bg-[#0d1526] border border-[#1b2d4f] rounded-lg text-[9px] font-mono font-extrabold text-zinc-300 uppercase tracking-widest">
-                  {artist.genre || 'SERTANEJO'}
-                </span>
-                {artist.city && (
-                  <span className="px-2.5 py-1 bg-[#0d1526] border border-[#1b2d4f] rounded-lg text-[9px] font-mono font-extrabold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                    <MapPin className="w-2.5 h-2.5 text-zinc-550" />
-                    {artist.city} - {artist.state || 'GO'}
-                  </span>
+            {/* Split layout on mobile, standard column on desktop */}
+            <div className="flex sm:flex-col items-center sm:items-stretch gap-4 sm:gap-0 mb-4 sm:mb-0 w-full">
+              {/* Picture block */}
+              <div className="w-[96px] h-[115px] sm:w-full sm:aspect-square rounded-xl bg-[#090e1a] border border-[#1b2b4d] overflow-hidden relative group shadow-md shrink-0 sm:mb-4">
+                {artist.avatarUrl || artist.photoURL || artist.profileImageUrl ? (
+                  <img 
+                    src={artist.avatarUrl || artist.photoURL || artist.profileImageUrl} 
+                    alt={artist.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0c0f18] to-slate-950 font-black text-2xl text-zinc-650 font-mono">
+                    {(artist.name || 'S').substring(0, 1).toUpperCase()}
+                  </div>
                 )}
+                {/* Overlay styling */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#182033]/80 via-transparent to-transparent opacity-90"></div>
               </div>
 
-              <div className="pt-3 flex items-center gap-2 text-[10.5px] font-mono font-medium text-zinc-400">
-                <span className="inline-block w-2 h-2 rounded-full bg-[#00e676] animate-pulse"></span>
-                <span>{allTracks.length} músicas disponíveis</span>
+              {/* Metadata Text Details */}
+              <div className="space-y-1.5 min-w-0 flex-1 sm:mb-5 text-left">
+                <h2 className="text-[20px] sm:text-2xl font-heading font-black tracking-tight text-white uppercase flex items-center gap-1.5 flex-wrap">
+                  {artist.name}
+                  <svg className="w-4.5 h-4.5 sm:w-5 h-5 text-emerald-400 fill-emerald-400 shrink-0" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </h2>
+                
+                <div className="text-[10px] sm:text-[11px] font-mono font-bold text-yellow-500 tracking-wider uppercase">
+                  {artist.userType || "COMPOSITOR"}
+                </div>
+
+                {/* Badges Info */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5 sm:pt-1.5">
+                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-[#161c2c]/65 border border-[#1b2d4f] rounded-lg text-[9px] sm:text-[9px] font-mono font-extrabold text-zinc-300 uppercase tracking-widest">
+                    {artist.genre || 'SERTANEJO'}
+                  </span>
+                  {artist.city && (
+                    <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-[#161c2c]/65 border border-[#1b2d4f] rounded-lg text-[9px] sm:text-[9px] font-mono font-extrabold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                      <MapPin className="w-2.5 h-2.5 text-zinc-550" />
+                      {artist.city} - {artist.state || 'GO'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="pt-1.5 sm:pt-3 flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[10.5px] font-mono font-medium text-zinc-400">
+                  <span className="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#00e676] animate-pulse"></span>
+                  <span>{allTracks.length} músicas disponíveis</span>
+                </div>
               </div>
             </div>
 
             {/* Action Buttons pills matching image reference */}
-            <div className="space-y-2.5">
-              {/* Primary Green Pill 'Ouvir Artista' */}
-              {allTracks.length > 0 ? (
-                <button 
-                  onClick={() => onSelectTrack(allTracks[0], allTracks)}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-[#00e676] hover:bg-[#00c853] text-zinc-950 rounded-xl text-xs font-heading font-black uppercase tracking-wider transition-all cursor-pointer select-none font-bold active:scale-97 shadow-[0_5px_15px_rgba(0,230,118,0.18)]"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current stroke-[3]" />
-                  <span>OUVIR ARTISTA</span>
-                </button>
-              ) : (
-                <button 
-                  disabled
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-zinc-900 border border-zinc-800 text-zinc-600 rounded-xl text-[10.5px] font-mono uppercase tracking-wider select-none"
-                >
-                  Indisponível
-                </button>
-              )}
+            <div className="space-y-2.5 w-full mt-4 sm:mt-5">
+              {/* Grid 2 Columns for main action pills */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Secondary Gray Ouvir Artista */}
+                {allTracks.length > 0 ? (
+                  <button 
+                    onClick={() => onSelectTrack(allTracks[0], allTracks)}
+                    className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10px] sm:text-[10.5px] font-heading font-black uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                  >
+                    <Play className="w-3 h-3 fill-current stroke-[2]" />
+                    <span>OUVIR</span>
+                  </button>
+                ) : (
+                  <button 
+                    disabled
+                    className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 text-zinc-650 rounded-xl text-[10.5px] font-mono uppercase tracking-wider select-none shrink-0"
+                  >
+                    Indisponível
+                  </button>
+                )}
 
-              {/* Secondary Outline Pill 'Seguir Artista / Contactar' */}
-              <button 
-                onClick={handleSpeakWithArtist}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-transparent border border-zinc-700/80 hover:border-zinc-550 text-zinc-200 hover:text-white rounded-xl text-xs font-heading font-black uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
-              >
-                <Mail className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span>ENTRAR EM CONTATO</span>
-              </button>
+                {/* Secondary Gray Contact block */}
+                <button 
+                  onClick={handleSpeakWithArtist}
+                  className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-zinc-700/60 hover:border-zinc-500 text-zinc-200 hover:text-white rounded-xl text-[10px] sm:text-[10.5px] font-heading font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                >
+                  <Mail className="w-3 h-3 text-zinc-400 shrink-0" />
+                  <span>CONTATO</span>
+                </button>
+              </div>
 
               {/* Extra social horizontal bar containing Share profile, Insta, WhatsApp */}
-              <div className="flex items-center gap-2 pt-1.5 justify-between">
+              <div className="grid grid-cols-5 gap-1.5 pt-0.5">
                 <button 
                   onClick={handleCopyLinkDissemination}
-                  className="p-3 bg-[#0d162a]/90 hover:bg-[#121f3d] border border-[#1b2b4e] rounded-xl text-yellow-400 hover:text-yellow-300 transition-all cursor-pointer active:scale-95 flex-1 flex items-center justify-center"
+                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-amber-500/25 hover:border-amber-500/50 rounded-xl text-yellow-400 hover:text-yellow-350 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
                   title="Copiar Link de Divulgação"
                 >
-                  <Copy className="w-4 h-4" />
+                  <Copy className="w-3.5 h-3.5" />
                 </button>
 
                 <button 
                   onClick={handleInstagramShare}
-                  className="p-3 bg-[#0d162a]/90 hover:bg-[#121f3d] border border-[#1b2b4e] rounded-xl text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-95 flex-1 flex items-center justify-center"
+                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-zinc-700/50 hover:border-zinc-550 rounded-xl text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center"
                   title="Acessar Instagram"
                 >
-                  <Instagram className="w-4 h-4" />
+                  <Instagram className="w-3.5 h-3.5" />
                 </button>
 
                 <button 
                   onClick={handleShareWhatsApp}
-                  className="p-3 bg-[#0d162a]/90 hover:bg-[#121f3d] border border-[#1b2b4e] rounded-xl text-emerald-400 hover:text-[#00e676] transition-all cursor-pointer active:scale-95 flex-1 flex items-center justify-center"
+                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl text-emerald-400 hover:text-[#00e676] transition-all cursor-pointer active:scale-95 flex items-center justify-center"
                   title="Enviar por WhatsApp"
                 >
-                  <Share2 className="w-4 h-4" />
+                  <Share2 className="w-3.5 h-3.5" />
                 </button>
 
-                <div className="relative flex-1">
+                <button 
+                  onClick={handleGeneralProfileShare}
+                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-cyan-500/25 hover:border-cyan-500/50 rounded-xl text-cyan-400 hover:text-cyan-300 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
+                  title="Compartilhar Perfil"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="relative h-full">
                   <button 
                     onClick={() => setActiveProfileMenu(!activeProfileMenu)}
-                    className={`p-3 bg-[#0d162a]/90 hover:bg-[#121f3d] border rounded-xl text-zinc-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center w-full ${activeProfileMenu ? 'border-yellow-500' : 'border-[#1b2b4e]'}`}
+                    className={`h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border rounded-xl text-zinc-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center w-full ${activeProfileMenu ? 'border-yellow-500' : 'border-zinc-700/50 hover:border-zinc-650'}`}
                   >
-                    <MoreVertical className="w-4 h-4" />
+                    <MoreVertical className="w-3.5 h-3.5" />
                   </button>
 
                   {activeProfileMenu && (
@@ -597,7 +630,7 @@ export default function ArtistPublic({
         </section>
 
         {/* RIGHT COLUMN: REPERTOIRES & TRACKS (Frequência e beleza no estilo cadastrado) */}
-        <section className="flex-1 min-w-0 space-y-7 flex flex-col justify-start">
+        <section className="flex-1 w-full min-w-0 space-y-7 flex flex-col justify-start">
           
           {/* A. REPERTOIRES SECTION - Sliding Cards precisely organized */}
           <div className="space-y-3.5 select-none">
@@ -621,79 +654,108 @@ export default function ArtistPublic({
             </div>
 
             {repertoires.length === 0 ? (
-              <div className="p-6 bg-[#050914] border border-dashed border-[#141f36] rounded-2.5xl text-center text-zinc-500 text-xs font-mono">
+              <div className="p-6 bg-[#162035] border border-dashed border-[#25324e] rounded-2.5xl text-center text-zinc-400 text-xs font-mono">
                 O artista ainda não separou suas guias em repertórios públicos.
               </div>
             ) : (
-              <div className="flex overflow-x-auto gap-4 pb-3 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                {repertoires.map((rep) => {
+              <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                {repertoires.map((rep, idx) => {
                   const repTracksNum = (rep.trackIds || []).length;
-                  const repTracks = allTracks.filter(t => rep.trackIds?.includes(t.trackId));
                   const isRepActive = selectedRepertoireId === rep.id;
+
+                  // Unique vivid custom neon gradients for different folder cards to stand out beautifully
+                  const neonGradients = [
+                    'from-[#ffd600] via-[#00e676] to-[#00e5ff]',       // Yellow-Green-Cyan glow
+                    'from-[#ff3d00] via-[#ff007f] to-[#7b2cbf]',       // Orange-Pink-Purple glow
+                    'from-[#00e5ff] via-[#4d7cff] to-[#d500f9]',       // Cyan-Blue-Indigo glow
+                    'from-[#00e676] via-[#aeea00] to-[#ffd600]',       // Electric Green-Volt-Yellow glow
+                    'from-[#ff9100] via-[#ff3d00] to-[#ff007f]'        // Sunset Amber-Orange-Rose glow
+                  ];
+
+                  const glowShadows = [
+                    'shadow-[0_0_15px_rgba(0,230,118,0.25)]',
+                    'shadow-[0_0_15px_rgba(255,0,127,0.22)]',
+                    'shadow-[0_0_15px_rgba(0,191,255,0.25)]',
+                    'shadow-[0_0_15px_rgba(16eea,0,0.22)]',
+                    'shadow-[0_0_15px_rgba(255,61,0,0.22)]'
+                  ];
+
+                  const cardColorText = isRepActive
+                    ? ['text-yellow-400', 'text-[#ff007f]', 'text-cyan-455', 'text-[#00e676]', 'text-orange-455'][idx % 5]
+                    : 'text-[#64748b] group-hover:text-white';
+
+                  const badgeColorBg = isRepActive
+                    ? ['bg-yellow-500/15 border-yellow-500/30 text-yellow-400', 'bg-rose-500/15 border-rose-500/30 text-rose-400', 'bg-cyan-500/15 border-cyan-500/35 text-cyan-400', 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400', 'bg-orange-500/15 border-orange-500/30 text-orange-400'][idx % 5]
+                    : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400';
 
                   return (
                     <div 
                       key={rep.id}
                       onClick={() => setSelectedRepertoireId(rep.id)}
-                      className={`min-w-[190px] sm:min-w-[210px] p-4.5 bg-[#050914] border hover:border-yellow-500/60 rounded-2xl flex flex-col justify-between h-[162px] cursor-pointer transition-all relative group overflow-hidden ${isRepActive ? 'border-yellow-500 ring-1 ring-yellow-500/20' : 'border-[#141f36]'}`}
+                      className={`min-w-[195px] sm:min-w-[215px] p-[1.5px] bg-gradient-to-br ${isRepActive ? neonGradients[idx % neonGradients.length] + ' ' + glowShadows[idx % glowShadows.length] : 'from-zinc-850 to-zinc-900/60 hover:from-zinc-700 hover:to-zinc-800'} rounded-2xl flex flex-col h-[162px] cursor-pointer transition-all relative group overflow-hidden active:scale-97 select-none`}
                     >
-                      {/* Ambient shine in card based on status */}
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-yellow-500/5 to-transparent rounded-full pointer-events-none"></div>
+                      <div className="w-full h-full p-4 bg-[#141b2d] rounded-[14px] flex flex-col justify-between relative z-10">
+                        {/* Ambient shine in card with neon values */}
+                        <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${isRepActive ? 'from-emerald-500/12' : 'from-zinc-700/5'} to-transparent rounded-full pointer-events-none`}></div>
 
-                      <div className="space-y-1 text-left relative z-10">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[8px] sm:text-[9px] font-mono tracking-widest text-yellow-500 font-extrabold uppercase bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded">
-                            {rep.type === 'playlist' ? 'COLEÇÃO' : rep.type === 'project' ? 'PROJETO' : 'REPERTÓRIO'}
-                          </span>
-                          
-                          {/* Share button pill on Repertoire */}
-                          <button 
-                            onClick={(e) => handleShareRepertoire(rep, e)}
-                            className="p-1 px-1.5 text-[8.5px] font-mono text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition-all flex items-center gap-1 cursor-pointer"
-                            title="Compartilhar este repertório"
-                          >
-                            <Share2 className="w-2.5 h-2.5" />
-                            <span>Share</span>
-                          </button>
-                        </div>
-
-                        <h4 className="text-sm font-heading font-black tracking-tight text-white uppercase pt-2 group-hover:text-yellow-400 transition-colors line-clamp-2">
-                          {rep.name}
-                        </h4>
-                      </div>
-
-                      {/* Waveform Fake Aesthetic Decor and Tracks count details */}
-                      <div className="relative z-10">
-                        {/* Elegant false waveforms */}
-                        <div className="flex items-end gap-[2px] h-6 mt-1 opacity-40 group-hover:opacity-75 transition-opacity">
-                          <span className="w-[1.5px] bg-yellow-500 h-[6px] rounded-full animate-pulse"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[14px] rounded-full"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[9px] rounded-full"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[22px] rounded-full"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[11px] rounded-full"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[17px] rounded-full animate-pulse"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[6px] rounded-full"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[15px] rounded-full"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[11px] rounded-full animate-bar-3"></span>
-                          <span className="w-[1.5px] bg-yellow-500 h-[5px] rounded-full"></span>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2">
-                          <span className="text-[10px] font-mono tracking-wide text-zinc-400">{repTracksNum} {repTracksNum === 1 ? 'faixa' : 'faixas'}</span>
-                          
-                          {/* Green Play Repertoire Button */}
-                          {repTracksNum > 0 && (
-                            <button
-                              onClick={(e) => handlePlayRepertoire(rep, e)}
-                              className="w-7.5 h-7.5 rounded-full bg-[#00e676] hover:bg-[#00c853] hover:scale-105 flex items-center justify-center text-zinc-950 transition shadow shadow-emerald-500/20 cursor-pointer"
-                              title="Tocar este repertório"
+                        <div className="space-y-1 text-left relative z-10 w-full">
+                          <div className="flex items-center justify-between w-full">
+                            <span className={`text-[8.5px] font-mono tracking-widest font-extrabold uppercase border px-2 py-0.5 rounded-lg ${badgeColorBg}`}>
+                              {rep.type === 'playlist' ? 'COLEÇÃO' : rep.type === 'project' ? 'PROJETO' : 'REPERTÓRIO'}
+                            </span>
+                            
+                            {/* Share button style matching image reference */}
+                            <button 
+                              onClick={(e) => handleShareRepertoire(rep, e)}
+                              className="p-1 px-1.5 text-[8.5px] font-mono text-zinc-400 hover:text-white bg-[#101625]/90 border border-zinc-800/80 hover:border-zinc-700 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                              title="Compartilhar este repertório"
                             >
-                              <Play className="w-3.5 h-3.5 fill-current stroke-[3] ml-0.5 text-zinc-950" />
+                              <Share2 className="w-2.5 h-2.5" />
+                              <span>Share</span>
                             </button>
-                          )}
+                          </div>
+
+                          <h4 className={`text-[13.5px] font-heading font-black tracking-tight uppercase pt-2.5 transition-colors line-clamp-2 ${isRepActive ? 'text-white' : 'text-zinc-200 group-hover:text-white'}`}>
+                            {rep.name}
+                          </h4>
+                        </div>
+
+                        {/* Waveform Fake Aesthetic Decor and Tracks count details */}
+                        <div className="relative z-10 w-full">
+                          {/* Elegant false waveforms of different neon options */}
+                          <div className="flex items-end gap-[2px] h-6 mt-1 opacity-50 group-hover:opacity-90 transition-opacity">
+                            <span className={`w-[1.5px] h-[6px] rounded-full animate-pulse bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[14px] rounded-full bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[9px] rounded-full bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[22px] rounded-full bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[11px] rounded-full bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[17px] rounded-full animate-pulse bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[6px] rounded-full bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[15px] rounded-full bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[11px] rounded-full animate-bar-3 bg-current ${cardColorText}`}></span>
+                            <span className={`w-[1.5px] h-[5px] rounded-full bg-current ${cardColorText}`}></span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 w-full">
+                            <span className="text-[10px] font-mono tracking-wide text-zinc-400">{repTracksNum} {repTracksNum === 1 ? 'faixa' : 'faixas'}</span>
+                            
+                            {/* Play Repertoire Button */}
+                            {repTracksNum > 0 && (
+                              <button
+                                onClick={(e) => handlePlayRepertoire(rep, e)}
+                                className={`w-7.5 h-7.5 rounded-full hover:scale-105 flex items-center justify-center text-zinc-950 transition shadow cursor-pointer ${isRepActive ? 'bg-[#00e676] hover:bg-[#00c853]' : 'bg-zinc-800 hover:bg-zinc-700 text-white hover:text-[#00e676]'}`}
+                                title="Tocar este repertório"
+                              >
+                                {isRepActive ? (
+                                  <Play className="w-3.5 h-3.5 fill-current stroke-[3] ml-0.5 text-zinc-950" />
+                                ) : (
+                                  <Play className="w-3.5 h-3.5 fill-transparent stroke-[2] ml-0.5 text-current" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-
                     </div>
                   );
                 })}
@@ -705,7 +767,7 @@ export default function ArtistPublic({
           <div className="space-y-4">
             
             {/* Header section with search & filter inputs */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#141f36] pb-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#263554] pb-3.5">
               <div className="text-left">
                 <h3 className="text-[13px] font-mono font-black tracking-widest text-[#5c7094] uppercase flex items-center gap-2">
                   <Disc className="w-4.5 h-4.5 text-emerald-400 rotate-slow" />
@@ -733,7 +795,7 @@ export default function ArtistPublic({
                     placeholder="Buscar músicas..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full sm:w-48 pl-8 pr-3.5 py-1.5 bg-[#050914] border border-[#141f36] hover:border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-550 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500/20 transition-all font-mono"
+                    className="w-full sm:w-48 pl-8 pr-3.5 py-1.5 bg-[#162035] border border-[#263554] hover:border-zinc-500 rounded-xl text-xs text-white placeholder-zinc-550 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500/20 transition-all font-mono"
                   />
                   <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 </div>
@@ -743,7 +805,7 @@ export default function ArtistPublic({
                   <select
                     value={selectedGenreFilter}
                     onChange={(e) => setSelectedGenreFilter(e.target.value)}
-                    className="px-3.5 py-1.5 bg-[#050914] border border-[#141f36] hover:border-zinc-700 rounded-xl text-xs text-zinc-300 font-mono uppercase font-bold focus:outline-none cursor-pointer focus:border-emerald-500 appearance-none pr-8"
+                    className="px-3.5 py-1.5 bg-[#162035] border border-[#263554] hover:border-zinc-500 rounded-xl text-xs text-zinc-300 font-mono uppercase font-bold focus:outline-none cursor-pointer focus:border-emerald-500 appearance-none pr-8"
                   >
                     {genres.map(g => (
                       <option key={g} value={g}>{g === 'All' ? 'TEMAS' : g}</option>
@@ -762,19 +824,19 @@ export default function ArtistPublic({
             )}
 
             {allTracks.length === 0 ? (
-              <div className="text-center py-16 bg-[#050914]/40 border border-[#141f36] rounded-3xl text-zinc-500 text-xs font-mono">
+              <div className="text-center py-16 bg-[#162035]/50 border border-[#263554] rounded-3xl text-zinc-400 text-xs font-mono">
                 Artor ainda não disponibilizou nenhuma gravação ativa no acervo.
               </div>
             ) : activeDisplayTracks.length === 0 ? (
-              <div className="text-center py-12 bg-[#050914]/40 border border-[#141f36] rounded-2xl text-zinc-500 text-xs font-mono">
+              <div className="text-center py-12 bg-[#162035]/50 border border-[#263554] rounded-2xl text-zinc-400 text-xs font-mono">
                 Nenhuma gravação encontrada com as palavras buscadas / filtros.
               </div>
             ) : (
               /* High Polished List of Tracks modeled exactly as shown in screenshot */
-              <div id="pub-tracks-list" className="border border-[#141f36] rounded-2xl bg-[#050914]/60 backdrop-blur-md overflow-hidden text-left flex flex-col shadow-xl">
+              <div id="pub-tracks-list" className="border border-[#263554] rounded-2xl bg-[#162035]/70 backdrop-blur-md overflow-hidden text-left flex flex-col shadow-xl">
                 
                 {/* Headers Line Table Column */}
-                <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-4 border-b border-[#141f36] text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-extrabold select-none">
+                <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-4 border-b border-[#263554] text-[10px] font-mono uppercase tracking-widest text-[#8495b4] font-extrabold select-none">
                   <div className="col-span-1">#</div>
                   <div className="col-span-5">MÚSICA / GUIA EM MP3</div>
                   <div className="col-span-3">ESTILO / GÊNERO</div>
@@ -792,7 +854,7 @@ export default function ArtistPublic({
                   const durationText = mockTimes[idx % mockTimes.length];
 
                   return (
-                    <div key={track.trackId} className="flex flex-col w-full border-b last:border-b-0 border-[#141f36]/40">
+                    <div key={track.trackId} className="flex flex-col w-full border-b last:border-b-0 border-[#263554]/40">
                       
                       {/* Responsive Grid block */}
                       <div 
@@ -803,72 +865,80 @@ export default function ArtistPublic({
                             onSelectTrack(track, activeDisplayTracks);
                           }
                         }}
-                        className={`grid grid-cols-12 gap-3 md:gap-4 px-4.5 sm:px-6 py-4 items-center cursor-pointer transition-all select-none border-l-[3.5px] ${isCurrentlyPlaying ? 'bg-[#0f1b33]/40 border-l-emerald-400 shadow-inner' : 'border-l-transparent hover:border-l-zinc-700 hover:bg-[#080d19]/60'}`}
+                        className={`grid grid-cols-12 gap-3 md:gap-4 px-4.5 sm:px-6 py-1.5 md:py-2 items-center cursor-pointer transition-all select-none border-l-[3.5px] group ${isCurrentlyPlaying ? 'bg-[#1a253e] border-l-emerald-400 shadow-inner' : 'border-l-transparent hover:border-l-zinc-500 hover:bg-[#1b2438]/65'}`}
                       >
-                        {/* Col 1: Play trigger + index */}
-                        <div className="col-span-2 sm:col-span-1 flex items-center gap-3.5">
+                        {/* Col 1: Play trigger + index swap (Spotify style for ultimate elegance and minimum width) */}
+                        <div className="col-span-2 sm:col-span-1 flex items-center justify-start min-w-8">
                           {isCurrentlyPlaying ? (
                             <button
                               onClick={(e) => {
-                                e.stopPropagation();
-                                onPlayPause();
+                                  e.stopPropagation();
+                                  onPlayPause();
                               }}
-                              className="w-8 h-8 rounded-full bg-emerald-400/15 border border-emerald-400 flex items-center justify-center text-emerald-400 cursor-pointer focus:outline-none"
+                              className="w-7.5 h-7.5 rounded-full bg-[#00e676]/10 border border-[#00e676] flex items-center justify-center text-[#00e676] cursor-pointer focus:outline-none shrink-0"
                             >
                               {isActiveAndPlaying ? (
-                                <Pause className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+                                <Pause className="w-3.5 h-3.5 text-[#00e676] fill-[#00e676]" />
                               ) : (
                                 <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
                               )}
                             </button>
                           ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectTrack(track, activeDisplayTracks);
-                              }}
-                              className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-emerald-400 hover:border-emerald-500 transition-all cursor-pointer focus:outline-none"
-                            >
-                              <Play className="w-3 h-3 text-white fill-white ml-0.5" />
-                            </button>
+                            <div className="relative w-7.5 h-7.5 flex items-center justify-start">
+                              {/* Show index number, hide on row hover */}
+                              <span className="font-mono text-[11px] font-bold text-zinc-400 block group-hover:hidden pl-1 select-none">
+                                {(idx + 1).toString().padStart(2, '0')}
+                              </span>
+                              {/* Show play button icon on row hover */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectTrack(track, activeDisplayTracks);
+                                }}
+                                className="hidden group-hover:flex w-7 h-7 rounded-full bg-[#1c253b] border border-zinc-700/50 items-center justify-center text-white hover:text-emerald-400 hover:border-emerald-500 transition-all cursor-pointer focus:outline-none"
+                              >
+                                <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                              </button>
+                            </div>
                           )}
-
-                          <span className="font-mono text-[10.5px] font-bold text-zinc-500 hidden sm:inline">
-                            {(idx + 1).toString().padStart(2, '0')}
-                          </span>
                         </div>
 
                         {/* Col 2: Title & Waveform bar layout from Reference */}
-                        <div className="col-span-8 sm:col-span-5 flex items-center gap-3 min-w-0">
+                        <div className="col-span-7 sm:col-span-5 flex items-center gap-3 min-w-0">
                           
                           {/* Mini dynamic waveform indicator next to title */}
-                          <div className="flex items-end gap-[1.5px] h-3.5 text-emerald-400 shrink-0 select-none hidden lg:flex mr-1">
+                          <div className="flex items-end gap-[1.5px] h-3.5 text-[#00e676] shrink-0 select-none hidden lg:flex mr-1">
                             <span className={`w-[1.5px] bg-[#00e676] max-h-3 rounded-full ${isActiveAndPlaying ? 'h-3 animate-bar-2' : 'h-1.5'}`}></span>
                             <span className={`w-[1.5px] bg-[#00e676] max-h-4.5 rounded-full ${isActiveAndPlaying ? 'h-4.5 animate-bar-3' : 'h-2.5'}`}></span>
                             <span className={`w-[1.5px] bg-[#00e676] max-h-2 rounded-full ${isActiveAndPlaying ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
                           </div>
 
                           <div className="min-w-0 text-left">
-                            <h4 className={`text-xs sm:text-sm font-heading font-black truncate uppercase tracking-wide ${isCurrentlyPlaying ? 'text-[#00e676]' : 'text-zinc-100'}`}>
+                            <h4 className={`text-[16px] sm:text-[16px] font-heading font-black truncate uppercase tracking-wide ${isCurrentlyPlaying ? 'text-[#00e676]' : 'text-zinc-100'}`}>
                               {track.title}
                             </h4>
-                            {track.composer && (
-                              <p className="text-[9px] text-[#5c7094] font-mono uppercase truncate mt-0.5">
-                                Autor: {track.composer}
-                              </p>
-                            )}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 mt-0.5 min-w-0">
+                              {track.composer && (
+                                <p className="text-[12px] sm:text-[12px] text-[#8495b4] font-mono uppercase truncate">
+                                  Autor: {track.composer}
+                                </p>
+                              )}
+                              <span className="inline-flex self-start px-1.5 py-[2px] bg-[#141b2e] border border-zinc-700/60 text-zinc-300 font-mono text-[10px] sm:text-[11px] font-bold rounded uppercase shrink-0">
+                                {track.genre || 'Sertanejo'}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
                         {/* Col 3: Style descriptor tags */}
-                        <div className="col-span-4 block sm:col-span-3 text-left">
-                          <span className="px-2.5 py-1 bg-[#10182c] border border-[#1b2b4d] text-zinc-400 font-mono text-[9px] font-bold rounded-lg uppercase tracking-wider">
+                        <div className="hidden sm:block sm:col-span-3 text-left">
+                          <span className="px-2.5 py-1 bg-[#141b2e] border border-zinc-700/60 text-zinc-300 font-mono text-[9px] font-bold rounded-lg uppercase tracking-wider">
                             {track.genre || 'Sertanejo'}
                           </span>
                         </div>
 
                         {/* Col 4: Durations & popup menus */}
-                        <div className="col-span-2 sm:col-span-3 text-right flex items-center justify-end gap-3.5 relative">
+                        <div className="col-span-3 sm:col-span-3 text-right flex items-center justify-end gap-1 sm:gap-2 relative">
                           <span className="font-mono text-xs text-zinc-400 hidden md:inline">{durationText}</span>
                           
                           {/* WhatsApp contact regarding track */}
@@ -877,10 +947,10 @@ export default function ArtistPublic({
                               e.stopPropagation();
                               handleContactForTrack(track);
                             }}
-                            className="p-1 px-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20 rounded z-10 transition-colors"
+                            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-[#00e676] hover:bg-emerald-500/10 border border-transparent rounded-lg z-10 transition-colors"
                             title="Conversar sobre esta guia de áudio"
                           >
-                            <MessageSquare className="w-4 h-4 text-zinc-400 hover:text-emerald-400" />
+                            <MessageSquare className="w-4 h-4" />
                           </button>
 
                           {/* Quick track sharing options menu */}
@@ -890,9 +960,9 @@ export default function ArtistPublic({
                                 e.stopPropagation();
                                 setActiveMenuTrackId(activeMenuTrackId === track.trackId ? null : track.trackId);
                               }}
-                              className="p-1.5 text-[#5c7094] hover:text-white rounded-lg hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-colors cursor-pointer z-10"
+                              className="w-8 h-8 flex items-center justify-center text-[#8495b4] hover:text-white rounded-lg hover:bg-[#20293d] border border-transparent hover:border-[#2d3a54] transition-colors cursor-pointer z-10"
                             >
-                              <MoreVertical className="w-3.5 h-3.5" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
 
                             {activeMenuTrackId === track.trackId && (
@@ -901,14 +971,14 @@ export default function ArtistPublic({
                                   e.stopPropagation();
                                   setActiveMenuTrackId(null);
                                 }} />
-                                <div className="absolute right-0 mt-2 w-48 bg-[#0a0f1d] border border-[#1b2a47] rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.5)] py-2 z-50 text-left">
+                                <div className="absolute right-0 mt-2 w-48 bg-[#182033] border border-[#2c3a5c] rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.5)] py-2 z-50 text-left">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onSelectTrack(track, activeDisplayTracks);
                                       setActiveMenuTrackId(null);
                                     }}
-                                    className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                                    className="w-full px-4 py-2 hover:bg-[#1f283d] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
                                   >
                                     <Play className="w-3.5 h-3.5" /> Ouvir música
                                   </button>
@@ -916,8 +986,9 @@ export default function ArtistPublic({
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleCopyTrackLink(track);
+                                      setActiveMenuTrackId(null);
                                     }}
-                                    className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                                    className="w-full px-4 py-2 hover:bg-[#1f283d] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
                                   >
                                     <Copy className="w-3.5 h-3.5" /> Copiar link da música
                                   </button>
@@ -925,8 +996,9 @@ export default function ArtistPublic({
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleShareTrackWhatsApp(track);
+                                      setActiveMenuTrackId(null);
                                     }}
-                                    className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                                    className="w-full px-4 py-2 hover:bg-[#1f283d] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
                                   >
                                     <Share2 className="w-3.5 h-3.5 text-emerald-400" /> Compartilhar música
                                   </button>
@@ -934,8 +1006,9 @@ export default function ArtistPublic({
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleEmbedTrack(track);
+                                      setActiveMenuTrackId(null);
                                     }}
-                                    className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                                    className="w-full px-4 py-2 hover:bg-[#1f283d] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
                                   >
                                     <Code className="w-3.5 h-3.5 text-yellow-500" /> Incorporar música
                                   </button>
@@ -946,7 +1019,7 @@ export default function ArtistPublic({
                                         setExpandedLyricsTrackId(lyricsOpen ? null : track.trackId);
                                         setActiveMenuTrackId(null);
                                       }}
-                                      className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2 border-t border-[#141f36]/45"
+                                      className="w-full px-4 py-2 hover:bg-[#1f283d] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2 border-t border-[#263554]/45"
                                     >
                                       <Info className="w-3.5 h-3.5 text-amber-500" /> Letra da música
                                     </button>
@@ -961,14 +1034,14 @@ export default function ArtistPublic({
 
                       {/* Expandable lyrics block panel */}
                       {track.lyrics && lyricsOpen && (
-                        <div className="p-5.5 bg-[#03060f]/90 border-t border-b border-[#141f36]/40 text-left">
-                          <div className="flex items-center justify-between border-b border-[#141f36]/40 pb-2 mb-3 select-none">
+                        <div className="p-5.5 bg-[#141c2d]/95 border-t border-b border-[#263554]/50 text-left">
+                          <div className="flex items-center justify-between border-b border-[#263554]/40 pb-2 mb-3 select-none">
                             <span className="text-[9px] font-mono tracking-widest text-[#d4af37] font-extrabold uppercase flex items-center gap-1">
                               <Info className="w-3 h-3 text-[#d4af37]" /> Letra Completa
                             </span>
                             <button 
                               onClick={() => setExpandedLyricsTrackId(null)}
-                              className="text-[9px] text-zinc-500 hover:text-white transition font-mono tracking-widest font-bold uppercase cursor-pointer"
+                              className="text-[9px] text-zinc-400 hover:text-white transition font-mono tracking-widest font-bold uppercase cursor-pointer"
                             >
                               [ fechar letra ]
                             </button>
@@ -985,7 +1058,7 @@ export default function ArtistPublic({
           </div>
 
           {/* C. BIO & ACQUISITION CARD OVERVIEW */}
-          <div className="bg-[#050914] border border-[#141f36] rounded-2.5xl p-6 text-left space-y-4">
+          <div className="bg-[#182033] border border-[#273554] rounded-2.5xl p-6 text-left space-y-4">
             <h4 className="text-[10px] font-mono tracking-widest text-[#5c7094] uppercase font-bold">SOBRE O ARTISTA & COMPOSITOR</h4>
             <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
               {artist.bio ? artist.bio : `O conceituado compositor ${artist.name} disponibiliza seu portfólio autoral, contendo guias de canções de alta fidelidade exclusivas para gravação e aquisição comercial de bandas, cantores e produtoras.`}
@@ -1009,7 +1082,7 @@ export default function ArtistPublic({
       {/* Embed Code Modal */}
       {showEmbedModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#080d1a] border border-[#1b2b4d] rounded-2.5xl max-w-lg w-full p-6 text-left space-y-4 shadow-2xl relative select-text">
+          <div className="bg-[#182033] border border-[#273554] rounded-2.5xl max-w-lg w-full p-6 text-left space-y-4 shadow-2xl relative select-text">
             <h4 className="text-sm font-heading font-black tracking-widest text-yellow-500 uppercase">INCORPORAR ELEMENTO MUSICAL (EMBED)</h4>
             
             <p className="text-zinc-400 text-[11px] leading-relaxed">

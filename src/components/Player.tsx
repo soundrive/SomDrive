@@ -21,7 +21,8 @@ import {
   Zap,
   Wifi,
   MoreVertical,
-  List
+  List,
+  ChevronDown
 } from 'lucide-react';
 import { Music } from '../types';
 
@@ -250,6 +251,7 @@ export default function Player({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   
   // Data saver (3G/4G/5G) mode to restrict graphic re-renders and audio preloading
   const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {
@@ -716,144 +718,228 @@ export default function Player({
         id="bottom-dock-player" 
         onContextMenu={(e) => e.preventDefault()}
         className="fixed bottom-0 left-0 right-0 z-40 bg-[#050609]/95 border-t border-zinc-800/80 backdrop-blur-2xl transition-all duration-350 shadow-[0_-10px_35px_rgba(0,0,0,0.8)] select-none"
+        style={{
+          paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))'
+        }}
       >
         <div className="max-w-7xl mx-auto p-4 md:py-5 md:px-8 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 min-h-[90px]">
           
-          {/* MOBILE ONLY: Ultra-polished structured view matching the User's Screenshot */}
-          <div className="flex md:hidden flex-col w-full gap-3 px-2 py-3">
-            {/* Row 1: Graphic Disc Artwork, Title Metadata, Heart Toggler */}
-            <div className="flex items-center justify-between gap-3 w-full">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div 
-                  onClick={() => setShowFicha(!showFicha)}
-                  className="relative w-12 h-12 rounded-xl bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0 cursor-pointer active:scale-95 transition-all"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
-                  <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:6px_8px]"></div>
-                  <div className="relative flex flex-col items-center justify-center p-1 text-emerald-400 text-center z-10">
-                    <div className="flex items-end gap-[1.5px] h-3.5 justify-center">
-                      <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
-                      <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-2' : 'h-2.5'}`}></span>
-                      <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2.5 animate-bar-3' : 'h-2'}`}></span>
+          {/* MOBILE ONLY: Compact / Expanded Adaptive Player */}
+          <div className="flex md:hidden flex-col w-full px-2">
+            {!isMobileExpanded ? (
+              /* PLAYER COMPACTO */
+              <div 
+                onClick={() => setIsMobileExpanded(true)}
+                className="flex items-center justify-between w-full h-[64px] select-none cursor-pointer"
+              >
+                {/* Left: Mini gráfico, Título, Compositor */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {/* Mini Gráfico */}
+                  <div className="relative w-10 h-10 rounded-lg bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+                    <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:6px_8px]"></div>
+                    <div className="relative flex flex-col items-center justify-center p-1 text-emerald-400 text-center z-10">
+                      <div className="flex items-end gap-[1.5px] h-3.5 justify-center">
+                        <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
+                        <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-2' : 'h-2.5'}`}></span>
+                        <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2.5 animate-bar-3' : 'h-2'}`}></span>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Title & Compositor */}
+                  <div className="min-w-0 text-left">
+                    <h4 className="font-heading font-black text-xs sm:text-sm tracking-wide text-white uppercase truncate">
+                      {currentTrack.title}
+                    </h4>
+                    <p className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-0.5 truncate">
+                      {currentTrack.singer || currentTrack.composer || "STARNEJO"}
+                    </p>
                   </div>
                 </div>
 
-                <div 
-                  onClick={() => {
-                    if (onNavigate && currentTrack?.artistId) {
-                      onNavigate('public', { id: currentTrack.artistId });
-                    }
-                  }}
-                  className="min-w-0 text-left cursor-pointer group/mobile-meta active:scale-97 transition-all"
-                  title="Clique para voltar ao perfil do compositor"
-                >
-                  <h4 id="player-track-title-mobile" className="font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none group-hover/mobile-meta:text-[#d4af37]">
-                    {currentTrack.title}
-                  </h4>
-                  <p id="player-track-artist-mobile" className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
-                    {currentTrack.singer || "STARNEJO"}
-                    <span className="text-[7.5px] font-sans font-black text-[#d4af37] whitespace-nowrap bg-amber-500/10 border border-amber-500/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
-                      VOLTAR 📁
-                    </span>
-                  </p>
+                {/* Right: Play/Pause button + Expand Button */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Play/Pause Button */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlayPause();
+                    }}
+                    className="w-10 h-10 rounded-full bg-[#050608] border border-emerald-500/85 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.2)] cursor-pointer outline-none"
+                    title={isPlaying ? "Pausar" : "Tocar"}
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-4 h-4 fill-white text-white" />
+                    ) : (
+                      <Play className="w-4 h-4 fill-white text-white ml-0.5" />
+                    )}
+                  </button>
+
+                  {/* Expand Chevron Up */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsMobileExpanded(true);
+                    }}
+                    className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white rounded-xl active:bg-zinc-900 transition-colors cursor-pointer"
+                    title="Expandir player"
+                  >
+                    <ChevronDown className="w-5 h-5 rotate-180" />
+                  </button>
                 </div>
               </div>
+            ) : (
+              /* PLAYER EXPANDIDO */
+              <div className="flex flex-col w-full gap-3 py-2">
+                {/* Expanded Header Control info bar */}
+                <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5 mb-1 select-none">
+                  <span className="text-[9px] font-mono tracking-widest text-[#00e676] font-extrabold uppercase">
+                    GUIA ATIVA EXPANDIDA
+                  </span>
+                  <button 
+                    onClick={() => setIsMobileExpanded(false)}
+                    className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-[#00e676] hover:text-white transition font-mono text-[10px] tracking-wider font-extrabold uppercase rounded-lg cursor-pointer select-none active:scale-95"
+                  >
+                    RECOLHER ✕
+                  </button>
+                </div>
 
-              {/* Heart Button */}
-              <button 
-                onClick={() => setIsFavorited(!isFavorited)}
-                className="transition-all duration-300 hover:scale-110 active:scale-90 cursor-pointer shrink-0 p-1 bg-zinc-900/30 rounded-lg"
-                title={isFavorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-              >
-                <Heart className={`w-4.5 h-4.5 transition-colors ${isFavorited ? 'fill-emerald-450 text-emerald-450 stroke-emerald-500' : 'text-zinc-500 hover:text-white'}`} />
-              </button>
-            </div>
+                {/* Row 1: Graphic Disc Artwork, Title Metadata, Heart Toggler */}
+                <div className="flex items-center justify-between gap-3 w-full">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div 
+                      onClick={() => setShowFicha(!showFicha)}
+                      className="relative w-11 h-11 rounded-xl bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0 cursor-pointer active:scale-95 transition-all"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+                      <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:6px_8px]"></div>
+                      <div className="relative flex flex-col items-center justify-center p-1 text-emerald-400 text-center z-10">
+                        <div className="flex items-end gap-[1.5px] h-3.5 justify-center">
+                          <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
+                          <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-2' : 'h-2.5'}`}></span>
+                          <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2.5 animate-bar-3' : 'h-2'}`}></span>
+                        </div>
+                      </div>
+                    </div>
 
-            {/* Row 2: Elegant Timeline progress bar */}
-            <div className="w-full flex items-center gap-3 font-mono text-[10px] text-zinc-400 font-bold select-none">
-              <span className="w-8 text-left select-none">{formatTime(currentTime)}</span>
-              
-              <input 
-                type="range"
-                min={0}
-                max={duration || 100}
-                value={currentTime}
-                onChange={(e) => handleSeek(Number(e.target.value))}
-                className="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500"
-                style={{
-                  background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
-                }}
-              />
-              
-              <span className="w-8 text-right select-none">{formatTime(duration)}</span>
-            </div>
+                    <div 
+                      onClick={() => {
+                        if (onNavigate && currentTrack?.artistId) {
+                          onNavigate('public', { id: currentTrack.artistId });
+                        }
+                      }}
+                      className="min-w-0 text-left cursor-pointer group/mobile-meta active:scale-97 transition-all"
+                      title="Clique para voltar ao perfil do compositor"
+                    >
+                      <h4 id="player-track-title-mobile" className="font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none group-hover/mobile-meta:text-[#d4af37]">
+                        {currentTrack.title}
+                      </h4>
+                      <p id="player-track-artist-mobile" className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
+                        {currentTrack.singer || "STARNEJO"}
+                        <span className="text-[7.5px] font-sans font-black text-[#d4af37] whitespace-nowrap bg-amber-500/10 border border-amber-500/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
+                          VOLTAR 📁
+                        </span>
+                      </p>
+                    </div>
+                  </div>
 
-            {/* Row 3: Professional Compact Controls Grid */}
-            <div className="w-full flex items-center justify-between px-4 py-1.5 select-none">
-              {/* Shuffle */}
-              <button 
-                onClick={() => setIsShuffle(!isShuffle)}
-                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isShuffle ? 'text-emerald-400' : 'text-zinc-500'}`}
-              >
-                <Shuffle className="w-4 h-4" />
-              </button>
+                  {/* Heart Button */}
+                  <button 
+                    onClick={() => setIsFavorited(!isFavorited)}
+                    className="transition-all duration-300 hover:scale-110 active:scale-90 cursor-pointer shrink-0 p-1 bg-zinc-900/30 rounded-lg"
+                    title={isFavorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                  >
+                    <Heart className={`w-4.5 h-4.5 transition-colors ${isFavorited ? 'fill-emerald-450 text-emerald-450 stroke-emerald-500' : 'text-zinc-500 hover:text-white'}`} />
+                  </button>
+                </div>
 
-              {/* Previous */}
-              <button 
-                onClick={onPrev}
-                className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
-              >
-                <SkipBack className="w-4.5 h-4.5" />
-              </button>
+                {/* Row 2: Elegant Timeline progress bar */}
+                <div className="w-full flex items-center gap-3 font-mono text-[10px] text-zinc-400 font-bold select-none">
+                  <span className="w-8 text-left select-none">{formatTime(currentTime)}</span>
+                  
+                  <input 
+                    type="range"
+                    min={0}
+                    max={duration || 100}
+                    value={currentTime}
+                    onChange={(e) => handleSeek(Number(e.target.value))}
+                    className="flex-1 h-[3px] bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500"
+                    style={{
+                      background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
+                    }}
+                  />
+                  
+                  <span className="w-8 text-right select-none">{formatTime(duration)}</span>
+                </div>
 
-              {/* Large Green Glowing play/pause */}
-              <button 
-                onClick={onPlayPause}
-                className="w-13 h-13 rounded-full bg-[#050608] border border-emerald-500/80 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.35)] cursor-pointer outline-none shrink-0"
-              >
-                {isPlaying ? (
-                  <Pause className="w-4.5 h-4.5 fill-white text-white" />
-                ) : (
-                  <Play className="w-4.5 h-4.5 fill-white text-white ml-0.5" />
-                )}
-              </button>
+                {/* Row 3: Professional Compact Controls Grid */}
+                <div className="w-full flex items-center justify-between px-4 py-1 select-none">
+                  {/* Shuffle */}
+                  <button 
+                    onClick={() => setIsShuffle(!isShuffle)}
+                    className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isShuffle ? 'text-emerald-400' : 'text-zinc-500'}`}
+                  >
+                    <Shuffle className="w-4 h-4" />
+                  </button>
 
-              {/* Next */}
-              <button 
-                onClick={onNext}
-                className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
-              >
-                <SkipForward className="w-4.5 h-4.5" />
-              </button>
+                  {/* Previous */}
+                  <button 
+                    onClick={onPrev}
+                    className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
+                  >
+                    <SkipBack className="w-4.5 h-4.5" />
+                  </button>
 
-              {/* Repeat */}
-              <button 
-                onClick={() => setIsRepeat(!isRepeat)}
-                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isRepeat ? 'text-emerald-400' : 'text-zinc-500'}`}
-              >
-                <Repeat className="w-4 h-4" />
-              </button>
-            </div>
+                  {/* Large Green Glowing play/pause */}
+                  <button 
+                    onClick={onPlayPause}
+                    className="w-12 h-12 rounded-full bg-[#050608] border border-emerald-500/80 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.35)] cursor-pointer outline-none shrink-0"
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-4.5 h-4.5 fill-white text-white" />
+                    ) : (
+                      <Play className="w-4.5 h-4.5 fill-white text-white ml-0.5" />
+                    )}
+                  </button>
 
-            {/* Row 4: Side-by-side luxurious "LETRA" and "CARRO" button pills */}
-            <div className="grid grid-cols-2 gap-2 w-full mt-1">
-              <button 
-                onClick={() => setShowLyrics(true)}
-                className="flex items-center justify-center gap-1 py-2.5 bg-transparent border border-emerald-500/25 hover:border-emerald-500 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
-              >
-                <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>LETRA</span>
-              </button>
+                  {/* Next */}
+                  <button 
+                    onClick={onNext}
+                    className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
+                  >
+                    <SkipForward className="w-4.5 h-4.5" />
+                  </button>
 
-              <button 
-                onClick={() => setCarMode(true)}
-                className="flex items-center justify-center gap-1 py-2.5 bg-yellow-500/10 border border-yellow-500/80 hover:border-yellow-400 text-yellow-400 hover:text-yellow-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97 shadow-[0_0_10px_rgba(234,179,8,0.15)]"
-              >
-                <Car className="w-4 h-4 text-yellow-500 shrink-0" />
-                <span>CARRO</span>
-              </button>
-            </div>
+                  {/* Repeat */}
+                  <button 
+                    onClick={() => setIsRepeat(!isRepeat)}
+                    className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isRepeat ? 'text-emerald-400' : 'text-zinc-500'}`}
+                  >
+                    <Repeat className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Row 4: Side-by-side luxurious "LETRA" and "CARRO" button pills */}
+                <div className="grid grid-cols-2 gap-2 w-full mt-0.5">
+                  <button 
+                    onClick={() => setShowLyrics(true)}
+                    className="flex items-center justify-center gap-1 py-2 bg-transparent border border-emerald-500/25 hover:border-emerald-500 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>LETRA</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setCarMode(true)}
+                    className="flex items-center justify-center gap-1 py-2 bg-yellow-500/10 border border-yellow-500/80 hover:border-yellow-400 text-yellow-400 hover:text-yellow-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97 shadow-[0_0_10px_rgba(234,179,8,0.15)]"
+                  >
+                    <Car className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                    <span>CARRO</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* DESKTOP/TABLET ONLY: Left Block: Perfect Soundrive Album Thumbnail & Text Metadata */}
@@ -988,7 +1074,7 @@ export default function Player({
                 max={duration || 100}
                 value={currentTime}
                 onChange={(e) => handleSeek(Number(e.target.value))}
-                className="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500 hover:accent-emerald-400"
+                className="flex-1 h-[3px] bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500 hover:accent-emerald-400"
                 style={{
                   background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
                 }}
