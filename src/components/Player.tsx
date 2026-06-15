@@ -251,7 +251,7 @@ export default function Player({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
-  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(true);
   
   // Data saver (3G/4G/5G) mode to restrict graphic re-renders and audio preloading
   const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {
@@ -361,13 +361,60 @@ export default function Player({
     if (!currentTrack) return;
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.somdrive.com.br';
+        const brandVersion = "v=2";
+
+        const isValidArtworkUrl = (url: any): boolean => {
+          if (typeof url !== 'string') return false;
+          const cleaned = url.trim();
+          if (cleaned.length === 0) return false;
+          if (!cleaned.startsWith("https://")) return false;
+          const lower = cleaned.toLowerCase();
+          if (lower.includes(".svg")) return false;
+          if (lower.includes("favicon") && !lower.includes("somdrive-player")) return false;
+          return true;
+        };
+
+        const hasValidCover = currentTrack.coverUrl && isValidArtworkUrl(currentTrack.coverUrl);
+
+        const artwork = [
+          {
+            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-96.png?${brandVersion}`,
+            sizes: "96x96",
+            type: "image/png",
+          },
+          {
+            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-128.png?${brandVersion}`,
+            sizes: "128x128",
+            type: "image/png",
+          },
+          {
+            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-192.png?${brandVersion}`,
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-256.png?${brandVersion}`,
+            sizes: "256x256",
+            type: "image/png",
+          },
+          {
+            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-384.png?${brandVersion}`,
+            sizes: "384x384",
+            type: "image/png",
+          },
+          {
+            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-512.png?${brandVersion}`,
+            sizes: "512x512",
+            type: "image/png",
+          },
+        ];
+
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: currentTrack.title,
-          artist: currentTrack.singer || currentTrack.composer || "STARNEJO",
+          title: currentTrack.title || "SomDrive",
+          artist: currentTrack.singer || currentTrack.composer || "SomDrive",
           album: "SomDrive - Catálogo Musical",
-          artwork: [
-            { src: '/favicon.svg', sizes: '512x512', type: 'image/svg+xml' }
-          ]
+          artwork: artwork
         });
 
         navigator.mediaSession.setActionHandler('play', () => {

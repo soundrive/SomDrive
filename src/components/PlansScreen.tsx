@@ -398,7 +398,9 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
 
               <div className="text-[11px] text-slate-400 font-medium text-center space-y-1.5">
                 <p>Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.</p>
-                <p className="text-amber-450 font-semibold font-mono bg-amber-950/10 p-1 rounded border border-amber-500/10 text-[10px]">Depois do pagamento, aguarde a confirmação e volte automaticamente ao seu painel.</p>
+                <p className="text-amber-455 font-semibold font-mono bg-amber-950/15 p-2 rounded border border-amber-500/15 text-[10px] leading-relaxed">
+                  Após realizar o pagamento, aguarde o retorno automático ao SomDrive. Se permanecer na tela do Mercado Pago, use a opção voltar do navegador e toque em ‘Já paguei — verificar agora’.
+                </p>
               </div>
             </div>
           </div>
@@ -458,7 +460,9 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
 
               <div className="text-[11px] text-slate-400 font-medium text-center space-y-1.5">
                 <p>Pagamento único. Você escolhe cartão ou Pix no Mercado Pago. Para renovar, basta pagar novamente.</p>
-                <p className="text-amber-450 font-semibold font-mono bg-amber-950/10 p-1 rounded border border-amber-500/10 text-[10px]">Depois do pagamento, aguarde a confirmação e volte automaticamente ao seu painel.</p>
+                <p className="text-amber-455 font-semibold font-mono bg-amber-950/15 p-2 rounded border border-amber-500/15 text-[10px] leading-relaxed">
+                  Após realizar o pagamento, aguarde o retorno automático ao SomDrive. Se permanecer na tela do Mercado Pago, use a opção voltar do navegador e toque em ‘Já paguei — verificar agora’.
+                </p>
               </div>
             </div>
           </div>

@@ -1124,7 +1124,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
       {/* Trust Seal Footer */}
       <footer className="mt-28 py-10 border-t border-slate-900 text-center max-w-7xl mx-auto px-6">
         <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-mono uppercase mb-3">
-          <ShieldCheck className="w-4 h-4 text-orange-500" /> Servidor Cloud Run Seguro • Firebase Realtime DB • SSL Ativo
+          <ShieldCheck className="w-4 h-4 text-orange-500" /> Seus áudios em alta qualidade e 100% seguros • SSL Ativo
         </div>
         <p className="text-slate-600 text-xs">
           © {new Date().getFullYear()} SomDrive. Desenvolvido para a indústria musical do Brasil.

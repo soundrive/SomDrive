@@ -1571,6 +1571,63 @@ async function startServer() {
     return res.status(200).send(faviconContent);
   });
 
+  // Serve high-quality dynamic PNG logo representations for Player/Media Session Artwork
+  [96, 128, 192, 256, 384, 512].forEach((size) => {
+    app.get(`/somdrive-player-${size}.png`, async (req, res) => {
+      try {
+        const playerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Seamless vibrant green gradient matching the gorgeous new logo -->
+    <linearGradient id="yellow-gold-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#36eb18" />    <!-- Luminant bright top green -->
+      <stop offset="42%" stop-color="#1db954" />   <!-- Classic Spotify brand green -->
+      <stop offset="100%" stop-color="#05591c" />  <!-- Premium deep glossy forest green -->
+    </linearGradient>
+  </defs>
+
+  <!-- Main fully-filled square base -->
+  <rect width="512" height="512" fill="url(#yellow-gold-grad)" />
+
+  <!-- Inner circular subtle highlight (glossy premium inner disc/circle) -->
+  <circle cx="256" cy="256" r="236" fill="rgba(255, 255, 255, 0.03)" stroke="rgba(255, 255, 255, 0.15)" stroke-width="4" />
+
+  <!-- Symmetrical/Clean soundwave bars on left - slightly thicker for well-filled style -->
+  <g fill="#FFFFFF">
+    <!-- Short left bar -->
+    <rect x="100" y="215" width="24" height="82" rx="12" />
+    <!-- Tall middle bar -->
+    <rect x="134" y="165" width="24" height="182" rx="12" />
+    <!-- Short right bar -->
+    <rect x="168" y="230" width="24" height="52" rx="12" />
+  </g>
+
+  <!-- Gorgeous solid white dot - beautifully integrated and clean -->
+  <circle cx="168" cy="318" r="13" fill="#FFFFFF" />
+
+  <!-- Gorgeous stylized letter 'S' looping around - thicker stroke (48px) for bold premium look -->
+  <path d="M 400,180 C 400,135 350,115 300,115 C 245,115 220,150 220,205 C 220,280 390,245 390,315 C 390,370 350,395 295,395 C 240,395 210,355 210,320" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+</svg>`;
+
+        const pngBuffer = await sharp(Buffer.from(playerSvg))
+          .resize(size, size)
+          .png()
+          .toBuffer();
+
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=86405, s-maxage=86405");
+        return res.status(200).send(pngBuffer);
+      } catch (err) {
+        console.error(`Error generating somdrive-player-${size} PNG:`, err);
+        return res.status(500).send("Internal Server Error");
+      }
+    });
+  });
+
   // Support /favicon.ico queries by serving the SVG with the right content-type or redirecting
   app.get("/favicon.ico", (req, res) => {
     return res.redirect("/favicon.svg");
