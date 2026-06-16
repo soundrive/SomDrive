@@ -163,6 +163,16 @@ export default function App() {
     const path = window.location.pathname;
     if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
       const parts = path.split('/');
+      const repIdx = parts.indexOf('repertorio');
+      if (repIdx > 0 && repIdx < parts.length - 1) {
+        const artistSlug = parts[repIdx - 1];
+        const repertoireId = parts[repIdx + 1];
+        if (artistSlug && repertoireId) {
+          setCurrentView('public');
+          setRoutePayload({ id: artistSlug, repertoireId: repertoireId, autoCar: false });
+          return;
+        }
+      }
       const artistSlug = parts[parts.length - 1];
       if (artistSlug) {
         setCurrentView('public');
@@ -234,7 +244,11 @@ export default function App() {
       } else if (isGuid || currentPath.includes('/artista/')) {
         prefix = '/artista/';
       }
-      window.history.pushState({}, '', `${prefix}${payload.id}`);
+      if (payload.repertoireId) {
+        window.history.pushState({}, '', `${prefix}${payload.id}/repertorio/${payload.repertoireId}`);
+      } else {
+        window.history.pushState({}, '', `${prefix}${payload.id}`);
+      }
     } else if (view === 'dashboard') {
       window.history.pushState({}, '', '/dashboard');
     } else if (view === 'auth') {
@@ -416,6 +430,7 @@ export default function App() {
       {currentView === 'public' && (
         <ArtistPublic 
           artistId={routePayload?.id || "gabriel-silva"}
+          initialRepertoireId={routePayload?.repertoireId || null}
           onNavigate={handleNavigate}
           onSelectTrack={handleSelectTrack}
           activeTrack={currentTrack}
