@@ -529,8 +529,9 @@ export const dbService = {
       artists[checkedArtist.userId] = checkedArtist;
       localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
 
-      // Async write to Firestore - both artists and users!
-      this.updateArtistProfileLocallyAndFirestore(checkedArtist.userId, checkedArtist);
+      // Note: We removed the unconditional write to Firestore from here because setCurrentUser is called by onSnapshot.
+      // Writing back here was causing an infinite feedback loop of writes and triggering real-time snapshots indefinitely.
+      // Firestore writes are correctly and explicitly handled during actual profile updates, user logins, and when access status changes are computed.
     } else {
       localStorage.removeItem(LS_CURR_USER);
     }

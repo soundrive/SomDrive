@@ -104,7 +104,7 @@ export default function ArtistPublic({
     !selectedRepertoireId ||
     !currentRepertoire ||
     currentRepertoire.visibility === 'private' ||
-    currentRepertoire.ownerUid !== artist?.userId
+    (currentRepertoire.ownerUid?.toString().trim().toLowerCase() !== artist?.userId?.toString().trim().toLowerCase())
   );
 
   // Dynamic Browser Tab Meta Title
@@ -308,13 +308,18 @@ export default function ArtistPublic({
     // General section / complete profile: only show songs not linked to any repertoire
     const repertoriedTrackIds = new Set<string>();
     repertoires.forEach(rep => {
-      if (rep.trackIds) {
-        rep.trackIds.forEach(tid => {
-          repertoriedTrackIds.add(tid);
-        });
-      }
+      const idsComp = [...(rep.trackIds || []), ...(rep.orderedTrackIds || [])];
+      idsComp.forEach(tid => {
+        if (tid) {
+          repertoriedTrackIds.add(tid.toString().trim().toLowerCase());
+        }
+      });
     });
-    activeDisplayTracks = allTracks.filter(t => !repertoriedTrackIds.has(t.trackId));
+    activeDisplayTracks = allTracks.filter(t => {
+      if (!t.trackId) return true;
+      const tidNormalized = t.trackId.toString().trim().toLowerCase();
+      return !repertoriedTrackIds.has(tidNormalized);
+    });
   }
 
   // Apply visual search query

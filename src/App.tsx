@@ -272,9 +272,21 @@ export default function App() {
       const path = window.location.pathname;
       if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
         const parts = path.split('/');
-        const id = parts[parts.length - 1];
-        setCurrentView('public');
-        setRoutePayload({ id, autoCar: false });
+        const repIdx = parts.indexOf('repertorio');
+        if (repIdx > 0 && repIdx < parts.length - 1) {
+          const artistSlug = parts[repIdx - 1];
+          const repertoireId = parts[repIdx + 1];
+          if (artistSlug && repertoireId) {
+            setCurrentView('public');
+            setRoutePayload({ id: artistSlug, repertoireId: repertoireId, autoCar: false });
+            return;
+          }
+        }
+        const artistSlug = parts[parts.length - 1];
+        if (artistSlug) {
+          setCurrentView('public');
+          setRoutePayload({ id: artistSlug, autoCar: false });
+        }
       } else if (path === '/dashboard') {
         const u = dbService.getCurrentUser();
         if (u) {
