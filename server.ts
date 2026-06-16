@@ -985,7 +985,7 @@ async function startServer() {
   };
 
   // Helper to dynamically build/inject the Open Graph metadata for any artist URI/slug
-  const generateArtistHtml = async (slugOrId: string, req: any) => {
+  const generateArtistHtml = async (slugOrId: string, req: any, repertoireId: string | null = null) => {
     console.time("catalogo-total");
     console.time("buscar-artista");
     const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
@@ -1010,6 +1010,27 @@ async function startServer() {
     const protocol = req?.headers?.['x-forwarded-proto'] || "https";
     const dynamicAppBaseUrl = host.includes("://") ? host : `${protocol}://${host}`;
     const appBaseUrl = dynamicAppBaseUrl.replace(/\/$/, "");
+
+    let repertoireName = "";
+    let repertoireTrackCount = 0;
+    let isRepertoirePrivate = false;
+
+    if (repertoireId) {
+      try {
+        const repDoc = await db.collection("repertoires").doc(repertoireId).get();
+        if (repDoc.exists) {
+          const repData = repDoc.data();
+          if (repData && repData.ownerUid === resolvedArtistId) {
+            repertoireName = repData.name || "";
+            isRepertoirePrivate = repData.visibility === 'private';
+            const trackIds = repData.trackIds || [];
+            repertoireTrackCount = trackIds.length;
+          }
+        }
+      } catch (repErr) {
+        console.warn("Could not fetch repertoire info for OG tags:", repErr);
+      }
+    }
 
     // Priority: 1. Global site share card configured by admin. 2. Fallback standard SomDrive image.
     let ogImageToUse = "";
@@ -1049,13 +1070,21 @@ async function startServer() {
         ogImageSecureToUse = ogImageSecureToUse.replace("http://", "https://");
       }
 
+      let customTitle = `Catálogo musical de ${formattedName} | SomDrive`;
+      let customDescription = `Ouça músicas e composições compartilhadas pelo artista.`;
+
+      if (repertoireId && repertoireName && !isRepertoirePrivate) {
+        customTitle = `${repertoireName} — ${formattedName} | SomDrive`;
+        customDescription = `Ouça ${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'música' : 'músicas'} deste repertório no SomDrive.`;
+      }
+
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
-  <title>Catálogo musical de ${formattedName} | SomDrive</title>
-  <meta name="description" content="Ouça músicas e composições compartilhadas pelo artista." />
+  <title>${customTitle}</title>
+  <meta name="description" content="${customDescription}" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="SomDrive - Catálogo Musical" />
-  <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
+  <meta property="og:title" content="${customTitle}" />
+  <meta property="og:description" content="${customDescription}" />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
   <meta property="og:image:type" content="image/jpeg" />
@@ -1064,8 +1093,8 @@ async function startServer() {
   <meta property="og:url" content="${ogUrlToUse}" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
-  <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
+  <meta name="twitter:title" content="${customTitle}" />
+  <meta name="twitter:description" content="${customDescription}" />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <link rel="image_src" href="${ogImageToUse}" />
   <meta itemprop="image" content="${ogImageToUse}" />
@@ -2309,11 +2338,15 @@ async function startServer() {
     }
   });
 
-  // Intercept artist public profile requests to dynamically inject Open Graph sharing headers (including the official clean share URL /s/:userId)
-  app.get(["/artista/:userId", "/catalogo/:userId", "/s/:userId"], async (req, res, next) => {
+  // Intercept artist public profile requests to dynamically inject Open Graph sharing headers (including the official clean share URL /s/:userId / customizable clean repertoire route)
+  app.get([
+    "/artista/:userId", "/catalogo/:userId", "/s/:userId",
+    "/artista/:userId/repertorio/:repertoireId", "/catalogo/:userId/repertorio/:repertoireId", "/s/:userId/repertorio/:repertoireId"
+  ], async (req, res, next) => {
     try {
       const userId = req.params.userId;
-      const result = await generateArtistHtml(userId, req);
+      const repertoireId = req.params.repertoireId || null;
+      const result = await generateArtistHtml(userId, req, repertoireId);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
       return res.send(result.html);
