@@ -685,7 +685,7 @@ export default function AdminArea({
       // Calculate custom limit based on plan default if not modified
       let finalLimit = selectedUser.musicLimit;
       if (finalLimit === undefined) {
-        finalLimit = selectedUser.plan === 'free' ? 5 : (selectedUser.plan === 'pro' ? 15 : 50);
+        finalLimit = selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'pro' ? 15 : 50);
       }
 
       const updatedFields: Partial<Artist> = {
@@ -1334,7 +1334,7 @@ export default function AdminArea({
                       value={selectedUser.plan}
                       onChange={(e) => {
                         const nextPlan = e.target.value as 'free' | 'pro' | 'premium';
-                        const standardLimit = nextPlan === 'free' ? 5 : (nextPlan === 'pro' ? 15 : 50);
+                        const standardLimit = nextPlan === 'free' ? 3 : (nextPlan === 'pro' ? 15 : 50);
                         setSelectedUser({
                           ...selectedUser,
                           plan: nextPlan,
@@ -1646,7 +1646,7 @@ export default function AdminArea({
                       <Info className="h-3 w-3 mr-1" /> Nota Importante
                     </h4>
                     <p className="text-[10px] text-slate-400 leading-relaxed">
-                      Ao término do teste grátis criado, o sistema de segurança reverterá o usuário automaticamente para o plano Free, limitando seu catálogo a 5 faixas musicais.
+                      Ao término do teste grátis criado, o sistema de segurança reverterá o usuário automaticamente para o plano Free, limitando seu catálogo a 3 faixas musicais.
                     </p>
                   </div>
 

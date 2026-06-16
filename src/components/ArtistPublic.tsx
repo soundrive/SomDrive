@@ -249,6 +249,17 @@ export default function ArtistPublic({
       customCollectionLabel = `Música compartilhada: ${activeDisplayTracks[0].title}`;
       isFilteredToSingleContext = true;
     }
+  } else {
+    // General section / complete profile: only show songs not linked to any repertoire
+    const repertoriedTrackIds = new Set<string>();
+    repertoires.forEach(rep => {
+      if (rep.trackIds) {
+        rep.trackIds.forEach(tid => {
+          repertoriedTrackIds.add(tid);
+        });
+      }
+    });
+    activeDisplayTracks = allTracks.filter(t => !repertoriedTrackIds.has(t.trackId));
   }
 
   // Apply visual search query

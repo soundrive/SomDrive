@@ -186,7 +186,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (!ogImageToUse) {
-    ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
+    ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
   }
 
   let ogImageSecureToUse = ogImageToUse;

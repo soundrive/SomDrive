@@ -927,7 +927,7 @@ async function startServer() {
     }
 
     if (!ogImageToUse) {
-      ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
+      ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
     }
 
     const indexPath = process.env.NODE_ENV === "production"
@@ -1024,7 +1024,7 @@ async function startServer() {
     }
 
     if (!ogImageToUse) {
-      ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
+      ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
     }
 
     const ogUrlToUse = slugOrId === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `${appBaseUrl}/s/${slugOrId}`;
@@ -1130,7 +1130,7 @@ async function startServer() {
     }
 
     if (!ogImageToUse) {
-      ogImageToUse = "https://pub-dda3bc59b7224a77a905ceeef207d9c8.r2.dev/settings/shareCard.png";
+      ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
     }
 
     const ogUrlToUse = originalSlug === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `${appBaseUrl}/s/${originalSlug}`;

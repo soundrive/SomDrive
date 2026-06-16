@@ -105,6 +105,7 @@ export default function Dashboard({
   const [customAudioUrl, setCustomAudioUrl] = useState('');
   const [newTrackStatus, setNewTrackStatus] = useState<'active' | 'inactive'>('active');
   const [editTrackStatus, setEditTrackStatus] = useState<'active' | 'inactive'>('active');
+  const [editRepertoireId, setEditRepertoireId] = useState<string>('all_songs');
   const [formError, setFormError] = useState('');
   
   // File handlers for browser object url injection
@@ -1125,6 +1126,11 @@ export default function Dashboard({
     setEditDesc(track.description || '');
     setEditLyrics(track.lyrics || '');
     setEditTrackStatus((track.status || 'active') as 'active' | 'inactive');
+    
+    // Check which repertoire (if any) contains this trackId
+    const foundRep = dashboardRepertoires.find(r => r.trackIds && r.trackIds.includes(track.trackId));
+    setEditRepertoireId(foundRep ? foundRep.id : 'all_songs');
+
     setFormError('');
     setShowEditForm(true);
   };
@@ -1140,10 +1146,10 @@ export default function Dashboard({
     }
 
     setIsUploading(true);
-    setUploadProgress(50);
+    setUploadProgress(40);
 
     try {
-      setUploadProgress(80);
+      setUploadProgress(70);
       const updatedTrack = await dbService.updateMusic(profile.userId, editingTrack.trackId, {
         title: editTitle.trim(),
         composer: editComposer.trim(),
@@ -1155,6 +1161,38 @@ export default function Dashboard({
         lyrics: editLyrics.trim(),
         status: editTrackStatus
       });
+
+      setUploadProgress(85);
+      // Move track across repertoires
+      const allReps = await dbService.getRepertoires(profile.userId);
+      for (const rep of allReps) {
+        let changed = false;
+        let nextTrackIds = [...(rep.trackIds || [])];
+        let nextOrderedTrackIds = [...(rep.orderedTrackIds || [])];
+
+        const isCurrentlyInRep = nextTrackIds.includes(editingTrack.trackId);
+        const shouldBeInRep = rep.id === editRepertoireId;
+
+        if (isCurrentlyInRep && !shouldBeInRep) {
+          nextTrackIds = nextTrackIds.filter(id => id !== editingTrack.trackId);
+          nextOrderedTrackIds = nextOrderedTrackIds.filter(id => id !== editingTrack.trackId);
+          changed = true;
+        } else if (!isCurrentlyInRep && shouldBeInRep) {
+          nextTrackIds.push(editingTrack.trackId);
+          nextOrderedTrackIds.push(editingTrack.trackId);
+          changed = true;
+        }
+
+        if (changed) {
+          const updatedRep: Repertoire = {
+            ...rep,
+            trackIds: nextTrackIds,
+            orderedTrackIds: nextOrderedTrackIds,
+            updatedAt: new Date().toISOString()
+          };
+          await dbService.saveRepertoire(updatedRep);
+        }
+      }
 
       // Synchronously update active status list
       setTracks(prev => prev.map(t => t.trackId === editingTrack.trackId ? { ...t, ...updatedTrack } : t));
@@ -3456,6 +3494,23 @@ export default function Dashboard({
                     className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none"
                   />
                 </div>
+              </div>
+
+              {/* Destination Repertoire selecting */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Destino da Música (Mover para Repertório)</label>
+                <select
+                  value={editRepertoireId}
+                  onChange={(e) => setEditRepertoireId(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none cursor-pointer"
+                >
+                  <option value="all_songs">Todas as músicas (Lista Geral Pública)</option>
+                  {dashboardRepertoires.map((rep) => (
+                    <option key={rep.id} value={rep.id}>
+                      📁 {rep.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Description bio */}
