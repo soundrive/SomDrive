@@ -210,6 +210,20 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 
+export function createSlug(text: string): string {
+  if (!text) return 'repertorio';
+  return text
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 // Database Actions Layer
 export const dbService = {
   // Map and parse raw Firestore user/artist documents to complete Artist object format with precise field naming and UTC timestamp support
@@ -1945,6 +1959,7 @@ export const dbService = {
             id: docSnap.id,
             ownerUid: data.ownerUid,
             name: data.name,
+            slug: data.slug || '',
             description: data.description || '',
             type: data.type || 'repertoire',
             trackIds: data.trackIds || [],
@@ -1954,21 +1969,69 @@ export const dbService = {
             updatedAt: data.updatedAt || new Date().toISOString()
           } as Repertoire;
         });
-        localStorage.setItem(localKey, JSON.stringify(reps));
-        return reps;
+
+        // Upgrade and save slugs for any repertoires missing them
+        const finalReps: Repertoire[] = [];
+        for (const rep of reps) {
+          if (!rep.slug) {
+            const baseSlug = createSlug(rep.name || 'repertorio');
+            let uniqueSlug = baseSlug;
+            let counter = 2;
+            while (
+              finalReps.some(r => r.slug === uniqueSlug) ||
+              reps.some(r => r.id !== rep.id && r.slug === uniqueSlug)
+            ) {
+              uniqueSlug = `${baseSlug}-${counter}`;
+              counter++;
+            }
+            rep.slug = uniqueSlug;
+
+            try {
+              const docRef = doc(db, 'repertoires', rep.id);
+              await setDoc(docRef, { slug: uniqueSlug }, { merge: true }).catch(err => {
+                console.error("Error migrating repertoire with slug to Firestore:", err);
+              });
+            } catch (err) {
+              console.error("Firestore connection issue during auto-slug:", err);
+            }
+          }
+          finalReps.push(rep);
+        }
+
+        localStorage.setItem(localKey, JSON.stringify(finalReps));
+        return finalReps;
       }
     } catch (e) {
       console.error("Error in getRepertoires:", e);
     }
 
     const cached = localStorage.getItem(localKey);
-    return cached ? JSON.parse(cached) : [];
+    const parsedCache = cached ? JSON.parse(cached) : [];
+    return parsedCache.map((rep: any) => ({
+      ...rep,
+      slug: rep.slug || ''
+    }));
   },
 
   async saveRepertoire(repertoire: Repertoire): Promise<void> {
     const ownerUid = repertoire.ownerUid;
     const localKey = `somdrive_repertoires_${ownerUid}`;
     
+    // Ensure slug is populated
+    if (!repertoire.slug) {
+      const baseSlug = createSlug(repertoire.name || 'repertorio');
+      const currentReps = await this.getRepertoires(ownerUid);
+      const otherReps = currentReps.filter(r => r.id !== repertoire.id);
+      
+      let uniqueSlug = baseSlug;
+      let counter = 2;
+      while (otherReps.some(r => r.slug === uniqueSlug)) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+      repertoire.slug = uniqueSlug;
+    }
+
     // Save to LocalStorage first
     const cached = localStorage.getItem(localKey);
     let reps: Repertoire[] = cached ? JSON.parse(cached) : [];

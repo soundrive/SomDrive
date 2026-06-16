@@ -125,6 +125,7 @@ export interface Repertoire {
   id: string; // generated id
   ownerUid: string;
   name: string;
+  slug?: string;
   description?: string;
   type: 'repertoire' | 'collection' | 'playlist' | 'project';
   trackIds: string[];

@@ -99,7 +99,7 @@ export default function ArtistPublic({
   const [forceAllView, setForceAllView] = useState(false);
 
   const openedAsRepertoireOnly = !forceAllView && (!!initialRepertoireId || window.location.pathname.includes('/repertorio/')) && !!selectedRepertoireId;
-  const currentRepertoire = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId) : null;
+  const currentRepertoire = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
   const repertoireNotFoundOrPrivate = !isLoading && !forceAllView && window.location.pathname.includes('/repertorio/') && (
     !selectedRepertoireId ||
     !currentRepertoire ||
@@ -289,7 +289,7 @@ export default function ArtistPublic({
   let isFilteredToSingleContext = false;
 
   if (selectedRepertoireId) {
-    const foundRep = repertoires.find(r => r.id === selectedRepertoireId);
+    const foundRep = repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()));
     if (foundRep) {
       const allowedIds = foundRep.orderedTrackIds || foundRep.trackIds || [];
       activeDisplayTracks = allowedIds
@@ -350,7 +350,7 @@ export default function ArtistPublic({
     dbService.incrementAnalyticsView(artist.userId, false, false);
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
-    const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId) : null;
+    const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
     let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
     let messageText = `🎧 Ouça meu catálogo musical no SomDrive!\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
 
@@ -363,7 +363,7 @@ export default function ArtistPublic({
       } else if (isGuid || currentPath.includes('/artista/')) {
         prefix = '/artista/';
       }
-      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.id}`;
+      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       messageText = `Ouça o repertório “${foundRep.name}” de ${artist.name} no SomDrive: ${pageUrl}`;
     }
 
@@ -376,7 +376,7 @@ export default function ArtistPublic({
   const handleCopyLinkDissemination = () => {
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
-    const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId) : null;
+    const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
     let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
 
     if (foundRep) {
@@ -388,7 +388,7 @@ export default function ArtistPublic({
       } else if (isGuid || currentPath.includes('/artista/')) {
         prefix = '/artista/';
       }
-      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.id}`;
+      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       navigator.clipboard.writeText(pageUrl);
       triggerAlert(`🔗 Link do repertório "${foundRep.name}" copiado com sucesso!`);
     } else {
@@ -407,7 +407,7 @@ export default function ArtistPublic({
   const handleGeneralProfileShare = () => {
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
-    const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId) : null;
+    const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
     let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
     let shareTitle = `SomDrive - ${artist.name}`;
     let shareText = `Ouça o catálogo de composições de ${artist.name} no SomDrive!`;
@@ -421,7 +421,7 @@ export default function ArtistPublic({
       } else if (isGuid || currentPath.includes('/artista/')) {
         prefix = '/artista/';
       }
-      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.id}`;
+      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       shareTitle = `${foundRep.name} — ${artist.name} | SomDrive`;
       shareText = `Ouça as músicas do repertório "${foundRep.name}" de ${artist.name} no SomDrive!`;
     }
@@ -467,7 +467,7 @@ export default function ArtistPublic({
     } else if (isGuid || currentPath.includes('/artista/')) {
       prefix = '/artista/';
     }
-    const shareUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${rep.id}`;
+    const shareUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${rep.slug || rep.id}`;
     navigator.clipboard.writeText(shareUrl);
     triggerAlert(`🔗 Link do repertório "${rep.name}" copiado com sucesso!`);
   };
@@ -785,10 +785,10 @@ export default function ArtistPublic({
             ) : (
               <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
                 {repertoires
-                  .filter(rep => !openedAsRepertoireOnly || rep.id === selectedRepertoireId)
+                  .filter(rep => !openedAsRepertoireOnly || rep.id === selectedRepertoireId || (rep.slug && rep.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()))
                   .map((rep, idx) => {
                   const repTracksNum = (rep.trackIds || []).length;
-                  const isRepActive = selectedRepertoireId === rep.id;
+                  const isRepActive = selectedRepertoireId === rep.id || (rep.slug && selectedRepertoireId === rep.slug);
 
                   // Unique vivid custom neon gradients for different folder cards to stand out beautifully
                   const neonGradients = [

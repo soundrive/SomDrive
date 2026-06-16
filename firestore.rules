@@ -93,5 +93,13 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // --- Repertoires Collection Rules ---
+    match /repertoires/{repertoireId} {
+      allow read: if true; // Public can read repertoires
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
   }
 }
