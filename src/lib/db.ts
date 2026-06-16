@@ -879,6 +879,98 @@ export const dbService = {
         }
       });
 
+      // Synchronize all songs and repertoires in local storage cache for accurate admin calculations
+      try {
+        const allSongsSnap = await getDocs(collection(db, 'songs')).catch(() => null);
+        if (allSongsSnap && !allSongsSnap.empty) {
+          const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+          const songsByOwner: Record<string, Music[]> = {};
+          
+          allSongsSnap.forEach(songDoc => {
+            const d = songDoc.data();
+            const ownerId = d.ownerId || d.artistId;
+            if (ownerId) {
+              if (!songsByOwner[ownerId]) {
+                songsByOwner[ownerId] = [];
+              }
+              songsByOwner[ownerId].push({
+                trackId: songDoc.id || d.songId || d.trackId,
+                artistId: ownerId,
+                title: d.title,
+                composer: d.composer || "",
+                partners: d.partners || "",
+                singer: d.performer || d.singer || "",
+                performer: d.performer || d.singer || "",
+                genre: d.genre || "",
+                description: d.description || "",
+                audioUrl: d.audioUrl,
+                coverUrl: d.coverUrl || "",
+                lyrics: d.lyrics || "",
+                playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                status: d.status || "active",
+                storageProvider: d.storageProvider || "cloudflare_r2",
+                storagePath: d.storagePath || "",
+                fileSize: d.fileSize || 0,
+                mimeType: d.mimeType || "audio/mpeg",
+                originalFileName: d.originalFileName || "",
+                audioFileId: d.audioFileId || "",
+                position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+                orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+                createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+              });
+            }
+          });
+
+          // Update local storage LS_MUSICS for each user
+          Object.entries(songsByOwner).forEach(([ownerId, tracks]) => {
+            musicsMap[ownerId] = tracks;
+            // Also resolve under slugs if they exist
+            const foundArtist = mergedList.find(u => u.userId === ownerId);
+            if (foundArtist && foundArtist.slug) {
+              musicsMap[foundArtist.slug] = tracks;
+            }
+          });
+          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        }
+
+        const allRepsSnap = await getDocs(collection(db, 'repertoires')).catch(() => null);
+        if (allRepsSnap && !allRepsSnap.empty) {
+          const repsByOwner: Record<string, Repertoire[]> = {};
+          
+          allRepsSnap.forEach(repDoc => {
+            const d = repDoc.data();
+            const ownerUid = d.ownerUid;
+            if (ownerUid) {
+              if (!repsByOwner[ownerUid]) {
+                repsByOwner[ownerUid] = [];
+              }
+              repsByOwner[ownerUid].push({
+                id: repDoc.id,
+                ownerUid: ownerUid,
+                name: d.name || 'Pasta sem Nome',
+                slug: d.slug || '',
+                description: d.description || '',
+                type: d.type || 'repertoire',
+                trackIds: d.trackIds || [],
+                orderedTrackIds: d.orderedTrackIds || d.trackIds || [],
+                visibility: d.visibility || 'active',
+                createdAt: d.createdAt,
+                updatedAt: d.updatedAt
+              });
+            }
+          });
+
+          // Cache reps in localStorage
+          Object.entries(repsByOwner).forEach(([ownerUid, reps]) => {
+            localStorage.setItem(`somdrive_repertoires_${ownerUid}`, JSON.stringify(reps));
+          });
+        }
+      } catch (syncErr) {
+        console.error("Error background pre-fetching tracks/repertoires for admin:", syncErr);
+      }
+
       const now = new Date();
       // Apply expiry check and return
       const finalList = mergedList.map(u => {
@@ -2013,7 +2105,7 @@ export const dbService = {
     }));
   },
 
-  async saveRepertoire(repertoire: Repertoire): Promise<void> {
+  async saveRepertoire(repertoire: Repertoire): Promise<Repertoire> {
     const ownerUid = repertoire.ownerUid;
     const localKey = `somdrive_repertoires_${ownerUid}`;
     
@@ -2032,26 +2124,31 @@ export const dbService = {
       repertoire.slug = uniqueSlug;
     }
 
+    let savedRep = { ...repertoire };
     // Save to LocalStorage first
     const cached = localStorage.getItem(localKey);
     let reps: Repertoire[] = cached ? JSON.parse(cached) : [];
     const index = reps.findIndex(r => r.id === repertoire.id);
     if (index !== -1) {
-      reps[index] = { ...repertoire, updatedAt: new Date().toISOString() };
+      savedRep = { ...repertoire, updatedAt: new Date().toISOString() };
+      reps[index] = savedRep;
     } else {
-      reps.push({ ...repertoire, createdAt: repertoire.createdAt || new Date().toISOString() });
+      savedRep = { ...repertoire, createdAt: repertoire.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+      reps.push(savedRep);
     }
     localStorage.setItem(localKey, JSON.stringify(reps));
 
     // Sync to Firestore
     try {
       const docRef = doc(db, 'repertoires', repertoire.id);
-      await setDoc(docRef, { ...repertoire, updatedAt: new Date().toISOString() }, { merge: true }).catch(err => {
+      await setDoc(docRef, savedRep, { merge: true }).catch(err => {
         console.error("Error writing repertoire to Firestore:", err);
       });
     } catch (e) {
       console.error("Sync error in saveRepertoire:", e);
     }
+
+    return savedRep;
   },
 
   async deleteRepertoire(id: string, ownerUid: string): Promise<void> {

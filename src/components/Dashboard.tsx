@@ -37,7 +37,8 @@ import {
   Square,
   CheckSquare,
   X,
-  Lock
+  Lock,
+  Folder
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
@@ -144,8 +145,11 @@ export default function Dashboard({
   // Repertoires list & creations
   const [dashboardRepertoires, setDashboardRepertoires] = useState<Repertoire[]>([]);
   const [newRepName, setNewRepName] = useState('');
+  const [newRepDesc, setNewRepDesc] = useState('');
+  const [newRepVisibility, setNewRepVisibility] = useState<'active' | 'private'>('active');
   const [newRepType, setNewRepType] = useState<'repertoire' | 'playlist' | 'collection'>('repertoire');
   const [showCreateRep, setShowCreateRep] = useState(false);
+  const [repCopiedId, setRepCopiedId] = useState<string | null>(null);
   const [editingRepertoire, setEditingRepertoire] = useState<Repertoire | null>(null);
   const [managingRepTrackId, setManagingRepTrackId] = useState<string | null>(null); // Repertoire ID for checkboxes modal
 
@@ -718,7 +722,7 @@ export default function Dashboard({
     try {
       // Helper function to create repertoire dynamically
       const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'active' | 'private', initialTrackIds: string[] = []) => {
-        const repId = `rep-${Math.floor(Math.random() * 89999) + 10000}`;
+        const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
         const newRep: Repertoire = {
           id: repId,
           ownerUid: profile.userId,
@@ -1963,6 +1967,176 @@ export default function Dashboard({
           </div>
           )
         )}
+        </div>
+      )}
+
+      {/* REPERTOIRES, PROJECTS, AND SHARES SUB-AREAS */}
+      {dashboardTab === 'repertoires' && (
+        <div className="space-y-6 animate-fade-in text-left">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-4">
+            <div>
+              <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                <Folders className="w-5 h-5 text-orange-400" /> Meus Repertórios / Pastas
+              </h3>
+              <p className="text-slate-405 text-xs mt-0.5 font-medium">Crie, gerencie e compartilhe pastas de músicas específicas com seus parceiros.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNewRepName('');
+                setNewRepDesc('');
+                setNewRepVisibility('active');
+                setShowCreateRep(true);
+              }}
+              className="px-5 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 flex items-center gap-2 shadow-lg shadow-orange-500/10 cursor-pointer transition duration-200 active:scale-98 font-bold"
+            >
+              <Plus className="w-4 h-4 text-slate-950 stroke-[2.5]" /> Criar Novo Repertório
+            </button>
+          </div>
+
+          {dashboardRepertoires.length === 0 ? (
+            <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6">
+              <Folders className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <h4 className="text-base font-bold text-slate-300 uppercase">Nenhum repertório criado</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-mono">Você ainda não tem nenhum repertório cadastrado. Envie músicas e organize-as em pastas públicas ou privadas!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {dashboardRepertoires.map((rep) => {
+                const repTracksCount = rep.trackIds?.length || 0;
+                const slugToUse = rep.slug || rep.id;
+                const shareUrl = `${window.location.origin}/catalogo/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
+                const isPrivate = rep.visibility === 'private';
+                const isCopied = repCopiedId === rep.id;
+                
+                return (
+                  <div 
+                    key={rep.id}
+                    className="bg-slate-900/60 rounded-2xl border border-slate-850 p-5 flex flex-col justify-between hover:border-slate-700 transition space-y-4 shadow-xl"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase ${
+                          isPrivate ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
+                        }`}>
+                          {isPrivate ? 'Privado' : 'Público'}
+                        </span>
+                        
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
+                        </span>
+                      </div>
+
+                      <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">
+                        📁 {rep.name}
+                      </h4>
+                      
+                      <p className="text-slate-400 text-xs font-sans line-clamp-2 min-h-[32px]">
+                        {rep.description || 'Sem descrição.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-850 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(shareUrl);
+                          setRepCopiedId(rep.id);
+                          setTimeout(() => setRepCopiedId(null), 2000);
+                        }}
+                        className={`flex-1 py-2 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer font-mono ${
+                          isCopied ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'
+                        }`}
+                        title="Copiar Link"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{isCopied ? 'Copiado! ✓' : 'Copiar Link'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const greetingText = `Confira o meu repertório "${rep.name}" do SomDrive: ${shareUrl}`;
+                          window.open(`https://wa.me/?text=${encodeURIComponent(greetingText)}`, '_blank');
+                        }}
+                        className="p-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-xl transition cursor-pointer flex items-center justify-center"
+                        title="Compartilhar no WhatsApp"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
+                            await dbService.deleteRepertoire(rep.id, profile.userId);
+                            refreshData();
+                          }
+                        }}
+                        className="p-2 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
+                        title="Excluir Repertório"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {dashboardTab === 'projects' && (
+        <div className="space-y-6 animate-fade-in text-left">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-4">
+            <div>
+              <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-orange-400" /> Projetos Criativos
+              </h3>
+              <p className="text-slate-405 text-xs mt-0.5 font-medium">Painel para organizar projetos criativos, lançamentos, parcerias e fã-clubes.</p>
+            </div>
+          </div>
+
+          <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6 max-w-xl mx-auto space-y-4">
+            <Sparkles className="w-12 h-12 text-slate-500 mx-auto mb-2 animate-bounce" />
+            <h4 className="text-base font-bold text-slate-305 uppercase">Módulo de Projetos Criativos</h4>
+            <p className="text-xs text-slate-450 font-mono leading-relaxed">
+              Estamos preparando um módulo incrível onde você poderá gerenciar álbuns completos, frentes de pré-save, controle de lançamentos e distribuição direta de letras para parceiros. Receba novidades em breve!
+            </p>
+            <div className="pt-2">
+              <span className="text-[10px] uppercase font-bold tracking-widest bg-orange-500/10 border border-orange-500/20 text-orange-400 px-3 py-1 rounded-full">
+                Em Breve • Pro & Premium
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dashboardTab === 'shares' && (
+        <div className="space-y-6 animate-fade-in text-left">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-900 pb-4">
+            <div>
+              <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-orange-400" /> Relatório de Divulgação
+              </h3>
+              <p className="text-slate-405 text-xs mt-0.5 font-medium">Monitore o alcance dos seus links, acessos por região e número de audições.</p>
+            </div>
+          </div>
+
+          <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6 max-w-xl mx-auto space-y-4">
+            <Globe className="w-12 h-12 text-slate-500 mx-auto mb-2 animate-pulse" />
+            <h4 className="text-base font-bold text-slate-305 uppercase font-heading">Estatísticas Avançadas de Tráfego</h4>
+            <p className="text-xs text-slate-455 font-mono leading-relaxed">
+              Monitore de onde vêm os seus ouvintes, quais estados têm maior interesse nas suas composições e o tempo médio de audição de cada faixa.
+            </p>
+            <div className="pt-2">
+              <span className="text-[10px] uppercase font-bold tracking-widest bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full animate-pulse">
+                Exclusivo para assinantes
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
