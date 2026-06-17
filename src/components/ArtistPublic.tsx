@@ -107,6 +107,16 @@ export default function ArtistPublic({
     (currentRepertoire.ownerUid?.toString().trim().toLowerCase() !== artist?.userId?.toString().trim().toLowerCase())
   );
 
+  useEffect(() => {
+    if (repertoireNotFoundOrPrivate) {
+      console.error("Firestore repertoire error", {
+        code: "not-found",
+        message: `Repertoire '${selectedRepertoireId}' not found, not active, or is private for artist ${artist?.userId}`,
+        name: "RepertoireAccessError"
+      });
+    }
+  }, [repertoireNotFoundOrPrivate, selectedRepertoireId, artist]);
+
   // Dynamic Browser Tab Meta Title
   useEffect(() => {
     if (artist) {
@@ -198,7 +208,7 @@ export default function ArtistPublic({
           setAllTracks(syncedTracks);
           
           // Fetch Fresh Repertoires
-          const freshReps = await dbService.getRepertoires(syncedArtist.userId);
+          const freshReps = await dbService.getRepertoires(syncedArtist.userId, true);
           setRepertoires(freshReps || []);
           setIsLoading(false);
         } else if (!hasCache) {
@@ -210,7 +220,12 @@ export default function ArtistPublic({
         if (activeArtist) {
           dbService.incrementAnalyticsView(activeArtist.userId, true, false);
         }
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Firestore repertoire error", {
+          code: err?.code,
+          message: err?.message,
+          name: err?.name
+        });
         console.error("Erro geral no carregamento público:", err);
         setErrorMsg("Erro ao carregar o catálogo. Por favor, tente novamente.");
       } finally {

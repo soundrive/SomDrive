@@ -2028,10 +2028,19 @@ export const dbService = {
   },
 
   // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
-  async getRepertoires(ownerUid: string): Promise<Repertoire[]> {
+  async getRepertoires(ownerUid: string, onlyPublic?: boolean): Promise<Repertoire[]> {
     try {
-      const q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+      const q = onlyPublic
+        ? query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid), where('visibility', '==', 'public'))
+        : query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+
       const snap = await getDocs(q).catch(e => {
+        const error = e as any;
+        console.error("Firestore repertoire error", {
+          code: error?.code,
+          message: error?.message,
+          name: error?.name
+        });
         handleFirestoreError(e, OperationType.GET, 'repertoires');
         throw e;
       });

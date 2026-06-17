@@ -183,7 +183,12 @@ export default function Dashboard({
       });
       setDashboardRepertoires(repsList);
       setLoadingRepertoires(false);
-    }, (err) => {
+    }, (err: any) => {
+      console.error("Firestore repertoire error", {
+        code: err?.code,
+        message: err?.message,
+        name: err?.name
+      });
       console.error("Error subscribing to repertoires snapshot in Dashboard:", err);
       setRepertoiresError("Não foi possível carregar os repertórios.");
       setLoadingRepertoires(false);
