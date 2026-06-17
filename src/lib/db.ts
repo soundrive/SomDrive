@@ -916,10 +916,10 @@ export const dbService = {
             }
           });
 
-          // Cache reps in localStorage
-          Object.entries(repsByOwner).forEach(([ownerUid, reps]) => {
-            localStorage.setItem(`somdrive_repertoires_${ownerUid}`, JSON.stringify(reps));
-          });
+          // No longer caching repertoires in localStorage to make Firestore the single source of truth
+          // Object.entries(repsByOwner).forEach(([ownerUid, reps]) => {
+          //   localStorage.setItem(`somdrive_repertoires_${ownerUid}`, JSON.stringify(reps));
+          // });
         }
       } catch (syncErr) {
         console.error("Error background pre-fetching tracks/repertoires for admin:", syncErr);
@@ -2029,12 +2029,11 @@ export const dbService = {
 
   // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
   async getRepertoires(ownerUid: string): Promise<Repertoire[]> {
-    const localKey = `somdrive_repertoires_${ownerUid}`;
     try {
       const q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
       const snap = await getDocs(q).catch(e => {
-        console.warn("Could not fetch repertoires from Firestore, using local fallback", e);
-        return null;
+        handleFirestoreError(e, OperationType.GET, 'repertoires');
+        throw e;
       });
 
       if (snap && !snap.empty) {
@@ -2074,7 +2073,8 @@ export const dbService = {
             try {
               const docRef = doc(db, 'repertoires', rep.id);
               await setDoc(docRef, { slug: uniqueSlug }, { merge: true }).catch(err => {
-                console.error("Error migrating repertoire with slug to Firestore:", err);
+                handleFirestoreError(err, OperationType.WRITE, `repertoires/${rep.id}`);
+                throw err;
               });
             } catch (err) {
               console.error("Firestore connection issue during auto-slug:", err);
@@ -2083,24 +2083,17 @@ export const dbService = {
           finalReps.push(rep);
         }
 
-        localStorage.setItem(localKey, JSON.stringify(finalReps));
         return finalReps;
       }
     } catch (e) {
       console.error("Error in getRepertoires:", e);
+      throw e;
     }
-
-    const cached = localStorage.getItem(localKey);
-    const parsedCache = cached ? JSON.parse(cached) : [];
-    return parsedCache.map((rep: any) => ({
-      ...rep,
-      slug: rep.slug || ''
-    }));
+    return [];
   },
 
   async saveRepertoire(repertoire: Repertoire): Promise<Repertoire> {
     const ownerUid = repertoire.ownerUid;
-    const localKey = `somdrive_repertoires_${ownerUid}`;
     
     // Ensure slug is populated
     if (!repertoire.slug) {
@@ -2117,52 +2110,38 @@ export const dbService = {
       repertoire.slug = uniqueSlug;
     }
 
-    let savedRep = { ...repertoire };
-    // Save to LocalStorage first
-    const cached = localStorage.getItem(localKey);
-    let reps: Repertoire[] = cached ? JSON.parse(cached) : [];
-    const index = reps.findIndex(r => r.id === repertoire.id);
-    if (index !== -1) {
-      savedRep = { ...repertoire, updatedAt: new Date().toISOString() };
-      reps[index] = savedRep;
-    } else {
-      savedRep = { ...repertoire, createdAt: repertoire.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
-      reps.push(savedRep);
-    }
-    localStorage.setItem(localKey, JSON.stringify(reps));
+    const savedRep = { 
+      ...repertoire, 
+      createdAt: repertoire.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString() 
+    };
 
-    // Sync to Firestore
     try {
+      // Sync strictly to Firestore - do NOT cache or fallback in localStorage
       const docRef = doc(db, 'repertoires', repertoire.id);
       await setDoc(docRef, savedRep, { merge: true }).catch(err => {
-        console.error("Error writing repertoire to Firestore:", err);
+        handleFirestoreError(err, OperationType.WRITE, `repertoires/${repertoire.id}`);
+        throw err;
       });
     } catch (e) {
-      console.error("Sync error in saveRepertoire:", e);
+      console.error("Error inside saveRepertoire:", e);
+      throw e;
     }
 
     return savedRep;
   },
 
   async deleteRepertoire(id: string, ownerUid: string): Promise<void> {
-    const localKey = `somdrive_repertoires_${ownerUid}`;
-    
-    // Delete from LocalStorage first
-    const cached = localStorage.getItem(localKey);
-    if (cached) {
-      let reps: Repertoire[] = JSON.parse(cached);
-      reps = reps.filter(r => r.id !== id);
-      localStorage.setItem(localKey, JSON.stringify(reps));
-    }
-
-    // Delete from Firestore
     try {
+      // Delete strictly from Firestore - do NOT cache or fallback in localStorage
       const docRef = doc(db, 'repertoires', id);
       await deleteDoc(docRef).catch(err => {
-        console.error("Error deleting repertoire in Firestore:", err);
+        handleFirestoreError(err, OperationType.DELETE, `repertoires/${id}`);
+        throw err;
       });
     } catch (e) {
-      console.error("Deletion error in deleteRepertoire:", e);
+      console.error("Error inside deleteRepertoire:", e);
+      throw e;
     }
   },
 

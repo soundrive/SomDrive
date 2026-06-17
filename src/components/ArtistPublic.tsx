@@ -179,11 +179,6 @@ export default function ArtistPublic({
           const cachedTracks = dbService.getArtistMusics(cachedArtist.userId).filter(t => t.status !== 'inactive');
           setAllTracks(cachedTracks);
           
-          // Load cached repertoires
-          const cachedReps = JSON.parse(localStorage.getItem(`somdrive_repertoires_${cachedArtist.userId}`) || "[]");
-          if (cachedReps?.length) {
-            setRepertoires(cachedReps);
-          }
           setIsLoading(false);
           hasCache = true;
         }

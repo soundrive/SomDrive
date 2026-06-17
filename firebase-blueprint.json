@@ -128,6 +128,25 @@
         "updatedAt": { "type": "string", "description": "Audit change stamp" }
       },
       "required": ["id", "userId", "email", "plan", "billingCycle", "status", "musicLimit", "paidAt"]
+    },
+    "Repertoire": {
+      "title": "Repertoire",
+      "description": "Folders or collections of music tracks styled as portable folders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the repertoire folder" },
+        "ownerUid": { "type": "string", "description": "Reference UID linking to the artist who owns this repertoire" },
+        "name": { "type": "string", "description": "The custom folder name" },
+        "slug": { "type": "string", "description": "The unique slug for sharing URLs" },
+        "description": { "type": "string", "description": "The detailed explanation of the folder" },
+        "type": { "type": "string", "enum": ["repertoire", "collection", "playlist", "project"], "description": "The configuration category" },
+        "trackIds": { "type": "array", "description": "Listing of associated music track IDs" },
+        "orderedTrackIds": { "type": "array", "description": "Preserved user customized ordering of tracks" },
+        "visibility": { "type": "string", "enum": ["active", "private"], "description": "Access settings" },
+        "createdAt": { "type": "string", "description": "Upload calendar stamp" },
+        "updatedAt": { "type": "string", "description": "Latest edit calendar stamp" }
+      },
+      "required": ["id", "ownerUid", "name", "type", "trackIds", "visibility"]
     }
   },
   "firestore": {
@@ -162,6 +181,10 @@
     "/settings/{settingId}": {
       "schema": "PaymentSettings",
       "description": "General settings and dynamic integration configs used by the app"
+    },
+    "/repertoires/{repertoireId}": {
+      "schema": "Repertoire",
+      "description": "Shareable folders compiling multiple musical tracks"
     }
   }
 }

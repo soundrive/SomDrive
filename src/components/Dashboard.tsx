@@ -44,6 +44,8 @@ import {
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
+import { db } from '../lib/firebase';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import PlansScreen from './PlansScreen';
 import { motion } from 'motion/react';
 
@@ -147,6 +149,49 @@ export default function Dashboard({
 
   // Repertoires list & creations
   const [dashboardRepertoires, setDashboardRepertoires] = useState<Repertoire[]>([]);
+  const [loadingRepertoires, setLoadingRepertoires] = useState(true);
+  const [repertoiresError, setRepertoiresError] = useState<string | null>(null);
+  const [isSyncingRepertoire, setIsSyncingRepertoire] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.userId) return;
+
+    setLoadingRepertoires(true);
+    setRepertoiresError(null);
+
+    const q = query(
+      collection(db, 'repertoires'),
+      where('ownerUid', '==', currentUser.userId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const repsList: Repertoire[] = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ownerUid: data.ownerUid,
+          name: data.name || '',
+          slug: data.slug || '',
+          description: data.description || '',
+          type: data.type || 'repertoire',
+          trackIds: data.trackIds || [],
+          orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+          visibility: data.visibility || 'active',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt
+        } as Repertoire;
+      });
+      setDashboardRepertoires(repsList);
+      setLoadingRepertoires(false);
+    }, (err) => {
+      console.error("Error subscribing to repertoires snapshot in Dashboard:", err);
+      setRepertoiresError("Não foi possível carregar os repertórios.");
+      setLoadingRepertoires(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
   const [newRepName, setNewRepName] = useState('');
   const [newRepDesc, setNewRepDesc] = useState('');
   const [newRepVisibility, setNewRepVisibility] = useState<'active' | 'private'>('active');
@@ -397,12 +442,7 @@ export default function Dashboard({
     setTracks(dbService.getArtistMusics(currentUser.userId));
     setAnalytics(dbService.getAnalytics(currentUser.userId));
 
-    // Warm up Repertoires & Projects from LocalStorage/Cache instantly
-    const localKeyReps = `somdrive_repertoires_${currentUser.userId}`;
-    const cachedReps = localStorage.getItem(localKeyReps);
-    if (cachedReps) {
-      setDashboardRepertoires(JSON.parse(cachedReps));
-    }
+    // Warm up Projects from LocalStorage/Cache instantly
     const localKeyProj = `somdrive_projects_${currentUser.userId}`;
     const cachedProjs = localStorage.getItem(localKeyProj);
     if (cachedProjs) {
@@ -410,9 +450,6 @@ export default function Dashboard({
     }
 
     // Refresh concurrently in the background from Firestore
-    dbService.getRepertoires(currentUser.userId).then(reps => {
-      if (reps) setDashboardRepertoires(reps);
-    });
     dbService.getProjects(currentUser.userId).then(projs => {
       if (projs) setDashboardProjects(projs);
     });
@@ -1287,7 +1324,9 @@ export default function Dashboard({
         };
         await dbService.saveRepertoire(updatedRep);
       } else {
-        const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
+        // Generate real Firestore document ID instead of a temporary ID
+        const newDocRef = doc(collection(db, 'repertoires'));
+        const repId = newDocRef.id;
         const newRep: Repertoire = {
           id: repId,
           ownerUid: profile.userId,
@@ -1310,6 +1349,19 @@ export default function Dashboard({
       refreshData();
     } catch (err: any) {
       console.error("Erro ao salvar o repertório:", err);
+    }
+  };
+
+  const handleSyncRepertoire = async (rep: Repertoire) => {
+    setIsSyncingRepertoire(rep.id);
+    try {
+      await dbService.saveRepertoire(rep);
+      setToastMessage?.("Repertório sincronizado com o Firestore com sucesso!");
+    } catch (err) {
+      console.error("Error syncing ghost repertoire:", err);
+      setToastMessage?.("Erro ao sincronizar repertório.");
+    } finally {
+      setIsSyncingRepertoire(null);
     }
   };
 
@@ -2055,7 +2107,7 @@ export default function Dashboard({
 
                       <button 
                         onClick={(e) => handleDeleteMusic(track.trackId, e)}
-                        className="p-1.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-red-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
+                        className="p-1.5 bg-slate-955 border border-slate-800 text-slate-400 hover:text-red-400 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center justify-center transition"
                         title="Excluir música"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -2096,129 +2148,227 @@ export default function Dashboard({
             </button>
           </div>
 
-          {dashboardRepertoires.length === 0 ? (
-            <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6">
-              <Folders className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-              <h4 className="text-base font-bold text-slate-300 uppercase">Nenhum repertório criado</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-mono">Você ainda não tem nenhum repertório cadastrado. Envie músicas e organize-as em pastas públicas ou privadas!</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {dashboardRepertoires.map((rep) => {
-                const repTracksCount = rep.trackIds?.length || 0;
-                const slugToUse = rep.slug || rep.id;
-                const shareUrl = `${window.location.origin}/catalogo/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
-                const isPrivate = rep.visibility === 'private';
-                const isCopied = repCopiedId === rep.id;
-                
-                return (
-                  <div 
-                    key={rep.id}
-                    className="bg-slate-900/60 rounded-2xl border border-slate-850 p-5 flex flex-col justify-between hover:border-slate-700 transition space-y-4 shadow-xl"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className={`text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase ${
-                          isPrivate ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
-                        }`}>
-                          {isPrivate ? 'Privado' : 'Público'}
-                        </span>
-                        
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
-                        </span>
-                      </div>
+          {(() => {
+            if (loadingRepertoires) {
+              return (
+                <div className="text-center py-20 bg-slate-900/10 rounded-3xl border border-slate-850 p-6 flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+                  <p className="text-xs text-slate-450 font-mono">Sincronizando pastas com o Firestore...</p>
+                </div>
+              );
+            }
 
-                      <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">
-                        📁 {rep.name}
-                      </h4>
-                      
-                      <p className="text-slate-400 text-xs font-sans line-clamp-2 min-h-[32px]">
-                        {rep.description || 'Sem descrição.'}
-                      </p>
-                    </div>
+            if (repertoiresError) {
+              return (
+                <div className="text-center py-16 bg-red-950/20 rounded-3xl border border-red-500/20 p-6">
+                  <Info className="w-12 h-12 text-red-500 mx-auto mb-4 animate-pulse" />
+                  <h4 className="text-base font-bold text-red-400 uppercase">Erro ao carregar dados</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 font-mono">{repertoiresError}</p>
+                </div>
+              );
+            }
 
-                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-850">
-                      <div className="flex gap-2 w-full">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setViewingRepertoireTracks(rep);
-                          }}
-                          className="flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-orange-600 hover:bg-orange-500 text-slate-950 px-3 font-mono"
-                          title="Abrir Repertório"
-                        >
-                          <FolderClosed className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>Abrir</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(shareUrl);
-                            setRepCopiedId(rep.id);
-                            setTimeout(() => setRepCopiedId(null), 2000);
-                          }}
-                          className={`flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer font-mono ${
-                            isCopied ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'
-                          }`}
-                          title="Copiar Link"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>{isCopied ? 'Copiado!' : 'Copiar Link'}</span>
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-1.5 w-full">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingRepertoire(rep);
-                            setNewRepName(rep.name);
-                            setNewRepDesc(rep.description || '');
-                            setNewRepVisibility(rep.visibility || 'active');
-                            setShowCreateRep(true);
-                          }}
-                          className="flex-1 py-1 px-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-[11px] font-bold uppercase font-mono"
-                          title="Editar Repertório"
-                        >
-                          <Pencil className="w-3 h-3" />
-                          <span>Editar</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const greetingText = `Confira o meu repertório "${rep.name}" do SomDrive: ${shareUrl}`;
-                            window.open(`https://wa.me/?text=${encodeURIComponent(greetingText)}`, '_blank');
-                          }}
-                          className="p-1.5 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-xl transition cursor-pointer flex items-center justify-center"
-                          title="Compartilhar no WhatsApp"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
-                              await dbService.deleteRepertoire(rep.id, profile.userId);
-                              refreshData();
-                            }
-                          }}
-                          className="p-1.5 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
-                          title="Excluir Repertório"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+            const unsyncedRepertoires = (() => {
+              try {
+                const localKeyReps = `somdrive_repertoires_${currentUser.userId}`;
+                const cachedRepsRaw = localStorage.getItem(localKeyReps);
+                if (!cachedRepsRaw) return [];
+                const cachedReps: Repertoire[] = JSON.parse(cachedRepsRaw);
+                return cachedReps.filter(cached => 
+                  !dashboardRepertoires.some(real => real.id === cached.id)
                 );
-              })}
-            </div>
-          )}
+              } catch {
+                return [];
+              }
+            })();
+
+            const combinedRepertoires = [
+              ...dashboardRepertoires.map(r => ({ ...r, isSynced: true })),
+              ...unsyncedRepertoires.map(r => ({ ...r, isSynced: false }))
+            ];
+
+            if (combinedRepertoires.length === 0) {
+              return (
+                <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6">
+                  <Folders className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <h4 className="text-base font-bold text-slate-300 uppercase">Nenhum repertório criado</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-mono">Você ainda não tem nenhum repertório cadastrado. Envie músicas e organize-as em pastas públicas ou privadas!</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {combinedRepertoires.map((rep) => {
+                  const repTracksCount = rep.trackIds?.length || 0;
+                  const slugToUse = rep.slug || rep.id;
+                  const shareUrl = `${window.location.origin}/catalogo/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
+                  const isPrivate = rep.visibility === 'private';
+                  const isCopied = repCopiedId === rep.id;
+                  
+                  return (
+                    <div 
+                      key={rep.id}
+                      className={`bg-slate-900/60 rounded-2xl border p-5 flex flex-col justify-between hover:border-slate-700 transition space-y-4 shadow-xl ${
+                        rep.isSynced ? 'border-slate-850' : 'border-amber-500/30'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          {rep.isSynced ? (
+                            <span className={`text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase ${
+                              isPrivate ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {isPrivate ? 'Privado' : 'Público'}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase bg-amber-950/40 border-amber-500/30 text-amber-400 animate-pulse">
+                              Não Sincronizado (Local)
+                            </span>
+                          )}
+                          
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
+                          </span>
+                        </div>
+
+                        <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">
+                          📁 {rep.name}
+                        </h4>
+                        
+                        <p className="text-slate-400 text-xs font-sans line-clamp-2 min-h-[32px]">
+                          {rep.description || 'Sem descrição.'}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col gap-2 pt-3 border-t border-slate-850">
+                        {/* If unsynced, display CTA to sync, otherwise show actions */}
+                        {!rep.isSynced ? (
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSyncRepertoire(rep)}
+                              disabled={isSyncingRepertoire === rep.id}
+                              className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-slate-950 text-xs font-black uppercase rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-md font-bold"
+                            >
+                              {isSyncingRepertoire === rep.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Save className="w-3.5 h-3.5 stroke-[2.5]" />
+                              )}
+                              <span>Salvar no Firestore</span>
+                            </button>
+                            <p className="text-[10px] text-amber-500 font-mono text-center leading-normal">
+                              Esta pasta existe só neste navegador. Salve no Firestore para compartilhar!
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 w-full">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewingRepertoireTracks(rep);
+                              }}
+                              className="flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-orange-600 hover:bg-orange-500 text-slate-950 px-3 font-mono"
+                              title="Abrir Repertório"
+                            >
+                              <FolderClosed className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>Abrir</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(shareUrl);
+                                setRepCopiedId(rep.id);
+                                setTimeout(() => setRepCopiedId(null), 2000);
+                              }}
+                              className={`flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer font-mono ${
+                                isCopied ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'
+                              }`}
+                              title="Copiar Link"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>{isCopied ? 'Copiado!' : 'Copiar Link'}</span>
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-1.5 w-full">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingRepertoire(rep);
+                              setNewRepName(rep.name);
+                              setNewRepDesc(rep.description || '');
+                              setNewRepVisibility(rep.visibility || 'active');
+                              setShowCreateRep(true);
+                            }}
+                            className="flex-1 py-1 px-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-[11px] font-bold uppercase font-mono"
+                            title="Editar Repertório"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span>Editar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={!rep.isSynced}
+                            onClick={() => {
+                              if (!rep.isSynced) {
+                                setToastMessage?.("Sincronize o repertório no Firestore antes de compartilhar.");
+                                return;
+                              }
+                              const greetingText = `Confira o meu repertório "${rep.name}" do SomDrive: ${shareUrl}`;
+                              window.open(`https://wa.me/?text=${encodeURIComponent(greetingText)}`, '_blank');
+                            }}
+                            className={`p-1.5 border rounded-xl transition flex items-center justify-center ${
+                              rep.isSynced
+                                ? 'bg-emerald-950/20 hover:bg-emerald-950/40 border-emerald-500/20 text-emerald-400 cursor-pointer'
+                                : 'bg-slate-905 border-slate-850 text-slate-600 cursor-not-allowed opacity-40'
+                            }`}
+                            title={rep.isSynced ? "Compartilhar no WhatsApp" : "Sincronize para compartilhar"}
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
+                                if (rep.isSynced) {
+                                  await dbService.deleteRepertoire(rep.id, profile.userId);
+                                } else {
+                                  // Local deletion for unsynced item
+                                  try {
+                                    const localKeyReps = `somdrive_repertoires_${currentUser.userId}`;
+                                    const cachedRepsRaw = localStorage.getItem(localKeyReps);
+                                    if (cachedRepsRaw) {
+                                      let cachedReps: Repertoire[] = JSON.parse(cachedRepsRaw);
+                                      cachedReps = cachedReps.filter(cached => cached.id !== rep.id);
+                                      localStorage.setItem(localKeyReps, JSON.stringify(cachedReps));
+                                    }
+                                  } catch (err) {
+                                    console.error("Local delete error:", err);
+                                  }
+                                }
+                                refreshData();
+                              }
+                            }}
+                            className="p-1.5 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
+                            title="Excluir Repertório"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
