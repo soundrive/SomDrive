@@ -1,69 +1,23 @@
 import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project } from '../types';
 
 // Static Royalty-Free MP3 links that are reliable and beautiful
-export const DEMO_SONGS = [
-  {
-    title: "Vento da Alvorada",
-    composer: "Gabriel Silva",
-    singer: "Lara & Gabriel",
-    genre: "Sertanejo Acústico",
-    description: "Uma melodia suave gravada ao vivo em Goiânia com arranjo de viola caipira.",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    coverUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80",
-  },
-  {
-    title: "Coração de Pedra",
-    composer: "Mariana Souza",
-    singer: "Grupo Sentimento",
-    genre: "Pagode / Samba",
-    description: "Samba raiz acelerado, com coro marcante e pandeiro orgânico gravado no Rio.",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-    coverUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80",
-  },
-  {
-    title: "Noites do Nordeste",
-    composer: "Raimundo Sanfoneiro",
-    singer: "Trio Asa Branca",
-    genre: "Forró / Xote",
-    description: "Xote tradicional nordestino perfeito para dançar agarradinho e ouvir no som do carro.",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
-    coverUrl: "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=500&auto=format&fit=crop&q=80",
-  },
-  {
-    title: "Horizonte Neon",
-    composer: "Carlos B.",
-    singer: "Carlos B. & Banda",
-    genre: "MPB / Pop",
-    description: "Uma fusão de MPB moderna com sintetizadores retro. Eleita melhor composição autoral.",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-    coverUrl: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80",
-  },
-  {
-    title: "Teus Olhos Claros",
-    composer: "Paula Teixeira",
-    singer: "Paula Teixeira",
-    genre: "Pop / Acústico",
-    description: "Voz e violão intimista, com letra romântica de arrancar suspiros.",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
-    coverUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80",
-  }
-];
+export const DEMO_SONGS: any[] = [];
 
 export const DEMO_ARTIST: Artist = {
-  userId: "gabriel-silva",
-  name: "Gabriel Silva",
-  avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80",
-  city: "Goiânia - GO",
-  genre: "Sertanejo / MPB",
-  whatsapp: "5562999999999",
-  instagram: "gabrielsilva_oficial",
-  email: "gabrielsilva@gmail.com",
-  bio: "Compositor há mais de 10 anos, escrevendo hits sertanejos e modas de viola exclusivas para artistas profissionais e contratantes de todo o Brasil.",
+  userId: "",
+  name: "Artista",
+  avatarUrl: "",
+  city: "",
+  genre: "",
+  whatsapp: "",
+  instagram: "",
+  email: "",
+  bio: "",
   plan: "free",
   createdAt: new Date().toISOString(),
 };
 
-export const DEMO_LYRICS = [
+export const DEMO_LYRICS: string[] = [
   `[Refrão]
 Vento da alvorada leva essa dor de mim
 Sopra no meu peito, diz que não é o fim

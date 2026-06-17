@@ -689,17 +689,19 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button 
-              type="button" 
-              onClick={() => {
-                setSelectedPlan('pro');
-                setIsCheckoutOpen(true);
-                setCheckoutStep('payment');
-              }}
-              className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-white rounded-lg transition uppercase tracking-wider font-mono text-[9px] cursor-pointer font-bold"
-            >
-              Simulador Sandbox (Dev)
-            </button>
+            {(currentUser?.role === 'admin' || currentUser?.email?.toLowerCase().trim() === 'videopremieroficial@gmail.com' || currentUser?.email?.toLowerCase().trim() === 'sertanejopremier@gmail.com') && (
+              <button 
+                type="button" 
+                onClick={() => {
+                  setSelectedPlan('pro');
+                  setIsCheckoutOpen(true);
+                  setCheckoutStep('payment');
+                }}
+                className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-white rounded-lg transition uppercase tracking-wider font-mono text-[9px] cursor-pointer font-bold"
+              >
+                Simulador Sandbox (Dev)
+              </button>
+            )}
             <button 
               type="button" 
               onClick={() => alert("Central de suporte prioritário: envie um e-mail para suporte@somdrive.com.br")}
