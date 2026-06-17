@@ -136,7 +136,7 @@ export interface Repertoire {
   type: 'repertoire' | 'collection' | 'playlist' | 'project';
   trackIds: string[];
   orderedTrackIds?: string[];
-  visibility: 'active' | 'private';
+  visibility: 'public' | 'unlisted' | 'private' | 'active';
   createdAt: string;
   updatedAt?: string;
 }

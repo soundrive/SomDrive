@@ -1,5 +1,44 @@
 import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project } from '../types';
 
+// Strict in-memory shadowing to replace browser persistent storage for core user/folder/music data
+const MEMORY_KV_STORE: Record<string, string> = {};
+
+const localStorage = {
+  getItem(key: string): string | null {
+    if (key === 'soundrive_datasaver_v2') {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    }
+    return MEMORY_KV_STORE[key] || null;
+  },
+  setItem(key: string, value: string): void {
+    if (key === 'soundrive_datasaver_v2') {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {}
+      return;
+    }
+    MEMORY_KV_STORE[key] = value;
+  },
+  removeItem(key: string): void {
+    if (key === 'soundrive_datasaver_v2') {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+      return;
+    }
+    delete MEMORY_KV_STORE[key];
+  },
+  clear(): void {
+    for (const k in MEMORY_KV_STORE) {
+      delete MEMORY_KV_STORE[k];
+    }
+  }
+};
+
 // Static Royalty-Free MP3 links that are reliable and beautiful
 export const DEMO_SONGS: any[] = [];
 
@@ -124,24 +163,17 @@ export const LS_CURR_USER = "pendrive_curr_user";
 
 // Clear old demo account if found in localStorage to avoid stale cached view
 if (localStorage.getItem(LS_CURR_USER)) {
-  try {
-    const user = JSON.parse(localStorage.getItem(LS_CURR_USER) || "{}");
-    if (user.userId === 'gabriel-silva' || user.email === 'gabriel.silva@somdrive.com' || user.name === 'Gabriel Silva') {
-      localStorage.removeItem(LS_CURR_USER);
-    }
-  } catch (e) {
-    localStorage.removeItem(LS_CURR_USER);
-  }
+  localStorage.removeItem(LS_CURR_USER);
 }
 
-// Seed local storage with base tables if empty or contains old demo tags
-if (!localStorage.getItem(LS_ARTISTS) || localStorage.getItem(LS_ARTISTS)?.includes("gabriel-silva")) {
+// Seed local storage with base tables if empty
+if (!localStorage.getItem(LS_ARTISTS)) {
   localStorage.setItem(LS_ARTISTS, JSON.stringify(INITIAL_ARTISTS));
 }
-if (!localStorage.getItem(LS_MUSICS) || localStorage.getItem(LS_MUSICS)?.includes("gabriel-silva")) {
+if (!localStorage.getItem(LS_MUSICS)) {
   localStorage.setItem(LS_MUSICS, JSON.stringify(INITIAL_MUSICS));
 }
-if (!localStorage.getItem(LS_ANALYTICS) || localStorage.getItem(LS_ANALYTICS)?.includes("gabriel-silva")) {
+if (!localStorage.getItem(LS_ANALYTICS)) {
   localStorage.setItem(LS_ANALYTICS, JSON.stringify(INITIAL_ANALYTICS));
 }
 
@@ -1025,16 +1057,7 @@ export const dbService = {
     }
 
     const tracks: Music[] = musicsMap[targetId] || musicsMap[artistId] || [];
-    const sorted = tracks.map((t, idx) => {
-      if (artistId === "gabriel-silva" && !t.lyrics) {
-        return {
-          ...t,
-          lyrics: DEMO_LYRICS[idx] || ""
-        };
-      }
-      return t;
-    });
-    return sorted.sort((a, b) => {
+    return tracks.sort((a, b) => {
       const getPosVal = (t: Music) => {
         if (t.orderIndex !== undefined) return t.orderIndex;
         if (t.position !== undefined) return t.position;
@@ -2099,6 +2122,64 @@ export const dbService = {
       throw e;
     }
     return [];
+  },
+
+  async getRepertoireBySlugOrId(ownerUid: string, slugOrId: string): Promise<Repertoire | null> {
+    try {
+      // 1. Try slug query first
+      const q = query(
+        collection(db, 'repertoires'),
+        where('ownerUid', '==', ownerUid),
+        where('slug', '==', slugOrId)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        const data = docSnap.data();
+        let visibilityVal = data.visibility || 'public';
+        if (visibilityVal === 'active') visibilityVal = 'public';
+        return {
+          id: docSnap.id,
+          ownerUid: data.ownerUid,
+          name: data.name,
+          slug: data.slug || '',
+          description: data.description || '',
+          type: data.type || 'repertoire',
+          trackIds: data.trackIds || [],
+          orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+          visibility: visibilityVal,
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString()
+        } as Repertoire;
+      }
+
+      // 2. Fallback to direct document ID check
+      const docRef = doc(db, 'repertoires', slugOrId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.ownerUid === ownerUid) {
+          let visibilityVal = data.visibility || 'public';
+          if (visibilityVal === 'active') visibilityVal = 'public';
+          return {
+            id: docSnap.id,
+            ownerUid: data.ownerUid,
+            name: data.name,
+            slug: data.slug || '',
+            description: data.description || '',
+            type: data.type || 'repertoire',
+            trackIds: data.trackIds || [],
+            orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+            visibility: visibilityVal,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString()
+          } as Repertoire;
+        }
+      }
+    } catch (err) {
+      console.error("Error in getRepertoireBySlugOrId:", err);
+    }
+    return null;
   },
 
   async saveRepertoire(repertoire: Repertoire): Promise<Repertoire> {

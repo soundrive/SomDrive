@@ -97,7 +97,9 @@ service cloud.firestore {
     match /repertoires/{repertoireId} {
       allow read: if
         (resource == null)
-        || (resource.data.get('visibility', 'private') == 'public')
+        || resource.data.get('visibility', 'private') == 'public'
+        || resource.data.get('visibility', 'private') == 'unlisted'
+        || resource.data.get('visibility', 'private') == 'active'
         || (isSignedIn() && resource.data.ownerUid == request.auth.uid)
         || isAdmin();
 

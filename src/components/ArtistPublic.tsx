@@ -196,11 +196,6 @@ export default function ArtistPublic({
         // 2. Fetch and synchronize fresh data from Firestore
         await dbService.syncArtistData(artistId);
         let syncedArtist = dbService.getArtist(artistId);
-        if (!syncedArtist) {
-          // Fallback to demo or query
-          await dbService.syncArtistData("gabriel-silva");
-          syncedArtist = dbService.getArtist("gabriel-silva");
-        }
 
         if (syncedArtist) {
           setArtist(syncedArtist);
@@ -209,14 +204,27 @@ export default function ArtistPublic({
           
           // Fetch Fresh Repertoires
           const freshReps = await dbService.getRepertoires(syncedArtist.userId, true);
-          setRepertoires(freshReps || []);
+          let finalRepsList = [...(freshReps || [])];
+
+          // If a specific repertoire was queried via direct link, fetch it specifically
+          // to support 'unlisted' folders as well.
+          if (selectedRepertoireId) {
+            const isAlreadyLoaded = finalRepsList.some(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()));
+            if (!isAlreadyLoaded) {
+              const queriedRep = await dbService.getRepertoireBySlugOrId(syncedArtist.userId, selectedRepertoireId);
+              if (queriedRep && queriedRep.visibility !== 'private') {
+                finalRepsList.push(queriedRep);
+              }
+            }
+          }
+          setRepertoires(finalRepsList);
           setIsLoading(false);
         } else if (!hasCache) {
           setErrorMsg("Catálogo não encontrado ou ainda sem músicas disponíveis.");
         }
 
         // 3. Increment views in background
-        const activeArtist = dbService.getArtist(artistId) || dbService.getArtist("gabriel-silva");
+        const activeArtist = dbService.getArtist(artistId);
         if (activeArtist) {
           dbService.incrementAnalyticsView(activeArtist.userId, true, false);
         }
@@ -233,7 +241,7 @@ export default function ArtistPublic({
       }
     };
     loadData();
-  }, [artistId]);
+  }, [artistId, selectedRepertoireId]);
 
   // Handle auto launch car mode if requested
   useEffect(() => {
@@ -915,8 +923,13 @@ export default function ArtistPublic({
               <div className="text-left">
                 <h3 className="text-[13px] font-mono font-black tracking-widest text-[#5c7094] uppercase flex items-center gap-2">
                   <Disc className="w-4.5 h-4.5 text-emerald-400 rotate-slow" />
-                  <span>MÚSICAS & DEMOS</span>
+                  <span>{selectedRepertoireId ? "MÚSICAS DO REPERTÓRIO" : "MÚSICAS AVULSAS"}</span>
                 </h3>
+                {!selectedRepertoireId && !selectedSongId && (
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    Músicas fora de repertórios (avulsas)
+                  </p>
+                )}
                 {isFilteredToSingleContext && (
                   <div className="mt-1.5 inline-flex items-center gap-2 bg-[#eab308]/10 border border-[#eab308]/20 px-3 py-1 rounded-full text-[10.5px] text-yellow-400 font-mono">
                     <span>{customCollectionLabel}</span>

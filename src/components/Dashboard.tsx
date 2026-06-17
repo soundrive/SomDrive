@@ -45,7 +45,7 @@ import {
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
 import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, Timestamp } from 'firebase/firestore';
 import PlansScreen from './PlansScreen';
 import { motion } from 'motion/react';
 
@@ -68,7 +68,7 @@ export default function Dashboard({
 }: DashboardProps) {
   const [profile, setProfile] = useState<Artist>(currentUser);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const generalSongs = tracks.filter(t => !t.repertoireId || t.publicationDestination === 'general');
+  const generalSongs = tracks.filter(t => !t.repertoireId);
   const [analytics, setAnalytics] = useState<Analytics>({ artistId: currentUser.userId, viewsCount: 0, whatsappClicks: 0 });
   const [copiedAlert, setCopiedAlert] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -192,6 +192,71 @@ export default function Dashboard({
       console.error("Error subscribing to repertoires snapshot in Dashboard:", err);
       setRepertoiresError("Não foi possível carregar os repertórios.");
       setLoadingRepertoires(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser?.userId) return;
+
+    const q = query(
+      collection(db, 'songs'),
+      where('ownerId', '==', currentUser.userId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const songsList: Track[] = snapshot.docs.map(docSnap => {
+        const d = docSnap.data();
+        return {
+          trackId: docSnap.id || d.songId || d.trackId,
+          artistId: d.ownerId || d.artistId || currentUser.userId,
+          title: d.title || "",
+          composer: d.composer || "",
+          partners: d.partners || "",
+          singer: d.performer || d.singer || "",
+          performer: d.performer || d.singer || "",
+          genre: d.genre || "",
+          description: d.description || "",
+          audioUrl: d.audioUrl || "",
+          coverUrl: d.coverUrl || "",
+          lyrics: d.lyrics || "",
+          playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+          plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+          status: d.status || "active",
+          storageProvider: d.storageProvider || "cloudflare_r2",
+          storagePath: d.storagePath || "",
+          fileSize: d.fileSize || 0,
+          mimeType: d.mimeType || "audio/mpeg",
+          originalFileName: d.originalFileName || "",
+          audioFileId: d.audioFileId || "",
+          position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+          orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : (d.createdAt || new Date().toISOString()),
+          updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : (d.updatedAt || d.createdAt || new Date().toISOString()),
+          repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
+          publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
+          isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
+          isPublic: d.isPublic !== undefined ? d.isPublic : true
+        } as Track;
+      });
+
+      // Sort by orderIndex/position or createdAt
+      setTracks(songsList.sort((a, b) => {
+        const getPosVal = (t: Track) => {
+          if (t.orderIndex !== undefined) return t.orderIndex;
+          if (t.position !== undefined) return t.position;
+          return 99999;
+        };
+        const posA = getPosVal(a);
+        const posB = getPosVal(b);
+        if (posA !== posB) return posA - posB;
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      }));
+    }, (err) => {
+      console.error("Error subscribing to songs snapshot:", err);
     });
 
     return () => unsubscribe();
@@ -1180,6 +1245,20 @@ export default function Dashboard({
         }
       }
 
+      // Update the track's own repertoireId alignment as well
+      let firstCheckedRepId: string | null = null;
+      for (const repId of Object.keys(checkboxesSnapshot)) {
+        if (checkboxesSnapshot[repId]) {
+          firstCheckedRepId = repId;
+          break;
+        }
+      }
+
+      await dbService.updateMusic(profile.userId, selectedTrackForRepAction.trackId, {
+        repertoireId: firstCheckedRepId,
+        publicationDestination: firstCheckedRepId ? 'repertoire' : 'general'
+      });
+
       setShowRepActionModal(false);
       setSelectedTrackForRepAction(null);
       setNewRepertoireName('');
@@ -1354,19 +1433,8 @@ export default function Dashboard({
       refreshData();
     } catch (err: any) {
       console.error("Erro ao salvar o repertório:", err);
-    }
-  };
-
-  const handleSyncRepertoire = async (rep: Repertoire) => {
-    setIsSyncingRepertoire(rep.id);
-    try {
-      await dbService.saveRepertoire(rep);
-      setToastMessage?.("Repertório sincronizado com o Firestore com sucesso!");
-    } catch (err) {
-      console.error("Error syncing ghost repertoire:", err);
-      setToastMessage?.("Erro ao sincronizar repertório.");
-    } finally {
-      setIsSyncingRepertoire(null);
+      setToastMessage(`Falha na gravação: ${err?.message || "Erro desconhecido"}`);
+      setTimeout(() => setToastMessage(null), 4000);
     }
   };
 
@@ -1821,6 +1889,12 @@ export default function Dashboard({
         </div>
 
         {/* Music List */}
+        <div className="flex items-center justify-between border-b border-slate-850/40 pb-2 mt-4 text-left">
+          <h4 className="font-heading font-black text-xs uppercase tracking-wider text-slate-400">
+            MÚSICAS AVULSAS (Não pertencem a nenhum repertório)
+          </h4>
+        </div>
+
         {generalSongs.length === 0 ? (
           <div id="empty-songs" className="text-center py-20 bg-slate-900/40 border border-dashed border-slate-850 rounded-3xl space-y-4">
             <div className="w-16 h-16 bg-slate-955 rounded-full flex items-center justify-center mx-auto text-orange-500 border border-slate-800 shadow-xl shadow-orange-550/5">
@@ -2173,204 +2247,130 @@ export default function Dashboard({
               );
             }
 
-            const unsyncedRepertoires = (() => {
-              try {
-                const localKeyReps = `somdrive_repertoires_${currentUser.userId}`;
-                const cachedRepsRaw = localStorage.getItem(localKeyReps);
-                if (!cachedRepsRaw) return [];
-                const cachedReps: Repertoire[] = JSON.parse(cachedRepsRaw);
-                return cachedReps.filter(cached => 
-                  !dashboardRepertoires.some(real => real.id === cached.id)
-                );
-              } catch {
-                return [];
-              }
-            })();
-
-            const combinedRepertoires = [
-              ...dashboardRepertoires.map(r => ({ ...r, isSynced: true })),
-              ...unsyncedRepertoires.map(r => ({ ...r, isSynced: false }))
-            ];
-
-            if (combinedRepertoires.length === 0) {
-              return (
-                <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6">
-                  <Folders className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                  <h4 className="text-base font-bold text-slate-300 uppercase">Nenhum repertório criado</h4>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-mono">Você ainda não tem nenhum repertório cadastrado. Envie músicas e organize-as em pastas públicas ou privadas!</p>
-                </div>
-              );
-            }
+            const combinedRepertoires = dashboardRepertoires;
 
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {combinedRepertoires.map((rep) => {
-                  const repTracksCount = rep.trackIds?.length || 0;
-                  const slugToUse = rep.slug || rep.id;
-                  const shareUrl = `${window.location.origin}/catalogo/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
-                  const isPrivate = rep.visibility === 'private';
-                  const isCopied = repCopiedId === rep.id;
-                  
-                  return (
-                    <div 
-                      key={rep.id}
-                      className={`bg-slate-900/60 rounded-2xl border p-5 flex flex-col justify-between hover:border-slate-700 transition space-y-4 shadow-xl ${
-                        rep.isSynced ? 'border-slate-850' : 'border-amber-500/30'
-                      }`}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          {rep.isSynced ? (
-                            <span className={`text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase ${
-                              isPrivate ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
-                            }`}>
-                              {isPrivate ? 'Privado' : 'Público'}
-                            </span>
-                          ) : (
-                            <span className="text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase bg-amber-950/40 border-amber-500/30 text-amber-400 animate-pulse">
-                              Não Sincronizado (Local)
-                            </span>
-                          )}
-                          
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
-                          </span>
-                        </div>
+              <div className="space-y-6">
+                {combinedRepertoires.length === 0 ? (
+                  <div className="text-center py-16 bg-slate-900/10 rounded-3xl border border-slate-850 p-6">
+                    <Folders className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <h4 className="text-base font-bold text-slate-300 uppercase">Nenhum repertório criado</h4>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-mono">Você ainda não tem nenhum repertório cadastrado. Envie músicas e organize-as em pastas públicas ou privadas!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {combinedRepertoires.map((rep) => {
+                      const repTracksCount = rep.trackIds?.length || 0;
+                      const slugToUse = rep.slug || rep.id;
+                      const shareUrl = `${window.location.origin}/catalogo/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
+                      const isPrivate = rep.visibility === 'private';
+                      const isCopied = repCopiedId === rep.id;
 
-                        <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">
-                          📁 {rep.name}
-                        </h4>
-                        
-                        <p className="text-slate-400 text-xs font-sans line-clamp-2 min-h-[32px]">
-                          {rep.description || 'Sem descrição.'}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col gap-2 pt-3 border-t border-slate-850">
-                        {/* If unsynced, display CTA to sync, otherwise show actions */}
-                        {!rep.isSynced ? (
+                      return (
+                        <div 
+                          key={rep.id}
+                          className="bg-slate-900/60 rounded-2xl border border-slate-850 p-5 flex flex-col justify-between hover:border-slate-700 transition space-y-4 shadow-xl"
+                        >
                           <div className="space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => handleSyncRepertoire(rep)}
-                              disabled={isSyncingRepertoire === rep.id}
-                              className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-slate-950 text-xs font-black uppercase rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-md font-bold"
-                            >
-                              {isSyncingRepertoire === rep.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Save className="w-3.5 h-3.5 stroke-[2.5]" />
-                              )}
-                              <span>Salvar no Firestore</span>
-                            </button>
-                            <p className="text-[10px] text-amber-500 font-mono text-center leading-normal">
-                              Esta pasta existe só neste navegador. Salve no Firestore para compartilhar!
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase ${
+                                isPrivate ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
+                              }`}>
+                                {isPrivate ? 'Privado' : 'Público'}
+                              </span>
+                              
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
+                              </span>
+                            </div>
+
+                            <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">
+                              📁 {rep.name}
+                            </h4>
+                            
+                            <p className="text-slate-400 text-xs font-sans line-clamp-2 min-h-[32px]">
+                              {rep.description || 'Sem descrição.'}
                             </p>
                           </div>
-                        ) : (
-                          <div className="flex gap-2 w-full">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewingRepertoireTracks(rep);
-                              }}
-                              className="flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-orange-600 hover:bg-orange-500 text-slate-950 px-3 font-mono"
-                              title="Abrir Repertório"
-                            >
-                              <FolderClosed className="w-3.5 h-3.5 stroke-[2.5]" />
-                              <span>Abrir</span>
-                            </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(shareUrl);
-                                setRepCopiedId(rep.id);
-                                setTimeout(() => setRepCopiedId(null), 2000);
-                              }}
-                              className={`flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer font-mono ${
-                                isCopied ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'
-                              }`}
-                              title="Copiar Link"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>{isCopied ? 'Copiado!' : 'Copiar Link'}</span>
-                            </button>
-                          </div>
-                        )}
+                          <div className="flex flex-col gap-2 pt-3 border-t border-slate-850">
+                            <div className="flex gap-2 w-full">
+                              {/* ABRIR BUTTON */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewingRepertoireTracks(rep);
+                                }}
+                                className="flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-orange-600 hover:bg-orange-500 text-slate-950 px-3 font-mono font-bold"
+                                title="Abrir Repertório"
+                              >
+                                <FolderClosed className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Abrir</span>
+                              </button>
 
-                        <div className="flex items-center justify-between gap-1.5 w-full">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingRepertoire(rep);
-                              setNewRepName(rep.name);
-                              setNewRepDesc(rep.description || '');
-                              setNewRepVisibility(rep.visibility || 'active');
-                              setShowCreateRep(true);
-                            }}
-                            className="flex-1 py-1 px-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-[11px] font-bold uppercase font-mono"
-                            title="Editar Repertório"
-                          >
-                            <Pencil className="w-3 h-3" />
-                            <span>Editar</span>
-                          </button>
+                              {/* COMPARTILHAR BUTTON */}
+                              <button
+                                type="button"
+                                disabled={isPrivate}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(shareUrl);
+                                  setRepCopiedId(rep.id);
+                                  setTimeout(() => setRepCopiedId(null), 2000);
+                                }}
+                                className={`flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 font-mono font-bold ${
+                                  isPrivate
+                                    ? 'bg-slate-950/45 border border-slate-850/60 text-slate-600 cursor-not-allowed'
+                                    : isCopied
+                                    ? 'bg-emerald-600 text-slate-950'
+                                    : 'bg-slate-800 hover:bg-slate-755 text-slate-200 cursor-pointer'
+                                }`}
+                                title={isPrivate ? "Repertórios privados não podem ser compartilhados publicamente." : "Copiar link de compartilhamento"}
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                                <span>{isPrivate ? 'Privado' : isCopied ? 'Copiado!' : 'Compartilhar'}</span>
+                              </button>
+                            </div>
 
-                          <button
-                            type="button"
-                            disabled={!rep.isSynced}
-                            onClick={() => {
-                              if (!rep.isSynced) {
-                                setToastMessage?.("Sincronize o repertório no Firestore antes de compartilhar.");
-                                return;
-                              }
-                              const greetingText = `Confira o meu repertório "${rep.name}" do SomDrive: ${shareUrl}`;
-                              window.open(`https://wa.me/?text=${encodeURIComponent(greetingText)}`, '_blank');
-                            }}
-                            className={`p-1.5 border rounded-xl transition flex items-center justify-center ${
-                              rep.isSynced
-                                ? 'bg-emerald-950/20 hover:bg-emerald-950/40 border-emerald-500/20 text-emerald-400 cursor-pointer'
-                                : 'bg-slate-905 border-slate-850 text-slate-600 cursor-not-allowed opacity-40'
-                            }`}
-                            title={rep.isSynced ? "Compartilhar no WhatsApp" : "Sincronize para compartilhar"}
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                          </button>
+                            <div className="flex items-center gap-2 pt-1 w-full">
+                              {/* EDITAR BUTTON */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingRepertoire(rep);
+                                  setNewRepName(rep.name);
+                                  setNewRepDesc(rep.description || '');
+                                  setNewRepVisibility(rep.visibility || 'active');
+                                  setShowCreateRep(true);
+                                }}
+                                className="flex-1 py-1.5 px-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-xs font-bold uppercase font-mono"
+                                title="Editar Repertório"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Editar</span>
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
-                                if (rep.isSynced) {
-                                  await dbService.deleteRepertoire(rep.id, profile.userId);
-                                } else {
-                                  // Local deletion for unsynced item
-                                  try {
-                                    const localKeyReps = `somdrive_repertoires_${currentUser.userId}`;
-                                    const cachedRepsRaw = localStorage.getItem(localKeyReps);
-                                    if (cachedRepsRaw) {
-                                      let cachedReps: Repertoire[] = JSON.parse(cachedRepsRaw);
-                                      cachedReps = cachedReps.filter(cached => cached.id !== rep.id);
-                                      localStorage.setItem(localKeyReps, JSON.stringify(cachedReps));
-                                    }
-                                  } catch (err) {
-                                    console.error("Local delete error:", err);
+                              {/* EXCLUIR BUTTON */}
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
+                                    await dbService.deleteRepertoire(rep.id, profile.userId);
+                                    refreshData();
                                   }
-                                }
-                                refreshData();
-                              }
-                            }}
-                            className="p-1.5 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
-                            title="Excluir Repertório"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                                }}
+                                className="py-1.5 px-3 bg-[#2a1318]/50 hover:bg-[#3d1a22] border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
+                                title="Excluir Repertório"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -3206,8 +3206,8 @@ export default function Dashboard({
                     >
                       <Folders className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'all_songs' ? 'text-orange-400' : 'text-slate-500'}`} />
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide">Salvar somente no meu acervo geral ("Todas as Músicas")</h4>
-                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Sua música será arquivada e listada no catálogo principal, mas não fará parte de coleções públicas separadas.</p>
+                        <h4 className="text-xs font-bold uppercase tracking-wide">Salvar como Música Avulsa (Não entra em nenhuma pasta/repertório)</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Sua música será arquivada e listada no catálogo principal, mas não fará parte de nenhum repertório ou pasta.</p>
                       </div>
                     </div>
 
@@ -3229,8 +3229,8 @@ export default function Dashboard({
                     >
                       <ListChecks className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'existing_repertoire' ? 'text-orange-400' : 'text-slate-500'}`} />
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide">Escolher um repertório que já criei</h4>
-                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Associe referências destas gravações nas pastas que já existem. Sem custos extras ou duplicações.</p>
+                        <h4 className="text-xs font-bold uppercase tracking-wide">Escolher uma Pasta/Repertório existente</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Associe estas gravações diretamente em um repertório existente.</p>
                         
                         {organizationOption === 'existing_repertoire' && dashboardRepertoires.length > 0 && (
                           <div className="mt-4 bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-2" onClick={(e) => e.stopPropagation()}>
@@ -3273,8 +3273,8 @@ export default function Dashboard({
                     >
                       <FolderPlus className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'new_repertoire' ? 'text-orange-400' : 'text-slate-500'}`} />
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide">Criar um novo repertório e carregar músicas nele</h4>
-                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Cria simultaneamente uma pasta/repertório específico e vincula estas novas músicas diretamente.</p>
+                        <h4 className="text-xs font-bold uppercase tracking-wide">Criar uma nova Pasta/Repertório</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Cria simultaneamente um novo repertório público ou privado e associa a música a ele.</p>
 
                         {organizationOption === 'new_repertoire' && (
                           <div className="mt-4 bg-slate-950/80 p-4 rounded-xl border border-slate-850 space-y-4 text-left" onClick={(e) => e.stopPropagation()}>
@@ -3335,104 +3335,6 @@ export default function Dashboard({
                         )}
                       </div>
                     </div>
-
-                    {/* Option 4: Configure severally (Visible only if bulk upload length > 1) */}
-                    {audioFiles.length > 1 && (
-                      <div 
-                        onClick={() => setOrganizationOption('each_separately')}
-                        className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
-                          organizationOption === 'each_separately' 
-                            ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
-                            : 'bg-slate-950/50 border-slate-800 text-slate-300'
-                        }`}
-                      >
-                        <SlidersHorizontal className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'each_separately' ? 'text-orange-400' : 'text-slate-500'}`} />
-                        <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wide">Escolher o destino de cada música separadamente</h4>
-                          <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Configurar individualmente o destino específico de cada um do(s) {audioFiles.length} MP3.</p>
-
-                          {organizationOption === 'each_separately' && (
-                            <div className="mt-4 bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-3 text-left" onClick={(e) => e.stopPropagation()}>
-                              <span className="text-[9.5px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block">Configurar guias individuais:</span>
-                              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
-                                {audioFiles.map(file => {
-                                  const spec = trackSpecificOrganization[file.name] || { option: 'all_songs' };
-                                  return (
-                                    <div key={file.name} className="p-2.5 bg-slate-900 border border-slate-850 rounded-lg space-y-2">
-                                      <div className="text-[10px] font-mono font-bold text-white truncate">🎵 {file.name}</div>
-                                      <div className="flex gap-2">
-                                        {['all_songs', 'existing', 'new'].map((opt) => (
-                                          <button
-                                            key={opt}
-                                            type="button"
-                                            onClick={() => {
-                                              setTrackSpecificOrganization(prev => ({
-                                                ...prev,
-                                                [file.name]: {
-                                                  ...spec,
-                                                  option: opt as any
-                                                }
-                                              }));
-                                            }}
-                                            className={`text-[9px] px-2 py-1 rounded font-mono uppercase transition ${
-                                              spec.option === opt 
-                                                ? 'bg-orange-500 text-slate-950 font-extrabold' 
-                                                : 'bg-slate-950 text-zinc-500'
-                                            }`}
-                                          >
-                                            {opt === 'all_songs' ? 'Todas' : opt === 'existing' ? 'Existente' : 'Novo'}
-                                          </button>
-                                        ))}
-                                      </div>
-
-                                      {spec.option === 'existing' && dashboardRepertoires.length > 0 && (
-                                        <select
-                                          multiple
-                                          value={spec.selectedRepIds || []}
-                                          onChange={(e) => {
-                                            const opts = Array.from(e.target.selectedOptions, (o: any) => o.value);
-                                            setTrackSpecificOrganization(prev => ({
-                                              ...prev,
-                                              [file.name]: {
-                                                ...spec,
-                                                selectedRepIds: opts
-                                              }
-                                            }));
-                                          }}
-                                          className="w-full text-[10px] bg-slate-950 border border-slate-800 rounded p-1 text-white font-mono"
-                                        >
-                                          {dashboardRepertoires.map(r => (
-                                            <option key={r.id} value={r.id}>{r.name}</option>
-                                          ))}
-                                        </select>
-                                      )}
-
-                                      {spec.option === 'new' && (
-                                        <input
-                                          type="text"
-                                          placeholder="Nome do Novo Repertório"
-                                          value={spec.newRepName || ''}
-                                          onChange={(e) => {
-                                            setTrackSpecificOrganization(prev => ({
-                                              ...prev,
-                                              [file.name]: {
-                                                ...spec,
-                                                newRepName: e.target.value
-                                              }
-                                            }));
-                                          }}
-                                          className="w-full px-2 py-1 text-[10px] bg-slate-950 border border-slate-800 rounded text-white"
-                                        />
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-4 border-t border-slate-850/40">

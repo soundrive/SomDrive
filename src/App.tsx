@@ -441,7 +441,7 @@ export default function App() {
 
       {currentView === 'public' && (
         <ArtistPublic 
-          artistId={routePayload?.id || "gabriel-silva"}
+          artistId={routePayload?.id || ""}
           initialRepertoireId={routePayload?.repertoireId || null}
           onNavigate={handleNavigate}
           onSelectTrack={handleSelectTrack}
