@@ -38,7 +38,9 @@ import {
   CheckSquare,
   X,
   Lock,
-  Folder
+  Folder,
+  FolderClosed,
+  FolderOpen
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
@@ -64,6 +66,7 @@ export default function Dashboard({
 }: DashboardProps) {
   const [profile, setProfile] = useState<Artist>(currentUser);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const generalSongs = tracks.filter(t => !t.repertoireId || t.publicationDestination === 'general');
   const [analytics, setAnalytics] = useState<Analytics>({ artistId: currentUser.userId, viewsCount: 0, whatsappClicks: 0 });
   const [copiedAlert, setCopiedAlert] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -151,6 +154,7 @@ export default function Dashboard({
   const [showCreateRep, setShowCreateRep] = useState(false);
   const [repCopiedId, setRepCopiedId] = useState<string | null>(null);
   const [editingRepertoire, setEditingRepertoire] = useState<Repertoire | null>(null);
+  const [viewingRepertoireTracks, setViewingRepertoireTracks] = useState<Repertoire | null>(null);
   const [managingRepTrackId, setManagingRepTrackId] = useState<string | null>(null); // Repertoire ID for checkboxes modal
 
   // Projects list & creations
@@ -723,6 +727,18 @@ export default function Dashboard({
       // Helper function to create repertoire dynamically
       const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'active' | 'private', initialTrackIds: string[] = []) => {
         const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
+        const baseSlug = name
+          .toString()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/[\s_]+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        const randomSuffix = Math.floor(Math.random() * 89999) + 10000;
+        const computedSlug = `${baseSlug || "repertorio"}-${randomSuffix}`;
         const newRep: Repertoire = {
           id: repId,
           ownerUid: profile.userId,
@@ -732,6 +748,7 @@ export default function Dashboard({
           trackIds: initialTrackIds,
           orderedTrackIds: initialTrackIds,
           visibility: visibility,
+          slug: computedSlug,
           createdAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(newRep);
@@ -856,6 +873,9 @@ export default function Dashboard({
             }
           }
 
+          const finalRepId = targetRepIds.length > 0 ? targetRepIds[0] : null;
+          const pubDest = finalRepId ? "repertoire" : "general";
+
           await dbService.addMusic(profile.userId, {
             trackId: uniqueId,
             artistId: profile.userId,
@@ -877,7 +897,11 @@ export default function Dashboard({
             originalFileName: r2OriginalName,
             audioFileId: calculatedAudioFileId,
             partners: partners.trim(),
-            audioHash: computedHashHex
+            audioHash: computedHashHex,
+            repertoireId: finalRepId,
+            publicationDestination: pubDest,
+            isActive: newTrackStatus === 'active',
+            isPublic: true
           });
 
           // Reference tracking
@@ -898,6 +922,17 @@ export default function Dashboard({
         let r2FileSize = 0;
         let r2StorageProvider = "external_link";
         let calculatedAudioFileId = `file-ext-${Math.floor(Math.random() * 89999) + 10000}`;
+
+        // Link with selected repertoires directly if configured
+        let targetRepIds: string[] = [];
+        if (organizationOption === 'existing_repertoire') {
+          targetRepIds = selectedRepertoireIds;
+        } else if (organizationOption === 'new_repertoire' && batchNewRepId) {
+          targetRepIds = [batchNewRepId];
+        }
+
+        const finalRepId = targetRepIds.length > 0 ? targetRepIds[0] : null;
+        const pubDest = finalRepId ? "repertoire" : "general";
 
         await dbService.addMusic(profile.userId, {
           trackId: uniqueId,
@@ -920,16 +955,12 @@ export default function Dashboard({
           originalFileName: r2OriginalName,
           audioFileId: calculatedAudioFileId,
           partners: partners.trim(),
-          audioHash: ""
+          audioHash: "",
+          repertoireId: finalRepId,
+          publicationDestination: pubDest,
+          isActive: newTrackStatus === 'active',
+          isPublic: true
         });
-
-        // Link with selected repertoires directly if configured
-        let targetRepIds: string[] = [];
-        if (organizationOption === 'existing_repertoire') {
-          targetRepIds = selectedRepertoireIds;
-        } else if (organizationOption === 'new_repertoire' && batchNewRepId) {
-          targetRepIds = [batchNewRepId];
-        }
         
         targetRepIds.forEach(repId => {
           if (!repToTracksMap[repId]) {
@@ -1163,7 +1194,9 @@ export default function Dashboard({
         genre: editGenre.trim(),
         description: editDesc.trim(),
         lyrics: editLyrics.trim(),
-        status: editTrackStatus
+        status: editTrackStatus,
+        repertoireId: editRepertoireId === 'all_songs' ? null : editRepertoireId,
+        publicationDestination: editRepertoireId === 'all_songs' ? 'general' : 'repertoire'
       });
 
       setUploadProgress(85);
@@ -1215,6 +1248,68 @@ export default function Dashboard({
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+    }
+  };
+
+  const handleSaveRepertoire = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRepName.trim()) {
+      setToastMessage?.("O nome do repertório é obrigatório.");
+      return;
+    }
+
+    try {
+      const slugifyStr = (text: string) => {
+        return text
+          .toString()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/[\s_]+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      };
+
+      const baseSlug = slugifyStr(newRepName);
+      const randomSuffix = Math.floor(Math.random() * 89999) + 10000;
+      const computedSlug = `${baseSlug || "repertorio"}-${randomSuffix}`;
+
+      if (editingRepertoire) {
+        const updatedRep: Repertoire = {
+          ...editingRepertoire,
+          name: newRepName.trim(),
+          description: newRepDesc.trim(),
+          visibility: newRepVisibility,
+          slug: editingRepertoire.slug || computedSlug,
+          updatedAt: new Date().toISOString()
+        };
+        await dbService.saveRepertoire(updatedRep);
+      } else {
+        const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
+        const newRep: Repertoire = {
+          id: repId,
+          ownerUid: profile.userId,
+          name: newRepName.trim(),
+          description: newRepDesc.trim(),
+          type: 'repertoire',
+          trackIds: [],
+          orderedTrackIds: [],
+          visibility: newRepVisibility,
+          slug: computedSlug,
+          createdAt: new Date().toISOString()
+        };
+        await dbService.saveRepertoire(newRep);
+      }
+
+      setShowCreateRep(false);
+      setEditingRepertoire(null);
+      setNewRepName('');
+      setNewRepDesc('');
+      refreshData();
+    } catch (err: any) {
+      console.error("Erro ao salvar o repertório:", err);
     }
   };
 
@@ -1669,14 +1764,20 @@ export default function Dashboard({
         </div>
 
         {/* Music List */}
-        {tracks.length === 0 ? (
+        {generalSongs.length === 0 ? (
           <div id="empty-songs" className="text-center py-20 bg-slate-900/40 border border-dashed border-slate-850 rounded-3xl space-y-4">
             <div className="w-16 h-16 bg-slate-955 rounded-full flex items-center justify-center mx-auto text-orange-500 border border-slate-800 shadow-xl shadow-orange-550/5">
               <Music className="w-8 h-8 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-heading font-black text-lg uppercase text-slate-200">Nenhuma música cadastrada ainda.</h4>
-              <p className="text-slate-500 text-xs max-w-sm mx-auto">Adicione sua primeira composição para montar seu catálogo SomDrive.</p>
+              <h4 className="font-heading font-black text-lg uppercase text-slate-200">
+                {tracks.length === 0 ? "Nenhuma música cadastrada ainda." : "Nenhuma música fora de repertórios."}
+              </h4>
+              <p className="text-slate-500 text-xs max-w-sm mx-auto">
+                {tracks.length === 0 
+                  ? "Adicione sua primeira composição para montar seu catálogo SomDrive." 
+                  : "Todas as suas músicas estão vinculadas a repertórios específicos no momento."}
+              </p>
             </div>
             <button 
               id="empty-add-btn"
@@ -1700,7 +1801,7 @@ export default function Dashboard({
               <span>Posição & Música</span>
               <span>Ordenar</span>
             </div>
-            {tracks.filter(t => {
+            {generalSongs.filter(t => {
               const isActive = (t.status || 'active') === 'active';
               if (statusFilter === 'active') return isActive;
               if (statusFilter === 'inactive') return !isActive;
@@ -1754,7 +1855,7 @@ export default function Dashboard({
         ) : (
           /* STANDARD PREMIUM LIST OF MUSIC CARDS VIA HORIZONTAL ROWS */
           <div className="space-y-3 mt-4">
-            {tracks.filter(t => {
+            {generalSongs.filter(t => {
               const isActive = (t.status || 'active') === 'active';
               if (statusFilter === 'active') return isActive;
               if (statusFilter === 'inactive') return !isActive;
@@ -2037,48 +2138,81 @@ export default function Dashboard({
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-850 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(shareUrl);
-                          setRepCopiedId(rep.id);
-                          setTimeout(() => setRepCopiedId(null), 2000);
-                        }}
-                        className={`flex-1 py-2 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer font-mono ${
-                          isCopied ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'
-                        }`}
-                        title="Copiar Link"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{isCopied ? 'Copiado! ✓' : 'Copiar Link'}</span>
-                      </button>
+                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-850">
+                      <div className="flex gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewingRepertoireTracks(rep);
+                          }}
+                          className="flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-orange-600 hover:bg-orange-500 text-slate-950 px-3 font-mono"
+                          title="Abrir Repertório"
+                        >
+                          <FolderClosed className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Abrir</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const greetingText = `Confira o meu repertório "${rep.name}" do SomDrive: ${shareUrl}`;
-                          window.open(`https://wa.me/?text=${encodeURIComponent(greetingText)}`, '_blank');
-                        }}
-                        className="p-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-xl transition cursor-pointer flex items-center justify-center"
-                        title="Compartilhar no WhatsApp"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(shareUrl);
+                            setRepCopiedId(rep.id);
+                            setTimeout(() => setRepCopiedId(null), 2000);
+                          }}
+                          className={`flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer font-mono ${
+                            isCopied ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950' : 'bg-slate-800 hover:bg-slate-750 text-slate-200'
+                          }`}
+                          title="Copiar Link"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>{isCopied ? 'Copiado!' : 'Copiar Link'}</span>
+                        </button>
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
-                            await dbService.deleteRepertoire(rep.id, profile.userId);
-                            refreshData();
-                          }
-                        }}
-                        className="p-2 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
-                        title="Excluir Repertório"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-between gap-1.5 w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingRepertoire(rep);
+                            setNewRepName(rep.name);
+                            setNewRepDesc(rep.description || '');
+                            setNewRepVisibility(rep.visibility || 'active');
+                            setShowCreateRep(true);
+                          }}
+                          className="flex-1 py-1 px-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-[11px] font-bold uppercase font-mono"
+                          title="Editar Repertório"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Editar</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const greetingText = `Confira o meu repertório "${rep.name}" do SomDrive: ${shareUrl}`;
+                            window.open(`https://wa.me/?text=${encodeURIComponent(greetingText)}`, '_blank');
+                          }}
+                          className="p-1.5 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-xl transition cursor-pointer flex items-center justify-center"
+                          title="Compartilhar no WhatsApp"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
+                              await dbService.deleteRepertoire(rep.id, profile.userId);
+                              refreshData();
+                            }
+                          }}
+                          className="p-1.5 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
+                          title="Excluir Repertório"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -4183,6 +4317,205 @@ export default function Dashboard({
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT REPERTOIRE MODAL */}
+      {showCreateRep && (
+        <div id="create-repertoire-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <h3 className="font-heading font-black text-lg uppercase text-white tracking-tight flex items-center gap-2">
+                <Folders className="w-5 h-5 text-orange-400" />
+                {editingRepertoire ? 'Editar Repertório / Pasta' : 'Criar Novo Repertório / Pasta'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowCreateRep(false);
+                  setEditingRepertoire(null);
+                  setNewRepName('');
+                  setNewRepDesc('');
+                }}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRepertoire} className="space-y-4 text-left">
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block">Nome do Repertório / Pasta *</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Show de Boteco, Acústico 2026..."
+                  required
+                  value={newRepName}
+                  onChange={(e) => setNewRepName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block">Descrição do Repertório</label>
+                <textarea 
+                  placeholder="Escreva uma breve descrição ou objetivo desta pasta..."
+                  rows={3}
+                  value={newRepDesc}
+                  onChange={(e) => setNewRepDesc(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-sans resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block">Visibilidade do Repertório</label>
+                <select 
+                  value={newRepVisibility}
+                  onChange={(e) => setNewRepVisibility(e.target.value as 'active' | 'private')}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-sans"
+                >
+                  <option value="active" className="bg-slate-950 text-white">Público (Aparece no catálogo de compartilhamentos)</option>
+                  <option value="private" className="bg-slate-950 text-white">Privado (Apenas você e quem tiver o link consegue ver)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowCreateRep(false);
+                    setEditingRepertoire(null);
+                    setNewRepName('');
+                    setNewRepDesc('');
+                  }}
+                  className="px-4 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition hover:scale-102 font-bold"
+                >
+                  Confirmar e Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW REPERTOIRE TRACKS (ABRIR) MODAL */}
+      {viewingRepertoireTracks && (
+        <div id="view-repertoire-tracks-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="text-left">
+                <h3 className="font-heading font-black text-lg uppercase text-white tracking-tight flex items-center gap-2">
+                  <FolderOpen className="w-5 h-5 text-orange-400" />
+                  {viewingRepertoireTracks.name}
+                </h3>
+                <p className="text-xs text-slate-400 font-mono mt-1">
+                  {viewingRepertoireTracks.description || "Nenhuma descrição informada."}
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setViewingRepertoireTracks(null)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
+              {(() => {
+                const repSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id);
+                if (repSongs.length === 0) {
+                  return (
+                    <div className="text-center py-12 bg-slate-955 rounded-2xl border border-slate-850">
+                      <Music className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                      <p className="text-slate-400 text-xs font-mono">Esta pasta ainda não possui nenhuma música vinculada.</p>
+                      <p className="text-slate-500 text-[10px] max-w-xs mx-auto mt-1">
+                        Use o botão Editar em alguma música da sua lista geral para movê-la para cá.
+                      </p>
+                    </div>
+                  );
+                }
+                return repSongs.map((track) => {
+                  const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
+                  const isPublicActive = (track.status || 'active') === 'active';
+                  
+                  return (
+                    <div 
+                      key={track.trackId}
+                      className="bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-2xl p-3.5 flex items-center justify-between gap-4 transition hover:bg-slate-900/60"
+                    >
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectTrack(track, tracks);
+                          }}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition border ${
+                            isCurrentlyPlaying
+                              ? 'bg-[#d4af37] text-slate-950 border-[#d4af37]/40 shadow-lg shadow-[#d4af37]/10'
+                              : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-orange-400'
+                          } cursor-pointer`}
+                        >
+                          {isCurrentlyPlaying ? (
+                            <div className="flex items-end gap-0.5 h-3">
+                              <span className="w-1 bg-slate-950 rounded-full animate-pulse h-3 block"></span>
+                              <span className="w-1 bg-slate-950 rounded-full animate-pulse h-2 block"></span>
+                              <span className="w-1 bg-slate-950 rounded-full animate-pulse h-3 block"></span>
+                            </div>
+                          ) : (
+                            <Play className="w-4 h-4 fill-current stroke-none pl-0.5" />
+                          )}
+                        </button>
+                        
+                        <div className="text-left">
+                          <h5 className="font-heading font-black text-xs text-white uppercase tracking-tight line-clamp-1">{track.title}</h5>
+                          <p className="text-slate-500 text-[10px] font-mono mt-0.5">{track.composer || 'Sem compositor'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded border ${
+                          isPublicActive ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' : 'bg-rose-950/20 border-rose-500/20 text-rose-400'
+                        }`}>
+                          {isPublicActive ? 'Ativo' : 'Inativo'}
+                        </span>
+
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingRepertoireTracks(null);
+                            handleStartEdit(track, e);
+                          }}
+                          className="p-1 text-slate-405 hover:text-white rounded hover:bg-slate-850 cursor-pointer"
+                          title="Editar"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button 
+                type="button"
+                onClick={() => setViewingRepertoireTracks(null)}
+                className="px-5 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

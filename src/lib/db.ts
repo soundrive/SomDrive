@@ -1207,7 +1207,11 @@ export const dbService = {
       position: track.position !== undefined ? track.position : initialIndex,
       orderIndex: track.orderIndex !== undefined ? track.orderIndex : initialIndex,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      repertoireId: track.repertoireId !== undefined ? track.repertoireId : null,
+      publicationDestination: track.publicationDestination || (track.repertoireId ? 'repertoire' : 'general'),
+      isActive: track.isActive !== undefined ? track.isActive : (statusValue === 'active'),
+      isPublic: track.isPublic !== undefined ? track.isPublic : true
     };
 
     tracks.push(newTrack);
@@ -1236,6 +1240,10 @@ export const dbService = {
         plays: playsValue,
         position: newTrack.orderIndex,
         orderIndex: newTrack.orderIndex,
+        repertoireId: newTrack.repertoireId,
+        publicationDestination: newTrack.publicationDestination,
+        isActive: newTrack.isActive,
+        isPublic: newTrack.isPublic,
         createdAt: Timestamp.fromDate(new Date(newTrack.createdAt)),
         updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt))
       };
@@ -1493,7 +1501,11 @@ export const dbService = {
               position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
               orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
               createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-              updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+              updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString(),
+              repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
+              publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
+              isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
+              isPublic: d.isPublic !== undefined ? d.isPublic : true
             };
           });
         } else {
@@ -1531,10 +1543,14 @@ export const dbService = {
                 position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
                 orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
                 createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString(),
+                repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
+                publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
+                isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
+                isPublic: d.isPublic !== undefined ? d.isPublic : true
               };
             });
-
+  
             // Automatically migrate these tracks to the root "songs" collection for future correctness
             for (const track of fetchedTracks) {
               const songDocRef = doc(db, 'songs', track.trackId);
@@ -1556,6 +1572,10 @@ export const dbService = {
                 mimeType: track.mimeType || 'audio/mpeg',
                 originalFileName: track.originalFileName || '',
                 plays: track.plays !== undefined ? track.plays : 0,
+                repertoireId: track.repertoireId !== undefined ? track.repertoireId : null,
+                publicationDestination: track.publicationDestination || 'general',
+                isActive: track.isActive !== undefined ? track.isActive : true,
+                isPublic: track.isPublic !== undefined ? track.isPublic : true,
                 createdAt: Timestamp.fromDate(new Date(track.createdAt)),
                 updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
               }, { merge: true }).catch(err => {
@@ -1882,6 +1902,25 @@ export const dbService = {
       
       if (updatedTrack.coverUrl) {
         songsPayload.coverUrl = updatedTrack.coverUrl;
+      }
+
+      if (updatedTrack.repertoireId !== undefined) {
+        songsPayload.repertoireId = updatedTrack.repertoireId;
+      }
+      if (updatedTrack.publicationDestination !== undefined) {
+        songsPayload.publicationDestination = updatedTrack.publicationDestination;
+      }
+      if (updatedTrack.status !== undefined) {
+        songsPayload.status = updatedTrack.status;
+        songsPayload.isActive = updatedTrack.status === 'active';
+        songsPayload.isPublic = updatedTrack.status === 'active';
+      } else {
+        if (updatedTrack.isActive !== undefined) {
+          songsPayload.isActive = updatedTrack.isActive;
+        }
+        if (updatedTrack.isPublic !== undefined) {
+          songsPayload.isPublic = updatedTrack.isPublic;
+        }
       }
 
       await setDoc(songsDocRef, songsPayload, { merge: true }).catch(err => {

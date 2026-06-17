@@ -83,6 +83,12 @@ export interface Music {
   audioHash?: string;
   position?: number;
   orderIndex?: number;
+
+  // Repertoire fields and visibility flags
+  repertoireId?: string | null;
+  publicationDestination?: "general" | "repertoire";
+  isActive?: boolean;
+  isPublic?: boolean;
 }
 
 export interface Analytics {

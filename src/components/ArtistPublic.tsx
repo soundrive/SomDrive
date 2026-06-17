@@ -292,9 +292,15 @@ export default function ArtistPublic({
     const foundRep = repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()));
     if (foundRep) {
       const allowedIds = foundRep.orderedTrackIds || foundRep.trackIds || [];
-      activeDisplayTracks = allowedIds
-        .map(id => allTracks.find(t => t.trackId === id))
-        .filter((t): t is Track => !!t);
+      const matchedTracks = allTracks.filter(t => t.repertoireId === foundRep.id || allowedIds.includes(t.trackId));
+      activeDisplayTracks = matchedTracks.sort((a, b) => {
+        const idxA = allowedIds.indexOf(a.trackId);
+        const idxB = allowedIds.indexOf(b.trackId);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return 0;
+      });
       customCollectionLabel = `Repertório: ${foundRep.name}`;
       isFilteredToSingleContext = true;
     }
@@ -316,6 +322,7 @@ export default function ArtistPublic({
       });
     });
     activeDisplayTracks = allTracks.filter(t => {
+      if (t.repertoireId && t.repertoireId !== 'general') return false;
       if (!t.trackId) return true;
       const tidNormalized = t.trackId.toString().trim().toLowerCase();
       return !repertoriedTrackIds.has(tidNormalized);
