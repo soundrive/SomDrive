@@ -267,6 +267,7 @@ export default function Dashboard({
   const [newRepVisibility, setNewRepVisibility] = useState<'active' | 'private'>('active');
   const [newRepType, setNewRepType] = useState<'repertoire' | 'playlist' | 'collection'>('repertoire');
   const [showCreateRep, setShowCreateRep] = useState(false);
+  const [isSavingRepertoire, setIsSavingRepertoire] = useState(false);
   const [repCopiedId, setRepCopiedId] = useState<string | null>(null);
   const [editingRepertoire, setEditingRepertoire] = useState<Repertoire | null>(null);
   const [viewingRepertoireTracks, setViewingRepertoireTracks] = useState<Repertoire | null>(null);
@@ -834,18 +835,6 @@ export default function Dashboard({
       // Helper function to create repertoire dynamically
       const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'active' | 'private', initialTrackIds: string[] = []) => {
         const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
-        const baseSlug = name
-          .toString()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/[\s_]+/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        const randomSuffix = Math.floor(Math.random() * 89999) + 10000;
-        const computedSlug = `${baseSlug || "repertorio"}-${randomSuffix}`;
         const newRep: Repertoire = {
           id: repId,
           ownerUid: profile.userId,
@@ -855,7 +844,6 @@ export default function Dashboard({
           trackIds: initialTrackIds,
           orderedTrackIds: initialTrackIds,
           visibility: visibility,
-          slug: computedSlug,
           createdAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(newRep);
@@ -1378,32 +1366,16 @@ export default function Dashboard({
       setToastMessage?.("O nome do repertório é obrigatório.");
       return;
     }
+    if (isSavingRepertoire) return;
 
+    setIsSavingRepertoire(true);
     try {
-      const slugifyStr = (text: string) => {
-        return text
-          .toString()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/[\s_]+/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-+|-+$/g, '');
-      };
-
-      const baseSlug = slugifyStr(newRepName);
-      const randomSuffix = Math.floor(Math.random() * 89999) + 10000;
-      const computedSlug = `${baseSlug || "repertorio"}-${randomSuffix}`;
-
       if (editingRepertoire) {
         const updatedRep: Repertoire = {
           ...editingRepertoire,
           name: newRepName.trim(),
           description: newRepDesc.trim(),
           visibility: newRepVisibility,
-          slug: editingRepertoire.slug || computedSlug,
           updatedAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(updatedRep);
@@ -1420,7 +1392,6 @@ export default function Dashboard({
           trackIds: [],
           orderedTrackIds: [],
           visibility: newRepVisibility,
-          slug: computedSlug,
           createdAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(newRep);
@@ -1435,6 +1406,8 @@ export default function Dashboard({
       console.error("Erro ao salvar o repertório:", err);
       setToastMessage(`Falha na gravação: ${err?.message || "Erro desconhecido"}`);
       setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setIsSavingRepertoire(false);
     }
   };
 
@@ -4441,21 +4414,27 @@ export default function Dashboard({
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
                 <button 
                   type="button"
+                  disabled={isSavingRepertoire}
                   onClick={() => {
                     setShowCreateRep(false);
                     setEditingRepertoire(null);
                     setNewRepName('');
                     setNewRepDesc('');
                   }}
-                  className="px-4 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+                  className={`px-4 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-bold uppercase transition rounded-xl cursor-pointer ${
+                    isSavingRepertoire ? 'opacity-40 cursor-not-allowed' : ''
+                  }`}
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit"
-                  className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 cursor-pointer select-none transition hover:scale-102 font-bold"
+                  disabled={isSavingRepertoire}
+                  className={`px-6 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 shadow-lg shadow-orange-500/10 select-none transition hover:scale-102 font-bold ${
+                    isSavingRepertoire ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
                 >
-                  Confirmar e Salvar
+                  {isSavingRepertoire ? 'Gravando no Firestore...' : 'Confirmar e Salvar'}
                 </button>
               </div>
             </form>

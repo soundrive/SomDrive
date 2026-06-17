@@ -2080,7 +2080,7 @@ export const dbService = {
             type: data.type || 'repertoire',
             trackIds: data.trackIds || [],
             orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-            visibility: data.visibility || 'active',
+            visibility: (data.visibility === 'private') ? 'private' : 'public',
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString()
           } as Repertoire;
@@ -2200,8 +2200,12 @@ export const dbService = {
       repertoire.slug = uniqueSlug;
     }
 
-    const savedRep = { 
+    // Force strict normalized visibility values to fully match Firestore queries
+    const normalizedVisibility: "public" | "private" = (repertoire.visibility === 'private') ? 'private' : 'public';
+
+    const savedRep: Repertoire = { 
       ...repertoire, 
+      visibility: normalizedVisibility,
       createdAt: repertoire.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString() 
     };

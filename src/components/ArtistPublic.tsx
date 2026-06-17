@@ -78,8 +78,14 @@ export default function ArtistPublic({
   const [selectedGenreFilter, setSelectedGenreFilter] = useState('All');
   
   // Shared navigation parameters mapped from URLSearchParams
-  const [selectedRepertoireId, setSelectedRepertoireId] = useState<string | null>(null);
-  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
+  const [selectedRepertoireId, setSelectedRepertoireId] = useState<string | null>(() => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    return params.get('rep') || params.get('repertoire') || initialRepertoireId;
+  });
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(() => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    return params.get('song') || params.get('play');
+  });
 
   // Alerts
   const [copiedLinkAlert, setCopiedLinkAlert] = useState(false);
