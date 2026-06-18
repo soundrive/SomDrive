@@ -49,54 +49,6 @@ export default function App() {
     });
   }, []);
 
-  // Automatic database correction for Zé Quirino
-  useEffect(() => {
-    let active = true;
-    const runCorrection = async () => {
-      try {
-        const { doc, getDoc, updateDoc } = await import('firebase/firestore');
-        const targetUserId = "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3";
-        
-        // 1. Check and update the artists document
-        const artistRef = doc(db, 'artists', targetUserId);
-        const artistSnap = await getDoc(artistRef);
-        if (active && artistSnap.exists()) {
-          const data = artistSnap.data();
-          if (data.slug === 'ze-qurino' || data.artistName === 'Zé Qurino') {
-            console.log("Auto-correcting Zé Quirino artist document...");
-            await updateDoc(artistRef, {
-              slug: 'ze-quirino',
-              artistName: 'Zé Quirino'
-            });
-            console.log("Successfully updated artists/JTqE5lUhx8hgU7Ru7KByxp3Ze4A3");
-          }
-        }
-
-        // 2. Check and update the users document
-        const userRef = doc(db, 'users', targetUserId);
-        const userSnap = await getDoc(userRef);
-        if (active && userSnap.exists()) {
-          const data = userSnap.data();
-          if (data.slug === 'ze-qurino' || data.artistName === 'Zé Qurino') {
-            console.log("Auto-correcting Zé Quirino user document...");
-            await updateDoc(userRef, {
-              slug: 'ze-quirino',
-              artistName: 'Zé Quirino'
-            });
-            console.log("Successfully updated users/JTqE5lUhx8hgU7Ru7KByxp3Ze4A3");
-          }
-        }
-      } catch (err) {
-        // Safe fail wrapper for other non-auth users
-        console.warn("Silent profile adjustment check active:", err);
-      }
-    };
-    runCorrection();
-    return () => {
-      active = false;
-    };
-  }, []);
-
   // Handle routing deep link and session boot
   useEffect(() => {
     // Session load

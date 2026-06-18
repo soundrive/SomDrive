@@ -1048,7 +1048,7 @@ async function startServer() {
       ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
     }
 
-    const ogUrlToUse = slugOrId === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `${appBaseUrl}/s/${slugOrId}`;
+    const ogUrlToUse = `${appBaseUrl}/s/${slugOrId}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
@@ -1162,7 +1162,7 @@ async function startServer() {
       ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
     }
 
-    const ogUrlToUse = originalSlug === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `${appBaseUrl}/s/${originalSlug}`;
+    const ogUrlToUse = `${appBaseUrl}/s/${originalSlug}`;
 
     let ogImageSecureToUse = ogImageToUse;
     if (ogImageSecureToUse.startsWith("http://")) {
@@ -1217,7 +1217,7 @@ async function startServer() {
 
   // Debugging route for verifying matching OG properties
   app.get("/api/debug/og", async (req: any, res: any) => {
-    const slug = String(req.query.slug || "ze-quirino").trim();
+    const slug = String(req.query.slug || "somdrive").trim();
     try {
       const result = await generateArtistHtml(slug, req);
       const html = result.html;
@@ -1254,7 +1254,7 @@ async function startServer() {
 
   // HTML OG visualizer requested
   app.get("/api/debug/og-html", async (req: any, res: any) => {
-    const slug = String(req.query.slug || "ze-quirino").trim();
+    const slug = String(req.query.slug || "somdrive").trim();
     try {
       const result = await generateArtistHtml(slug, req);
       const headContent = result.html.split("<head>")[1]?.split("</head>")[0] || result.html;
@@ -1268,7 +1268,7 @@ async function startServer() {
 
   // Speed, latency, and structure diagnostics endpoint for public catalog URLs
   app.get("/api/debug/catalog-speed", async (req: any, res: any) => {
-    const slug = String(req.query.slug || "ze-quirino").trim();
+    const slug = String(req.query.slug || "somdrive").trim();
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     
@@ -1459,7 +1459,7 @@ async function startServer() {
       }
     }
 
-    const slug = String(req.query.slug || "ze-quirino").trim();
+    const slug = String(req.query.slug || "somdrive").trim();
     try {
       const result = await generateShareHtml(slug, req);
       const html = result.html;

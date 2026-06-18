@@ -1364,46 +1364,68 @@ export const dbService = {
           .replace(/^-+|-+$/g, "");
       };
 
-      // Direct override for Zé Quirino to avoid any collection scanning or timing issues
-      if (queryLower === "ze-quirino" || queryLower === "ze-qurino") {
-        resolvedUserId = "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3";
-        const artistDocRef = doc(db, 'artists', resolvedUserId);
-        const artistSnap = await getDoc(artistDocRef).catch(() => null);
-        if (artistSnap && artistSnap.exists()) {
-          artData = artistSnap.data();
-        }
-      } else {
-        // 1. Try to find the document directly by ID in 'artists' collection
-        const artistDocRef = doc(db, 'artists', normalizedQuery);
-        const artistSnap = await getDoc(artistDocRef).catch(() => null);
+      // 1. Try to find the document directly by ID in 'artists' collection
+      const artistDocRef = doc(db, 'artists', normalizedQuery);
+      const artistSnap = await getDoc(artistDocRef).catch(error => {
+        console.error("PUBLIC CATALOG LOAD ERROR", {
+          step: "syncArtistData.getDoc(artists-direct)",
+          code: error?.code,
+          message: error?.message,
+          slug: normalizedQuery
+        });
+        return null;
+      });
 
-        if (artistSnap && artistSnap.exists()) {
-          artData = artistSnap.data();
-          resolvedUserId = artData.userId || normalizedQuery;
+      if (artistSnap && artistSnap.exists()) {
+        artData = artistSnap.data();
+        resolvedUserId = artData.userId || normalizedQuery;
+      } else {
+        // 2. Query 'artists' collection for slug
+        const qArtists = query(collection(db, 'artists'), where('slug', '==', normalizedQuery));
+        const snapArtists = await getDocs(qArtists).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR", {
+            step: "syncArtistData.getDocs(artists-slug)",
+            code: error?.code,
+            message: error?.message,
+            slug: normalizedQuery
+          });
+          return null;
+        });
+        if (snapArtists && !snapArtists.empty) {
+          const docSnap = snapArtists.docs[0];
+          artData = docSnap.data();
+          resolvedUserId = artData.userId || docSnap.id;
         } else {
-          // 2. Query 'artists' collection for slug
-          const qArtists = query(collection(db, 'artists'), where('slug', '==', normalizedQuery));
-          const snapArtists = await getDocs(qArtists).catch(() => null);
-          if (snapArtists && !snapArtists.empty) {
-            const docSnap = snapArtists.docs[0];
+          // 3. Query 'users' collection for slug
+          const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedQuery));
+          const snapUsers = await getDocs(qUsers).catch(error => {
+            console.error("PUBLIC CATALOG LOAD ERROR", {
+              step: "syncArtistData.getDocs(users-slug)",
+              code: error?.code,
+              message: error?.message,
+              slug: normalizedQuery
+            });
+            return null;
+          });
+          if (snapUsers && !snapUsers.empty) {
+            const docSnap = snapUsers.docs[0];
             artData = docSnap.data();
-            resolvedUserId = artData.userId || docSnap.id;
+            resolvedUserId = artData.uid || artData.userId || docSnap.id;
           } else {
-            // 3. Query 'users' collection for slug
-            const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedQuery));
-            const snapUsers = await getDocs(qUsers).catch(() => null);
-            if (snapUsers && !snapUsers.empty) {
-              const docSnap = snapUsers.docs[0];
-              artData = docSnap.data();
-              resolvedUserId = artData.uid || artData.userId || docSnap.id;
-            } else {
-              // 4. Try direct get from 'users' collection too
-              const userDocRef = doc(db, 'users', normalizedQuery);
-              const userSnap = await getDoc(userDocRef).catch(() => null);
-              if (userSnap && userSnap.exists()) {
-                artData = userSnap.data();
-                resolvedUserId = artData.uid || artData.userId || normalizedQuery;
-              }
+            // 4. Try direct get from 'users' collection too
+            const userDocRef = doc(db, 'users', normalizedQuery);
+            const userSnap = await getDoc(userDocRef).catch(error => {
+              console.error("PUBLIC CATALOG LOAD ERROR", {
+                step: "syncArtistData.getDoc(users-direct)",
+                code: error?.code,
+                message: error?.message,
+                slug: normalizedQuery
+              });
+              return null;
+            });
+            if (userSnap && userSnap.exists()) {
+              artData = userSnap.data();
+              resolvedUserId = artData.uid || artData.userId || normalizedQuery;
             }
           }
         }
@@ -1412,7 +1434,15 @@ export const dbService = {
       // If we found the artist data, load complete profile from 'artists/' + resolvedUserId
       if (resolvedUserId) {
         const fullArtistRef = doc(db, 'artists', resolvedUserId);
-        const fullArtistSnap = await getDoc(fullArtistRef).catch(() => null);
+        const fullArtistSnap = await getDoc(fullArtistRef).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR", {
+            step: "syncArtistData.getDoc(artists-full-profile)",
+            code: error?.code,
+            message: error?.message,
+            slug: normalizedQuery
+          });
+          return null;
+        });
         if (fullArtistSnap && fullArtistSnap.exists()) {
           artData = { ...artData, ...fullArtistSnap.data() };
         }
@@ -2064,16 +2094,30 @@ export const dbService = {
   // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
   async getRepertoires(ownerUid: string, onlyPublic?: boolean): Promise<Repertoire[]> {
     try {
-      // Query all repertoires for the specific artist to allow safe in-memory migration
-      const q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+      // Query repertoires: filter by visibility for public users to obey Firestore security rules safely
+      let q;
+      if (onlyPublic) {
+        q = query(
+          collection(db, 'repertoires'),
+          where('ownerUid', '==', ownerUid),
+          where('visibility', '==', 'public')
+        );
+      } else {
+        q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+      }
 
       const snap = await getDocs(q).catch(e => {
         const error = e as any;
-        console.error("Firestore repertoire error", {
+        console.error("PUBLIC CATALOG LOAD ERROR", {
+          step: "getRepertoires",
           code: error?.code,
           message: error?.message,
-          name: error?.name
+          ownerUid
         });
+        if (onlyPublic) {
+          // Return null to fall through gracefully without throwing and crashing the page
+          return null;
+        }
         handleFirestoreError(e, OperationType.GET, 'repertoires');
         throw e;
       });

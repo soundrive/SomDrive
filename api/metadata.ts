@@ -153,37 +153,7 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
     };
   }
 
-  // 1. Check if it's Zé Quirino directly
-  if (cleanIdLower === "ze-quirino" || cleanIdLower === "ze-qurino") {
-    try {
-      const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/JTqE5lUhx8hgU7Ru7KByxp3Ze4A3`;
-      const res = await fetch(artistUrl);
-      if (res.ok) {
-        const doc = await res.json();
-        const f = doc.fields || {};
-        return {
-          userId: "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3",
-          name: f.name?.stringValue || f.artistName?.stringValue || "Zé Quirino",
-          genre: f.genre?.stringValue || f.mainGenre?.stringValue || "Música Sertaneja",
-          city: f.city?.stringValue || "Brasil",
-          customCardImageUrl: f.customCardImageUrl?.stringValue || "",
-          slug: "ze-quirino"
-        };
-      }
-    } catch (err) {
-      console.warn("Direct Zé Quirino fetch failed, fallback to direct query.");
-    }
-    return {
-      userId: "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3",
-      name: "Zé Quirino",
-      genre: "Música Sertaneja",
-      city: "Brasil",
-      customCardImageUrl: "",
-      slug: "ze-quirino"
-    };
-  }
-
-  // 2. Direct document fetch by ID (if it's a UID)
+  // 1. Direct document fetch by ID (if it's a UID)
   try {
     const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${cleanId}`;
     const res = await fetch(artistUrl);
@@ -219,7 +189,7 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
 
 export default async function handler(req: any, res: any) {
   const { slug } = req.query || {};
-  const slugStr = typeof slug === 'string' ? slug.trim() : 'ze-quirino';
+  const slugStr = typeof slug === 'string' ? slug.trim() : 'somdrive';
 
   console.log(`[API Metadata] Processing OG request for slug: ${slugStr}`);
 
@@ -237,9 +207,7 @@ export default async function handler(req: any, res: any) {
     const artist = await fetchArtistRest(slugStr);
     let formattedName = artist.name || "Compositor";
 
-    if (slugStr === "ze-quirino") {
-      formattedName = "Zé Quirino";
-    } else if (formattedName === "Compositor") {
+    if (formattedName === "Compositor") {
       // Fallback to title casing the slug (e.g. joao-silva -> Joao Silva)
       formattedName = slugStr
         .split('-')
@@ -269,7 +237,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // 3. Resolve the canonical og:url
-    const ogUrlToUse = slugStr === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `https://www.somdrive.com.br/s/${slugStr}`;
+    const ogUrlToUse = `https://www.somdrive.com.br/s/${slugStr}`;
 
     // 4. Try loading the template file index.html
     let htmlContents = "";
