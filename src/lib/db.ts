@@ -2053,9 +2053,8 @@ export const dbService = {
   // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
   async getRepertoires(ownerUid: string, onlyPublic?: boolean): Promise<Repertoire[]> {
     try {
-      const q = onlyPublic
-        ? query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid), where('visibility', '==', 'public'))
-        : query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+      // Query all repertoires for the specific artist to allow safe in-memory migration
+      const q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
 
       const snap = await getDocs(q).catch(e => {
         const error = e as any;
@@ -2071,6 +2070,8 @@ export const dbService = {
       if (snap && !snap.empty) {
         const reps: Repertoire[] = snap.docs.map(docSnap => {
           const data = docSnap.data();
+          let visibilityVal = data.visibility || 'public';
+          if (visibilityVal === 'active') visibilityVal = 'public';
           return {
             id: docSnap.id,
             ownerUid: data.ownerUid,
@@ -2080,15 +2081,18 @@ export const dbService = {
             type: data.type || 'repertoire',
             trackIds: data.trackIds || [],
             orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-            visibility: (data.visibility === 'private') ? 'private' : 'public',
+            visibility: (visibilityVal === 'private') ? 'private' : 'public',
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString()
           } as Repertoire;
         });
 
-        // Upgrade and save slugs for any repertoires missing them
+        // Upgrade and save slugs or corrected visibility for any repertoires needing updates
         const finalReps: Repertoire[] = [];
         for (const rep of reps) {
+          let needsRemoteUpdate = false;
+          const remoteUpdates: any = {};
+
           if (!rep.slug) {
             const baseSlug = createSlug(rep.name || 'repertorio');
             let uniqueSlug = baseSlug;
@@ -2101,20 +2105,34 @@ export const dbService = {
               counter++;
             }
             rep.slug = uniqueSlug;
+            remoteUpdates.slug = uniqueSlug;
+            needsRemoteUpdate = true;
+          }
 
+          const snapDoc = snap.docs.find(d => d.id === rep.id);
+          const rawDbVal = snapDoc ? snapDoc.data().visibility : null;
+          if (rawDbVal === 'active' || !rawDbVal) {
+            remoteUpdates.visibility = 'public';
+            needsRemoteUpdate = true;
+          }
+
+          if (needsRemoteUpdate) {
             try {
               const docRef = doc(db, 'repertoires', rep.id);
-              await setDoc(docRef, { slug: uniqueSlug }, { merge: true }).catch(err => {
+              await setDoc(docRef, remoteUpdates, { merge: true }).catch(err => {
                 handleFirestoreError(err, OperationType.WRITE, `repertoires/${rep.id}`);
                 throw err;
               });
             } catch (err) {
-              console.error("Firestore connection issue during auto-slug:", err);
+              console.error("Firestore connection issue during auto-upgrade:", err);
             }
           }
           finalReps.push(rep);
         }
 
+        if (onlyPublic) {
+          return finalReps.filter(r => r.visibility === 'public');
+        }
         return finalReps;
       }
     } catch (e) {

@@ -236,14 +236,7 @@ export default function App() {
 
     // Sync browser address bar so copy-paste actually works!
     if (view === 'public' && payload?.id) {
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.id);
-      const currentPath = window.location.pathname;
-      let prefix = '/catalogo/';
-      if (currentPath.includes('/s/')) {
-        prefix = '/s/';
-      } else if (isGuid || currentPath.includes('/artista/')) {
-        prefix = '/artista/';
-      }
+      const prefix = '/catalogo/';
       if (payload.repertoireId) {
         window.history.pushState({}, '', `${prefix}${payload.id}/repertorio/${payload.repertoireId}`);
       } else {

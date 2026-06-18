@@ -264,7 +264,7 @@ export default function Dashboard({
 
   const [newRepName, setNewRepName] = useState('');
   const [newRepDesc, setNewRepDesc] = useState('');
-  const [newRepVisibility, setNewRepVisibility] = useState<'active' | 'private'>('active');
+  const [newRepVisibility, setNewRepVisibility] = useState<'public' | 'private'>('public');
   const [newRepType, setNewRepType] = useState<'repertoire' | 'playlist' | 'collection'>('repertoire');
   const [showCreateRep, setShowCreateRep] = useState(false);
   const [isSavingRepertoire, setIsSavingRepertoire] = useState(false);
@@ -293,7 +293,7 @@ export default function Dashboard({
   const [newRepertoireName, setNewRepertoireName] = useState('');
   const [newRepertoireDesc, setNewRepertoireDesc] = useState('');
   const [newRepertoireType, setNewRepertoireType] = useState<'repertoire' | 'playlist' | 'collection' | 'project'>('repertoire');
-  const [newRepertoireVisibility, setNewRepertoireVisibility] = useState<'active' | 'private'>('active');
+  const [newRepertoireVisibility, setNewRepertoireVisibility] = useState<'public' | 'private'>('public');
   const [trackSpecificOrganization, setTrackSpecificOrganization] = useState<Record<string, { option: 'all_songs' | 'existing' | 'new'; selectedRepIds?: string[]; newRepName?: string }>>({});
 
   // Direct Repertoire Quick Association modal states
@@ -595,7 +595,7 @@ export default function Dashboard({
     }
 
     const appBaseUrl = window.location.origin;
-    const pageUrl = `${appBaseUrl}/s/${slug}`;
+    const pageUrl = `${appBaseUrl}/catalogo/${slug}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -624,7 +624,7 @@ export default function Dashboard({
     }
 
     const appBaseUrl = window.location.origin;
-    const pageUrl = `${appBaseUrl}/s/${slug}`;
+    const pageUrl = `${appBaseUrl}/catalogo/${slug}`;
     const messageText = `🎧 Ouça meu catálogo musical no SomDrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     
@@ -833,7 +833,7 @@ export default function Dashboard({
 
     try {
       // Helper function to create repertoire dynamically
-      const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'active' | 'private', initialTrackIds: string[] = []) => {
+      const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'public' | 'private', initialTrackIds: string[] = []) => {
         const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
         const newRep: Repertoire = {
           id: repId,
@@ -843,7 +843,7 @@ export default function Dashboard({
           type: type,
           trackIds: initialTrackIds,
           orderedTrackIds: initialTrackIds,
-          visibility: visibility,
+          visibility: (visibility as string) === 'active' ? 'public' : visibility,
           createdAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(newRep);
@@ -962,7 +962,7 @@ export default function Dashboard({
                 spec.newRepName,
                 "Criado no upload múltiplo individualizado",
                 'repertoire',
-                'active'
+                'public'
               );
               targetRepIds = [itemNewRepId];
             }
@@ -1088,7 +1088,7 @@ export default function Dashboard({
           type: existingRep?.type || newRepertoireType || 'repertoire',
           trackIds: updatedTrackIds,
           orderedTrackIds: updatedTrackIds,
-          visibility: existingRep?.visibility || newRepertoireVisibility || 'active',
+          visibility: existingRep?.visibility || newRepertoireVisibility || 'public',
           createdAt: existingRep?.createdAt || new Date().toISOString()
         };
         await dbService.saveRepertoire(updatedRep);
@@ -1175,7 +1175,7 @@ export default function Dashboard({
     setNewRepertoireName('');
     setNewRepertoireDesc('');
     setNewRepertoireType('repertoire');
-    setNewRepertoireVisibility('active');
+    setNewRepertoireVisibility('public');
     setShowRepActionModal(true);
   };
 
@@ -1794,7 +1794,7 @@ export default function Dashboard({
                 setNewRepertoireName('');
                 setNewRepertoireDesc('');
                 setNewRepertoireType('repertoire');
-                setNewRepertoireVisibility('active');
+                setNewRepertoireVisibility('public');
                 setTrackSpecificOrganization({});
                 setTitle('');
                 setGenre('');
@@ -2191,7 +2191,7 @@ export default function Dashboard({
               onClick={() => {
                 setNewRepName('');
                 setNewRepDesc('');
-                setNewRepVisibility('active');
+                setNewRepVisibility('public');
                 setShowCreateRep(true);
               }}
               className="px-5 py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 rounded-xl text-xs font-heading font-black uppercase tracking-wider text-slate-950 flex items-center gap-2 shadow-lg shadow-orange-500/10 cursor-pointer transition duration-200 active:scale-98 font-bold"
@@ -2312,7 +2312,7 @@ export default function Dashboard({
                                   setEditingRepertoire(rep);
                                   setNewRepName(rep.name);
                                   setNewRepDesc(rep.description || '');
-                                  setNewRepVisibility(rep.visibility || 'active');
+                                  setNewRepVisibility(rep.visibility === 'active' ? 'public' : (rep.visibility || 'public') as any);
                                   setShowCreateRep(true);
                                 }}
                                 className="flex-1 py-1.5 px-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-xs font-bold uppercase font-mono"
@@ -3298,7 +3298,7 @@ export default function Dashboard({
                                     onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
                                     className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
                                   >
-                                    <option value="active">Público (Visível no Link)</option>
+                                    <option value="public">Público (Visível no Link)</option>
                                     <option value="private">Privado (Invisível no Link Geral)</option>
                                   </select>
                                 </div>
@@ -3682,7 +3682,7 @@ export default function Dashboard({
                             onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
                             className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-850 rounded-lg outline-none text-zinc-350 focus:border-orange-500"
                           >
-                            <option value="active">Público (Visível no Link)</option>
+                            <option value="public">Público (Visível no Link)</option>
                             <option value="private">Privado (Link Oculto/Privado)</option>
                           </select>
                         </div>
@@ -4403,10 +4403,10 @@ export default function Dashboard({
                 <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block">Visibilidade do Repertório</label>
                 <select 
                   value={newRepVisibility}
-                  onChange={(e) => setNewRepVisibility(e.target.value as 'active' | 'private')}
+                  onChange={(e) => setNewRepVisibility(e.target.value as 'public' | 'private')}
                   className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-sans"
                 >
-                  <option value="active" className="bg-slate-950 text-white">Público (Aparece no catálogo de compartilhamentos)</option>
+                  <option value="public" className="bg-slate-950 text-white">Público (Aparece no catálogo de compartilhamentos)</option>
                   <option value="private" className="bg-slate-950 text-white">Privado (Apenas você e quem tiver o link consegue ver)</option>
                 </select>
               </div>

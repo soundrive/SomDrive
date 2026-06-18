@@ -71,6 +71,7 @@ export default function ArtistPublic({
   const [repertoires, setRepertoires] = useState<Repertoire[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   // Search & Filter
@@ -106,10 +107,10 @@ export default function ArtistPublic({
 
   const openedAsRepertoireOnly = !forceAllView && (!!initialRepertoireId || window.location.pathname.includes('/repertorio/')) && !!selectedRepertoireId;
   const currentRepertoire = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
-  const repertoireNotFoundOrPrivate = !isLoading && !forceAllView && window.location.pathname.includes('/repertorio/') && (
+  const repertoireNotFoundOrPrivate = isInitialLoadDone && !forceAllView && window.location.pathname.includes('/repertorio/') && (
     !selectedRepertoireId ||
     !currentRepertoire ||
-    currentRepertoire.visibility === 'private' ||
+    currentRepertoire.visibility !== 'public' ||
     (currentRepertoire.ownerUid?.toString().trim().toLowerCase() !== artist?.userId?.toString().trim().toLowerCase())
   );
 
@@ -195,7 +196,9 @@ export default function ArtistPublic({
           const cachedTracks = dbService.getArtistMusics(cachedArtist.userId).filter(t => t.status !== 'inactive');
           setAllTracks(cachedTracks);
           
-          setIsLoading(false);
+          if (!selectedRepertoireId) {
+            setIsLoading(false);
+          }
           hasCache = true;
         }
 
@@ -213,18 +216,18 @@ export default function ArtistPublic({
           let finalRepsList = [...(freshReps || [])];
 
           // If a specific repertoire was queried via direct link, fetch it specifically
-          // to support 'unlisted' folders as well.
           if (selectedRepertoireId) {
             const isAlreadyLoaded = finalRepsList.some(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()));
             if (!isAlreadyLoaded) {
               const queriedRep = await dbService.getRepertoireBySlugOrId(syncedArtist.userId, selectedRepertoireId);
-              if (queriedRep && queriedRep.visibility !== 'private') {
+              if (queriedRep && queriedRep.visibility === 'public') {
                 finalRepsList.push(queriedRep);
               }
             }
           }
           setRepertoires(finalRepsList);
           setIsLoading(false);
+          setIsInitialLoadDone(true);
         } else if (!hasCache) {
           setErrorMsg("Catálogo não encontrado ou ainda sem músicas disponíveis.");
         }
@@ -244,6 +247,7 @@ export default function ArtistPublic({
         setErrorMsg("Erro ao carregar o catálogo. Por favor, tente novamente.");
       } finally {
         setIsLoading(false);
+        setIsInitialLoadDone(true);
       }
     };
     loadData();
@@ -316,7 +320,7 @@ export default function ArtistPublic({
     const foundRep = repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()));
     if (foundRep) {
       const allowedIds = foundRep.orderedTrackIds || foundRep.trackIds || [];
-      const matchedTracks = allTracks.filter(t => t.repertoireId === foundRep.id || allowedIds.includes(t.trackId));
+      const matchedTracks = allTracks.filter(t => allowedIds.includes(t.trackId));
       activeDisplayTracks = matchedTracks.sort((a, b) => {
         const idxA = allowedIds.indexOf(a.trackId);
         const idxB = allowedIds.indexOf(b.trackId);
@@ -382,19 +386,11 @@ export default function ArtistPublic({
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
     const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
-    let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
+    let pageUrl = `${appBaseUrl}/catalogo/${artistSlug}`;
     let messageText = `🎧 Ouça meu catálogo musical no SomDrive!\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
 
     if (foundRep) {
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(artistSlug);
-      let prefix = '/catalogo/';
-      const currentPath = window.location.pathname;
-      if (currentPath.includes('/s/')) {
-        prefix = '/s/';
-      } else if (isGuid || currentPath.includes('/artista/')) {
-        prefix = '/artista/';
-      }
-      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
+      pageUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       messageText = `Ouça o repertório “${foundRep.name}” de ${artist.name} no SomDrive: ${pageUrl}`;
     }
 
@@ -408,18 +404,10 @@ export default function ArtistPublic({
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
     const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
-    let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
+    let pageUrl = `${appBaseUrl}/catalogo/${artistSlug}`;
 
     if (foundRep) {
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(artistSlug);
-      let prefix = '/catalogo/';
-      const currentPath = window.location.pathname;
-      if (currentPath.includes('/s/')) {
-        prefix = '/s/';
-      } else if (isGuid || currentPath.includes('/artista/')) {
-        prefix = '/artista/';
-      }
-      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
+      pageUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       navigator.clipboard.writeText(pageUrl);
       triggerAlert(`🔗 Link do repertório "${foundRep.name}" copiado com sucesso!`);
     } else {
@@ -439,20 +427,12 @@ export default function ArtistPublic({
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
     const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
-    let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
+    let pageUrl = `${appBaseUrl}/catalogo/${artistSlug}`;
     let shareTitle = `SomDrive - ${artist.name}`;
     let shareText = `Ouça o catálogo de composições de ${artist.name} no SomDrive!`;
 
     if (foundRep) {
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(artistSlug);
-      let prefix = '/catalogo/';
-      const currentPath = window.location.pathname;
-      if (currentPath.includes('/s/')) {
-        prefix = '/s/';
-      } else if (isGuid || currentPath.includes('/artista/')) {
-        prefix = '/artista/';
-      }
-      pageUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
+      pageUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       shareTitle = `${foundRep.name} — ${artist.name} | SomDrive`;
       shareText = `Ouça as músicas do repertório "${foundRep.name}" de ${artist.name} no SomDrive!`;
     }
@@ -490,15 +470,7 @@ export default function ArtistPublic({
     e.stopPropagation();
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
-    const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(artistSlug);
-    let prefix = '/catalogo/';
-    const currentPath = window.location.pathname;
-    if (currentPath.includes('/s/')) {
-      prefix = '/s/';
-    } else if (isGuid || currentPath.includes('/artista/')) {
-      prefix = '/artista/';
-    }
-    const shareUrl = `${appBaseUrl}${prefix}${artistSlug}/repertorio/${rep.slug || rep.id}`;
+    const shareUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${rep.slug || rep.id}`;
     navigator.clipboard.writeText(shareUrl);
     triggerAlert(`🔗 Link do repertório "${rep.name}" copiado com sucesso!`);
   };
@@ -516,7 +488,7 @@ export default function ArtistPublic({
   // Individual Track sharing
   const handleCopyTrackLink = (track: Track) => {
     const appBaseUrl = window.location.origin;
-    const shareUrl = `${appBaseUrl}/s/${artist.slug || artist.userId}?song=${track.trackId}`;
+    const shareUrl = `${appBaseUrl}/catalogo/${artist.slug || artist.userId}?song=${track.trackId}`;
     navigator.clipboard.writeText(shareUrl);
     triggerAlert(`🔗 Link da música "${track.title}" copiado para transferência!`);
     setActiveMenuTrackId(null);
@@ -524,7 +496,7 @@ export default function ArtistPublic({
 
   const handleShareTrackWhatsApp = (track: Track) => {
     const appBaseUrl = window.location.origin;
-    const shareUrl = `${appBaseUrl}/s/${artist.slug || artist.userId}?song=${track.trackId}`;
+    const shareUrl = `${appBaseUrl}/catalogo/${artist.slug || artist.userId}?song=${track.trackId}`;
     const text = `Ouça a composição autoral "${track.title}" de ${artist.name} no SomDrive:\n${shareUrl}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     setActiveMenuTrackId(null);
@@ -1255,8 +1227,8 @@ export default function ArtistPublic({
             <textarea 
               readOnly
               value={showEmbedModal === 'profile' 
-                ? `<iframe src="${window.location.origin}/s/${artist.slug || artist.userId}" width="100%" height="600px" frameborder="0" style="border: 0; border-radius: 16px;"></iframe>`
-                : `<iframe src="${window.location.origin}/s/${artist.slug || artist.userId}?play=${showEmbedModal}&single=true" width="100%" height="180px" frameborder="0" style="border: 0; border-radius: 12px;"></iframe>`
+                ? `<iframe src="${window.location.origin}/catalogo/${artist.slug || artist.userId}" width="100%" height="600px" frameborder="0" style="border: 0; border-radius: 16px;"></iframe>`
+                : `<iframe src="${window.location.origin}/catalogo/${artist.slug || artist.userId}?play=${showEmbedModal}&single=true" width="100%" height="180px" frameborder="0" style="border: 0; border-radius: 12px;"></iframe>`
               }
               className="w-full h-32 p-3 bg-zinc-950 border border-zinc-800 rounded-xl font-mono text-xs text-emerald-400 focus:outline-none"
             />
@@ -1265,8 +1237,8 @@ export default function ArtistPublic({
               <button
                 onClick={() => {
                   const val = showEmbedModal === 'profile' 
-                    ? `<iframe src="${window.location.origin}/s/${artist.slug || artist.userId}" width="100%" height="600px" frameborder="0" style="border: 0; border-radius: 16px;"></iframe>`
-                    : `<iframe src="${window.location.origin}/s/${artist.slug || artist.userId}?play=${showEmbedModal}&single=true" width="100%" height="180px" frameborder="0" style="border: 0; border-radius: 12px;"></iframe>`;
+                    ? `<iframe src="${window.location.origin}/catalogo/${artist.slug || artist.userId}" width="100%" height="600px" frameborder="0" style="border: 0; border-radius: 16px;"></iframe>`
+                    : `<iframe src="${window.location.origin}/catalogo/${artist.slug || artist.userId}?play=${showEmbedModal}&single=true" width="100%" height="180px" frameborder="0" style="border: 0; border-radius: 12px;"></iframe>`;
                   navigator.clipboard.writeText(val);
                   triggerAlert("🔗 Link de incorporação copiado com sucesso!");
                   setShowEmbedModal(null);
