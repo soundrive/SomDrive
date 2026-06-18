@@ -192,13 +192,14 @@ export default function ArtistPublic({
       try {
         const normalizedArtistSlug = artistId.trim().toLowerCase();
 
-        // 1. Fetch artist directly from Firestore by slug
+        // 1. Fetch artist directly from Firestore by slug OR by ID in parallel
         let resolvedArtist: Artist | null = null;
         let resolvedUserId = '';
 
         const qArtist = query(collection(db, 'artists'), where('slug', '==', normalizedArtistSlug));
-        const snapArtist = await getDocs(qArtist).catch(error => {
-          console.error("PUBLIC CATALOG LOAD ERROR", {
+        
+        const artistQueryPromise = getDocs(qArtist).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR - artist slug query", {
             colecao: "artists",
             slug: normalizedArtistSlug,
             ownerUid: "não_resolvido",
@@ -208,26 +209,27 @@ export default function ArtistPublic({
           return null;
         });
 
+        const artistDirectDocPromise = getDoc(doc(db, 'artists', artistId.trim())).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR - artist direct fetch", {
+            colecao: "artists",
+            slug: normalizedArtistSlug,
+            ownerUid: artistId.trim(),
+            codigo_erro: error?.code || "desconhecido",
+            mensagem: error?.message || String(error)
+          });
+          return null;
+        });
+
+        // Resolve both queries in parallel so we don't have sequential latency
+        const [snapArtist, directSnap] = await Promise.all([artistQueryPromise, artistDirectDocPromise]);
+
         if (snapArtist && !snapArtist.empty) {
           const docSnap = snapArtist.docs[0];
           resolvedArtist = dbService.mapFirestoreDocToArtist(docSnap.id, docSnap.data());
           resolvedUserId = docSnap.id;
-        } else {
-          // Direct ID fallback (e.g. if the URL contains the raw userId instead of a slug)
-          const directSnap = await getDoc(doc(db, 'artists', artistId.trim())).catch(error => {
-            console.error("PUBLIC CATALOG LOAD ERROR", {
-              colecao: "artists",
-              slug: normalizedArtistSlug,
-              ownerUid: artistId.trim(),
-              codigo_erro: error?.code || "desconhecido",
-              mensagem: error?.message || String(error)
-            });
-            return null;
-          });
-          if (directSnap && directSnap.exists()) {
-            resolvedArtist = dbService.mapFirestoreDocToArtist(directSnap.id, directSnap.data());
-            resolvedUserId = directSnap.id;
-          }
+        } else if (directSnap && directSnap.exists()) {
+          resolvedArtist = dbService.mapFirestoreDocToArtist(directSnap.id, directSnap.data());
+          resolvedUserId = directSnap.id;
         }
 
         if (!resolvedArtist) {
@@ -239,16 +241,18 @@ export default function ArtistPublic({
 
         setArtist(resolvedArtist);
 
-        // 2. Fetch all public/active repertoires of this artist (supports 'public' and 'active' visibility, avoiding permission-denied queries)
+        // 2. Fetch all public/active repertoires AND songs collection AND legacy musics IN PARALLEL!
         let repsList: Repertoire[] = [];
+        let rawSongs: Track[] = [];
 
         const qRepsPub = query(
           collection(db, 'repertoires'),
           where('ownerUid', '==', resolvedUserId),
           where('visibility', '==', 'public')
         );
-        const snapRepsPub = await getDocs(qRepsPub).catch(error => {
-          console.error("PUBLIC CATALOG LOAD ERROR", {
+
+        const repsPubPromise = getDocs(qRepsPub).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR - repsPub", {
             colecao: "repertoires",
             slug: normalizedArtistSlug,
             ownerUid: resolvedUserId,
@@ -257,6 +261,59 @@ export default function ArtistPublic({
           });
           return null;
         });
+
+        const qRepsAct = query(
+          collection(db, 'repertoires'),
+          where('ownerUid', '==', resolvedUserId),
+          where('visibility', '==', 'active')
+        );
+
+        const repsActPromise = getDocs(qRepsAct).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR - repsAct", {
+            colecao: "repertoires",
+            slug: normalizedArtistSlug,
+            ownerUid: resolvedUserId,
+            codigo_erro: error?.code || "desconhecido",
+            mensagem: error?.message || String(error)
+          });
+          return null;
+        });
+
+        const qSongs = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
+
+        const songsPromise = getDocs(qSongs).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR - songs query", {
+            colecao: "songs",
+            slug: normalizedArtistSlug,
+            ownerUid: resolvedUserId,
+            codigo_erro: error?.code || "desconhecido",
+            mensagem: error?.message || String(error)
+          });
+          return null;
+        });
+
+        const musicsColRef = collection(db, 'artists', resolvedUserId, 'musics');
+
+        const legacyMusicsPromise = getDocs(musicsColRef).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR - legacy musics", {
+            colecao: `artists/${resolvedUserId}/musics`,
+            slug: normalizedArtistSlug,
+            ownerUid: resolvedUserId,
+            codigo_erro: error?.code || "desconhecido",
+            mensagem: error?.message || String(error)
+          });
+          return null;
+        });
+
+        // Trigger all four concurrent requests in parallel
+        const [snapRepsPub, snapRepsAct, snapSongs, snapLegacyMusics] = await Promise.all([
+          repsPubPromise,
+          repsActPromise,
+          songsPromise,
+          legacyMusicsPromise
+        ]);
+
+        // Process Repertoires
         if (snapRepsPub && !snapRepsPub.empty) {
           snapRepsPub.forEach(docSnap => {
             const d = docSnap.data();
@@ -276,21 +333,6 @@ export default function ArtistPublic({
           });
         }
 
-        const qRepsAct = query(
-          collection(db, 'repertoires'),
-          where('ownerUid', '==', resolvedUserId),
-          where('visibility', '==', 'active')
-        );
-        const snapRepsAct = await getDocs(qRepsAct).catch(error => {
-          console.error("PUBLIC CATALOG LOAD ERROR", {
-            colecao: "repertoires",
-            slug: normalizedArtistSlug,
-            ownerUid: resolvedUserId,
-            codigo_erro: error?.code || "desconhecido",
-            mensagem: error?.message || String(error)
-          });
-          return null;
-        });
         if (snapRepsAct && !snapRepsAct.empty) {
           snapRepsAct.forEach(docSnap => {
             const d = docSnap.data();
@@ -314,20 +356,7 @@ export default function ArtistPublic({
 
         setRepertoires(repsList);
 
-        // 3. Load tracks/songs of this artist directly from Firestore 'songs' collection (allows active status, maps properly)
-        let rawSongs: Track[] = [];
-        const qSongs = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
-        const snapSongs = await getDocs(qSongs).catch(error => {
-          console.error("PUBLIC CATALOG LOAD ERROR", {
-            colecao: "songs",
-            slug: normalizedArtistSlug,
-            ownerUid: resolvedUserId,
-            codigo_erro: error?.code || "desconhecido",
-            mensagem: error?.message || String(error)
-          });
-          return null;
-        });
-        
+        // Process Songs (prefer active status, maps properly)
         if (snapSongs && !snapSongs.empty) {
           snapSongs.forEach(songDoc => {
             const sd = songDoc.data();
@@ -353,45 +382,34 @@ export default function ArtistPublic({
               } as Track);
             }
           });
-        } else {
-          // Try legacy nested subcollection path `/artists/{userId}/musics` fallback
-          const musicsColRef = collection(db, 'artists', resolvedUserId, 'musics');
-          const snapLegacyMusics = await getDocs(musicsColRef).catch(error => {
-            console.error("PUBLIC CATALOG LOAD ERROR", {
-              colecao: `artists/${resolvedUserId}/musics`,
-              slug: normalizedArtistSlug,
-              ownerUid: resolvedUserId,
-              codigo_erro: error?.code || "desconhecido",
-              mensagem: error?.message || String(error)
-            });
-            return null;
+        }
+
+        // If 'songs' collection yields empty results, process legacy nested subcollection path `/artists/{userId}/musics` fallback
+        if (rawSongs.length === 0 && snapLegacyMusics && !snapLegacyMusics.empty) {
+          snapLegacyMusics.forEach(songDoc => {
+            const sd = songDoc.data();
+            const trackId = songDoc.id;
+            if (sd.status !== 'inactive') {
+              rawSongs.push({
+                trackId: trackId,
+                id: trackId,
+                title: sd.title || '',
+                artistId: sd.artistId || sd.ownerId || resolvedUserId,
+                artistName: sd.artistName || resolvedArtist?.name || '',
+                audioUrl: sd.audioUrl || sd.fileUrl || '',
+                coverUrl: sd.coverUrl || '',
+                lyrics: sd.lyrics || '',
+                status: sd.status || 'active',
+                genre: sd.genre || '',
+                duration: sd.duration || 0,
+                repertoireId: sd.repertoireId || '',
+                createdAt: sd.createdAt?.toDate?.()?.toISOString?.() || sd.createdAt || '',
+                playsCount: sd.playsCount || sd.plays || 0,
+                plays: sd.plays || 0,
+                orderIndex: sd.orderIndex !== undefined ? sd.orderIndex : sd.position
+              } as Track);
+            }
           });
-          if (snapLegacyMusics && !snapLegacyMusics.empty) {
-            snapLegacyMusics.forEach(songDoc => {
-              const sd = songDoc.data();
-              const trackId = songDoc.id;
-              if (sd.status !== 'inactive') {
-                rawSongs.push({
-                  trackId: trackId,
-                  id: trackId,
-                  title: sd.title || '',
-                  artistId: sd.artistId || sd.ownerId || resolvedUserId,
-                  artistName: sd.artistName || resolvedArtist?.name || '',
-                  audioUrl: sd.audioUrl || sd.fileUrl || '',
-                  coverUrl: sd.coverUrl || '',
-                  lyrics: sd.lyrics || '',
-                  status: sd.status || 'active',
-                  genre: sd.genre || '',
-                  duration: sd.duration || 0,
-                  repertoireId: sd.repertoireId || '',
-                  createdAt: sd.createdAt?.toDate?.()?.toISOString?.() || sd.createdAt || '',
-                  playsCount: sd.playsCount || sd.plays || 0,
-                  plays: sd.plays || 0,
-                  orderIndex: sd.orderIndex !== undefined ? sd.orderIndex : sd.position
-                } as Track);
-              }
-            });
-          }
         }
 
         // 4. Determine if we are loading a specific shared repertoire or the complete catalog

@@ -988,7 +988,7 @@ async function startServer() {
   const generateArtistHtml = async (slugOrId: string, req: any, repertoireId: string | null = null) => {
     console.time("catalogo-total");
     console.time("buscar-artista");
-    const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
+    const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, profileImageUrl, slug: resolvedSlug } = await fetchArtistRest(slugOrId);
     console.timeEnd("buscar-artista");
     const formattedName = name.trim();
 
@@ -1014,41 +1014,50 @@ async function startServer() {
     let repertoireName = "";
     let repertoireTrackCount = 0;
     let isRepertoirePrivate = false;
+    let resolvedRepertoireId = repertoireId;
 
     if (repertoireId) {
       try {
-        const repDoc = await db.collection("repertoires").doc(repertoireId).get();
-        if (repDoc.exists) {
-          const repData = repDoc.data();
-          if (repData && repData.ownerUid === resolvedArtistId) {
-            repertoireName = repData.name || "";
-            isRepertoirePrivate = repData.visibility === 'private';
-            const trackIds = repData.trackIds || [];
-            repertoireTrackCount = trackIds.length;
+        // Try getting by document ID first
+        let repDoc = await db.collection("repertoires").doc(repertoireId).get();
+        let repData = repDoc.exists ? repDoc.data() : null;
+
+        // If not found by Doc ID, query by slug and ownerUid
+        if (!repData) {
+          const repQuery = await db.collection("repertoires")
+            .where("ownerUid", "==", resolvedArtistId)
+            .where("slug", "==", repertoireId)
+            .limit(1)
+            .get();
+          if (!repQuery.empty) {
+            repDoc = repQuery.docs[0];
+            repData = repDoc.data();
           }
+        }
+
+        if (repData) {
+          repertoireName = repData.name || "";
+          isRepertoirePrivate = repData.visibility === 'private';
+          const trackIds = repData.trackIds || [];
+          repertoireTrackCount = trackIds.length;
+          resolvedRepertoireId = repDoc.id;
         }
       } catch (repErr) {
         console.warn("Could not fetch repertoire info for OG tags:", repErr);
       }
     }
 
-    // Priority: 1. Global site share card configured by admin. 2. Fallback standard SomDrive image.
+    // Dynamic image url generating path (handles profile and repertoire)
     let ogImageToUse = "";
-    try {
-      const shareCard = await fetchGlobalShareCardRest();
-      if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
-        // Direct public R2 URL from settings/shareCard.ogImageUrl as required
-        ogImageToUse = shareCard.ogImageUrl.trim();
-      }
-    } catch (fErr) {
-      console.warn("Could not fetch global share card settings for artist profile ogg tag:", fErr);
+    if (repertoireId && repertoireName && !isRepertoirePrivate) {
+      ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}?repertoireId=${resolvedRepertoireId || repertoireId}`;
+    } else {
+      ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}`;
     }
 
-    if (!ogImageToUse) {
-      ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
-    }
-
-    const ogUrlToUse = `${appBaseUrl}/s/${slugOrId}`;
+    const ogUrlToUse = repertoireId && repertoireName && !isRepertoirePrivate
+      ? `${appBaseUrl}/s/${cleanSlug}/repertorio/${repertoireId}`
+      : `${appBaseUrl}/s/${cleanSlug}`;
 
     const indexPath = process.env.NODE_ENV === "production" 
       ? path.join(process.cwd(), 'dist', 'index.html')
@@ -1071,23 +1080,23 @@ async function startServer() {
       }
 
       let customTitle = `Catálogo musical de ${formattedName} | SomDrive`;
-      let customDescription = `Ouça músicas e composições compartilhadas pelo artista.`;
+      let customDescription = `Ouça músicas e composições de ${formattedName} compartilhadas no SomDrive.`;
 
       if (repertoireId && repertoireName && !isRepertoirePrivate) {
-        customTitle = `${repertoireName} — ${formattedName} | SomDrive`;
-        customDescription = `Ouça ${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'música' : 'músicas'} deste repertório no SomDrive.`;
+        customTitle = `${repertoireName} — Pasta de ${formattedName} | SomDrive`;
+        customDescription = `Acesse e ouça o repertório "${repertoireName}" de ${formattedName} com ${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'faixa' : 'faixas'} no SomDrive.`;
       }
 
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
   <title>${customTitle}</title>
   <meta name="description" content="${customDescription}" />
-  <meta property="og:type" content="website" />
+  <meta property="og:type" content="music.playlist" />
   <meta property="og:title" content="${customTitle}" />
   <meta property="og:description" content="${customDescription}" />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
-  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="${ogUrlToUse}" />
@@ -1848,13 +1857,14 @@ async function startServer() {
   // Robust method to fetch public artist profiles using public Firestore REST API
   // This bypasses any server-side service-account PERMISSION_DENIED issues completely!
   // Also supports friendly sluggified names and ID search
-  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string; slug: string }> => {
+  const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string; profileImageUrl: string; slug: string }> => {
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     let name = "Compositor";
     let genre = "Música Sertaneja";
     let city = "Brasil";
     let customCardImageUrl = "";
+    let profileImageUrl = "";
     let resolvedUserId = idOrSlug;
     let dbSlug = "";
 
@@ -1875,6 +1885,7 @@ async function startServer() {
         genre: "Divulgue seu Repertório",
         city: "Brasil",
         customCardImageUrl: globalCover,
+        profileImageUrl: "",
         slug: "somdrive"
       };
     }
@@ -1902,9 +1913,10 @@ async function startServer() {
         genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
         city = f.city?.stringValue || city;
         customCardImageUrl = f.customCardImageUrl?.stringValue || "";
+        profileImageUrl = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || "";
         resolvedUserId = doc.name.split('/').pop() || cleanId;
         dbSlug = f.slug?.stringValue || slugifyStr(name);
-        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, slug: dbSlug };
+        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug };
       }
     } catch (err) {
       console.warn("Direct direct artist fetch failed, will try collection scan.");
@@ -1924,6 +1936,7 @@ async function startServer() {
           const artistGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
           const artistCity = f.city?.stringValue || '';
           const artistCustomCardUrl = f.customCardImageUrl?.stringValue || '';
+          const artistProfileImg = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || '';
           const artistSlug = f.slug?.stringValue || slugifyStr(artistName);
           
           if (docId.toLowerCase() === cleanIdLower || artistSlug.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
@@ -1933,6 +1946,7 @@ async function startServer() {
               genre: artistGenre || genre,
               city: artistCity || city,
               customCardImageUrl: artistCustomCardUrl,
+              profileImageUrl: artistProfileImg,
               slug: artistSlug
             };
           }
@@ -1956,6 +1970,7 @@ async function startServer() {
           const userGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
           const userCity = f.city?.stringValue || '';
           const userCustomCardUrl = f.customCardImageUrl?.stringValue || '';
+          const userProfileImg = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || '';
           const userSlug = f.slug?.stringValue || slugifyStr(userName);
           
           if (docId.toLowerCase() === cleanIdLower || userSlug.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
@@ -1963,6 +1978,7 @@ async function startServer() {
             let finalGenre = userGenre || genre;
             let finalCity = userCity || city;
             let finalImg = userCustomCardUrl;
+            let finalProfileImg = userProfileImg;
             let finalSlug = userSlug;
 
             try {
@@ -1975,6 +1991,7 @@ async function startServer() {
                 finalGenre = af.genre?.stringValue || af.mainGenre?.stringValue || finalGenre;
                 finalCity = af.city?.stringValue || finalCity;
                 finalImg = af.customCardImageUrl?.stringValue || finalImg;
+                finalProfileImg = af.profileImageUrl?.stringValue || af.avatarUrl?.stringValue || af.photoURL?.stringValue || finalProfileImg;
                 finalSlug = af.slug?.stringValue || finalSlug;
               }
             } catch {}
@@ -1985,6 +2002,7 @@ async function startServer() {
               genre: finalGenre,
               city: finalCity,
               customCardImageUrl: finalImg,
+              profileImageUrl: finalProfileImg,
               slug: finalSlug
             };
           }
@@ -2003,6 +2021,7 @@ async function startServer() {
         genre = data?.genre || data?.mainGenre || genre;
         city = data?.city || city;
         customCardImageUrl = data?.customCardImageUrl || "";
+        profileImageUrl = data?.profileImageUrl || data?.avatarUrl || data?.photoURL || "";
         dbSlug = data?.slug || "";
         resolvedUserId = cleanId;
       } else {
@@ -2013,6 +2032,7 @@ async function startServer() {
           genre = uData?.genre || uData?.mainGenre || genre;
           city = uData?.city || city;
           customCardImageUrl = uData?.customCardImageUrl || "";
+          profileImageUrl = uData?.profileImageUrl || uData?.avatarUrl || uData?.photoURL || "";
           dbSlug = uData?.slug || "";
           resolvedUserId = cleanId;
         }
@@ -2021,15 +2041,48 @@ async function startServer() {
       console.warn("Firestore Admin fallback exception:", adminErr);
     }
 
-    return { userId: resolvedUserId, name, genre, city, customCardImageUrl, slug: dbSlug || slugifyStr(name) };
+    return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug || slugifyStr(name) };
   };
 
-  // Helper to generate dynamic Open Graph PNG buffers
-  const generateArtistPngBuffer = async (artistId: string): Promise<{ buffer: Buffer; contentType: string }> => {
-    const { name, genre, city, customCardImageUrl } = await fetchArtistRest(artistId);
+  // Helper to generate dynamic Open Graph PNG buffers (supports artist profile and specific Repertoire/Pasta layouts)
+  const generateArtistPngBuffer = async (artistIdOrSlug: string, repertoireIdOrSlug: string | null = null): Promise<{ buffer: Buffer; contentType: string }> => {
+    const { userId: resolvedArtistId, name, genre, city, customCardImageUrl, profileImageUrl } = await fetchArtistRest(artistIdOrSlug);
 
-    // Dynamic resolution of cover card fallback: use artist's own upload or fallback to the site's global image uploaded by Admin
-    let resolvedCoverUrl = customCardImageUrl || "";
+    let isRepertoire = false;
+    let repertoireName = "";
+    let repertoireTrackCount = 0;
+
+    if (repertoireIdOrSlug) {
+      try {
+        // Find repertoire details either by ID or by slug and ownerUid
+        let repDoc = await db.collection("repertoires").doc(repertoireIdOrSlug).get();
+        let repData = repDoc.exists ? repDoc.data() : null;
+
+        if (!repData) {
+          const repQuery = await db.collection("repertoires")
+            .where("ownerUid", "==", resolvedArtistId)
+            .where("slug", "==", repertoireIdOrSlug)
+            .limit(1)
+            .get();
+          if (!repQuery.empty) {
+            repDoc = repQuery.docs[0];
+            repData = repDoc.data();
+          }
+        }
+
+        if (repData) {
+          repertoireName = repData.name || "";
+          const trackIds = repData.trackIds || [];
+          repertoireTrackCount = trackIds.length;
+          isRepertoire = true;
+        }
+      } catch (repErr) {
+        console.warn("Could not retrieve repertoire for dynamic PNG image:", repErr);
+      }
+    }
+
+    // Dynamic resolution of cover card fallback
+    let resolvedCoverUrl = customCardImageUrl || profileImageUrl || "";
     if (!resolvedCoverUrl) {
       try {
         const globalCard = await fetchGlobalShareCardRest();
@@ -2046,6 +2099,7 @@ async function startServer() {
     const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
     const cleanCity = escapeXml((city || "Brasil").trim());
     const cleanCardImageUrl = resolvedCoverUrl ? escapeXml(resolvedCoverUrl) : "";
+    const cleanProfileImageUrl = profileImageUrl ? escapeXml(profileImageUrl) : "";
 
     let subtitle = "";
     if (cleanGenre && cleanCity) {
@@ -2058,7 +2112,22 @@ async function startServer() {
       subtitle = "Catálogo de Músicas";
     }
 
-    const initialLetter = escapeXml((name || "S").trim().substring(0, 1).toUpperCase());
+    let pillText = "CATÁLOGO OFICIAL";
+    let mainTitle = "Ouça minhas composições";
+    let composerText = cleanName;
+    let descText = subtitle;
+
+    if (isRepertoire) {
+      pillText = "PASTA DE MÚSICAS";
+      mainTitle = escapeXml((repertoireName || "Pasta Compartilhada").trim().toUpperCase());
+      if (mainTitle.length > 24) {
+        mainTitle = mainTitle.substring(0, 23) + "...";
+      }
+      composerText = `por ${cleanName}`;
+      descText = `${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'MÚSICA AUTORAL' : 'MÚSICAS AUTORAIS'} \u2022 ${cleanGenre}`;
+    }
+
+    const initialLetter = escapeXml((isRepertoire ? (repertoireName || "P") : (name || "S")).trim().substring(0, 1).toUpperCase());
 
     // Beautiful, non-AI-looking dark/green premium card template (1200x630px)
     const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
@@ -2107,6 +2176,10 @@ async function startServer() {
 
     <clipPath id="card-rounded">
       <rect x="510" y="115" width="340" height="400" rx="16" ry="16" />
+    </clipPath>
+
+    <clipPath id="vinyl-center-clip">
+      <circle cx="930" cy="315" r="45" />
     </clipPath>
 
     <!-- Sleeve cover gradient (SomDrive Premium Charcoal/Slate) -->
@@ -2175,10 +2248,17 @@ async function startServer() {
     <circle cx="930" cy="315" r="58" stroke="#1D2A35" stroke-width="0.8" fill="none" />
     <circle cx="930" cy="315" r="52" stroke="url(#gold-gradient)" stroke-width="1" fill="none" opacity="0.35" stroke-dasharray="3,3" />
     
-    <!-- Central mini circle -->
+    <!-- Central vinyl avatar or monogram fallback -->
+    ${cleanProfileImageUrl ? `
+    <g clip-path="url(#vinyl-center-clip)">
+      <image href="${cleanProfileImageUrl}" x="885" y="270" width="90" height="90" preserveAspectRatio="xMidYMid slice" referrerPolicy="no-referrer" />
+    </g>
+    <!-- Overlay a clean center border ring around avatar -->
+    <circle cx="930" cy="315" r="45" fill="none" stroke="url(#gold-gradient)" stroke-width="1.5" />
+    ` : `
     <circle cx="930" cy="315" r="28" fill="#04020a" stroke="url(#gold-gradient)" stroke-width="1" />
-    <!-- Monogram representing Composer -->
     <text x="930" y="324" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="700" fill="url(#gold-gradient)" font-size="24" letter-spacing="0.5">${initialLetter}</text>
+    `}
     
     <!-- Center spindle core hole -->
     <circle cx="930" cy="315" r="8" fill="#020104" stroke="#475569" stroke-width="1.2" />
@@ -2229,25 +2309,25 @@ async function startServer() {
   <g transform="translate(100, 150)">
     <!-- Verified Catalog + Private Catalog pills -->
     <g transform="translate(0, 0)">
-      <rect width="180" height="30" rx="15" fill="#1ed760" fill-opacity="0.12" stroke="#1ed760" stroke-width="1" />
+      <rect width="${isRepertoire ? 210 : 180}" height="30" rx="15" fill="#1ed760" fill-opacity="0.12" stroke="#1ed760" stroke-width="1" />
       <circle cx="18" cy="15" r="4.5" fill="#1ed760" />
-      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#1ed760" letter-spacing="1">CATÁLOGO PRIVADO</text>
+      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#1ed760" letter-spacing="1">${pillText}</text>
     </g>
 
-    <g transform="translate(195, 0)">
+    <g transform="translate(${isRepertoire ? 225 : 195}, 0)">
       <rect width="125" height="30" rx="15" fill="#79D32E" fill-opacity="0.12" stroke="#79D32E" stroke-width="1.2" />
       <path d="M 12 14 L 15 17 L 21 11" stroke="#79D32E" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
-      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#79D32E" letter-spacing="1">VERIFICADO</text>
+      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#79D32E" letter-spacing="1">${isRepertoire ? 'PLAYLIST' : 'VERIFICADO'}</text>
     </g>
 
-    <!-- Main Title: Ouça meu repertório -->
-    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="44" fill="#ffffff" letter-spacing="-1px">Ouça meu repertório</text>
+    <!-- Main Title -->
+    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="${isRepertoire ? 38 : 44}" fill="#ffffff" letter-spacing="-1px">${mainTitle}</text>
 
     <!-- Composer Name -->
-    <text x="0" y="165" class="title-text" font-size="52" font-weight="850" filter="url(#shadow)" letter-spacing="-1">${cleanName}</text>
+    <text x="0" y="165" class="title-text" font-size="${isRepertoire ? 46 : 52}" font-weight="850" filter="url(#shadow)" letter-spacing="-1">${composerText}</text>
 
     <!-- City and Music genre info -->
-    <text x="0" y="215" class="sub-text" font-size="20" fill="#9AA6B2">${subtitle}</text>
+    <text x="0" y="215" class="sub-text" font-size="20" fill="${isRepertoire ? '#1ed760' : '#9AA6B2'}">${descText}</text>
 
     <!-- Interstitial interactive button mock: ▶ ACESSE E ESCUTE -->
     <g transform="translate(0, 270)" filter="url(#shadow)">
@@ -2278,7 +2358,8 @@ async function startServer() {
   app.get("/api/og/artista/:userId", async (req, res) => {
     try {
       const userId = req.params.userId;
-      const { buffer, contentType } = await generateArtistPngBuffer(userId);
+      const repertoireId = req.query.repertoireId ? String(req.query.repertoireId) : null;
+      const { buffer, contentType } = await generateArtistPngBuffer(userId, repertoireId);
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
       return res.status(200).send(buffer);
@@ -2304,7 +2385,8 @@ async function startServer() {
   app.get("/api/og-artista", async (req, res) => {
     try {
       const artistId = String(req.query.id || "default");
-      const { buffer, contentType } = await generateArtistPngBuffer(artistId);
+      const repertoireId = req.query.repertoireId ? String(req.query.repertoireId) : null;
+      const { buffer, contentType } = await generateArtistPngBuffer(artistId, repertoireId);
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
       return res.status(200).send(buffer);
