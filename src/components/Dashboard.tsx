@@ -597,7 +597,7 @@ export default function Dashboard({
     }
 
     const appBaseUrl = window.location.origin;
-    const pageUrl = `${appBaseUrl}/catalogo/${slug}`;
+    const pageUrl = `${appBaseUrl}/s/${slug}`;
     navigator.clipboard.writeText(pageUrl);
     setCopiedAlert(true);
     setTimeout(() => setCopiedAlert(false), 2000);
@@ -626,7 +626,7 @@ export default function Dashboard({
     }
 
     const appBaseUrl = window.location.origin;
-    const pageUrl = `${appBaseUrl}/catalogo/${slug}`;
+    const pageUrl = `${appBaseUrl}/s/${slug}`;
     const messageText = `🎧 Ouça meu catálogo musical no SomDrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     
@@ -2239,7 +2239,7 @@ export default function Dashboard({
                     {combinedRepertoires.map((rep) => {
                       const repTracksCount = rep.trackIds?.length || 0;
                       const slugToUse = rep.slug || rep.id;
-                      const shareUrl = `${window.location.origin}/catalogo/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
+                      const shareUrl = `${window.location.origin}/s/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
                       const isPrivate = rep.visibility === 'private';
                       const isCopied = repCopiedId === rep.id;
 

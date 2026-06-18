@@ -614,11 +614,11 @@ export default function ArtistPublic({
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
     const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
-    let pageUrl = `${appBaseUrl}/catalogo/${artistSlug}`;
+    let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
     let messageText = `🎧 Ouça meu catálogo musical no SomDrive!\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
 
     if (foundRep) {
-      pageUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
+      pageUrl = `${appBaseUrl}/s/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       messageText = `Ouça o repertório “${foundRep.name}” de ${artist.name} no SomDrive: ${pageUrl}`;
     }
 
@@ -632,10 +632,10 @@ export default function ArtistPublic({
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
     const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
-    let pageUrl = `${appBaseUrl}/catalogo/${artistSlug}`;
+    let pageUrl = `${appBaseUrl}/s/${artistSlug}`;
 
     if (foundRep) {
-      pageUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
+      pageUrl = `${appBaseUrl}/s/${artistSlug}/repertorio/${foundRep.slug || foundRep.id}`;
       navigator.clipboard.writeText(pageUrl);
       triggerAlert(`🔗 Link do repertório "${foundRep.name}" copiado com sucesso!`);
     } else {
@@ -698,7 +698,7 @@ export default function ArtistPublic({
     e.stopPropagation();
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
-    const shareUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${rep.slug || rep.id}`;
+    const shareUrl = `${appBaseUrl}/s/${artistSlug}/repertorio/${rep.slug || rep.id}`;
     navigator.clipboard.writeText(shareUrl);
     triggerAlert(`🔗 Link do repertório "${rep.name}" copiado com sucesso!`);
   };
@@ -808,7 +808,7 @@ export default function ArtistPublic({
                   onClick={() => {
                     const appBaseUrl = window.location.origin;
                     const artistSlug = artist.slug || artist.userId;
-                    const shareUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${currentRepertoire.slug || currentRepertoire.id}`;
+                    const shareUrl = `${appBaseUrl}/s/${artistSlug}/repertorio/${currentRepertoire.slug || currentRepertoire.id}`;
                     if (navigator.share) {
                       navigator.share({
                         title: `${currentRepertoire.name} — ${artist.name} | SomDrive`,

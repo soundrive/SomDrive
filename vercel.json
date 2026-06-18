@@ -5,6 +5,10 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/s/:slug/repertorio/:repertoireId",
+      "destination": "/api/metadata?slug=:slug&repertoireId=:repertoireId"
+    },
+    {
       "source": "/s/:slug",
       "destination": "/api/metadata?slug=:slug"
     },
