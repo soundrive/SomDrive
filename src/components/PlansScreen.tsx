@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Artist } from '../types';
 import { dbService } from '../lib/db';
+import { PLANS_CONFIG } from '../lib/plansConfig';
 
 interface PlansScreenProps {
   currentUser: Artist;
@@ -81,14 +82,14 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
       ]
     },
     essencial: {
-      name: 'SomDrive Essencial',
+      name: PLANS_CONFIG.essencial.name,
       description: 'Ideal para compositores com catálogo inicial.',
-      price: billingCycle === 'monthly' ? 9.99 : 99.90,
-      limitTracks: 10,
+      price: billingCycle === 'monthly' ? PLANS_CONFIG.essencial.priceMonthly : PLANS_CONFIG.essencial.priceYearly,
+      limitTracks: PLANS_CONFIG.essencial.limitTracks,
       limitSize: 20,
       badge: 'Básico',
       features: [
-        { name: '★ Até 10 músicas cadastradas', included: true, highlight: true },
+        { name: `★ Até ${PLANS_CONFIG.essencial.limitTracks} músicas cadastradas`, included: true, highlight: true },
         { name: 'Tudo do plano Free incluído', included: true },
         { name: 'Criação de repertórios', included: true },
         { name: 'Links privados', included: true },
@@ -99,14 +100,14 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
       ]
     },
     pro: {
-      name: 'SomDrive Pro',
+      name: PLANS_CONFIG.pro.name,
       description: 'Organize e compartilhe seu repertório do seu jeito.',
-      price: billingCycle === 'monthly' ? 14.99 : 149.90,
-      limitTracks: 15,
+      price: billingCycle === 'monthly' ? PLANS_CONFIG.pro.priceMonthly : PLANS_CONFIG.pro.priceYearly,
+      limitTracks: PLANS_CONFIG.pro.limitTracks,
       limitSize: 20,
       badge: 'Mais Escolhido',
       features: [
-        { name: '★ Até 15 músicas cadastradas', included: true, highlight: true },
+        { name: `★ Até ${PLANS_CONFIG.pro.limitTracks} músicas cadastradas`, included: true, highlight: true },
         { name: 'Tudo do plano Free incluído', included: true },
         { name: 'Criação de repertórios', included: true },
         { name: 'Organização em pastas e seleções', included: true },
@@ -126,14 +127,14 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
       ]
     },
     premium: {
-      name: 'SomDrive Premium',
+      name: PLANS_CONFIG.premium.name,
       description: 'Para catálogos e projetos maiores.',
-      price: billingCycle === 'monthly' ? 29.99 : 299.90,
-      limitTracks: 50,
+      price: billingCycle === 'monthly' ? PLANS_CONFIG.premium.priceMonthly : PLANS_CONFIG.premium.priceYearly,
+      limitTracks: PLANS_CONFIG.premium.limitTracks,
       limitSize: 20,
       badge: 'Premium',
       features: [
-        { name: '★ Até 50 músicas cadastradas', included: true, highlight: true },
+        { name: `★ Até ${PLANS_CONFIG.premium.limitTracks} músicas cadastradas`, included: true, highlight: true },
         { name: 'Tudo do plano Pro incluído', included: true },
         { name: 'Organização de catálogos maiores', included: true },
         { name: 'Repertórios e seleções', included: true },

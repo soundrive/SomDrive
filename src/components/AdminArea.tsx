@@ -115,6 +115,8 @@ export default function AdminArea({
 
   // PaymentSettings states
   const [paymentSettings, setPaymentSettings] = useState<{
+    essencialMonthlyUrl: string;
+    essencialAnnualUrl: string;
     proMonthlyUrl: string;
     proAnnualUrl: string;
     premiumMonthlyUrl: string;
@@ -122,6 +124,8 @@ export default function AdminArea({
     updatedAt?: string;
     updatedBy?: string;
   }>({
+    essencialMonthlyUrl: '',
+    essencialAnnualUrl: '',
     proMonthlyUrl: '',
     proAnnualUrl: '',
     premiumMonthlyUrl: '',
@@ -385,6 +389,8 @@ export default function AdminArea({
       const data = await dbService.getPaymentSettings();
       if (data) {
         setPaymentSettings({
+          essencialMonthlyUrl: data.essencialMonthlyUrl || '',
+          essencialAnnualUrl: data.essencialAnnualUrl || '',
           proMonthlyUrl: data.proMonthlyUrl || '',
           proAnnualUrl: data.proAnnualUrl || '',
           premiumMonthlyUrl: data.premiumMonthlyUrl || '',
@@ -1693,12 +1699,56 @@ export default function AdminArea({
               ) : (
                 <form onSubmit={handleSavePaymentSettings} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    {/* SECTION 1: PRO MONTHLY */}
+
+                    {/* SECTION 1: ESSENCIAL MONTHLY */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">1. SomDrive Pro Mensal</span>
-                        <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 19,90/mês</span>
+                        <span className="text-xs font-bold tracking-wider text-orange-400 uppercase">1. SomDrive Essencial Mensal</span>
+                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 9,99/mês</span>
+                      </div>
+                      <div className="text-slate-400 text-[11px] space-y-1">
+                        <p><strong>Limite:</strong> 10 músicas</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-slate-300 font-semibold" htmlFor="essencial-monthly-url">Link de Pagamento (Mercado Pago)</label>
+                        <input
+                          id="essencial-monthly-url"
+                          type="url"
+                          placeholder="https://link.mercadopago.com.br/..."
+                          value={paymentSettings.essencialMonthlyUrl}
+                          onChange={(e) => setPaymentSettings({ ...paymentSettings, essencialMonthlyUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-850 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SECTION 2: ESSENCIAL ANNUAL */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold tracking-wider text-orange-400 uppercase">2. SomDrive Essencial Anual</span>
+                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 99,90/ano</span>
+                      </div>
+                      <div className="text-slate-400 text-[11px] space-y-1">
+                        <p><strong>Limite:</strong> 10 músicas</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-slate-300 font-semibold" htmlFor="essencial-annual-url">Link de Pagamento (Mercado Pago)</label>
+                        <input
+                          id="essencial-annual-url"
+                          type="url"
+                          placeholder="https://link.mercadopago.com.br/..."
+                          value={paymentSettings.essencialAnnualUrl}
+                          onChange={(e) => setPaymentSettings({ ...paymentSettings, essencialAnnualUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-850 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-mono"
+                        />
+                      </div>
+                    </div>
+                     
+                    {/* SECTION 3: PRO MONTHLY */}
+                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">3. SomDrive Pro Mensal</span>
+                        <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 14,99/mês</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
                         <p><strong>Limite:</strong> 15 músicas</p>
@@ -1716,11 +1766,11 @@ export default function AdminArea({
                       </div>
                     </div>
 
-                    {/* SECTION 2: PRO ANNUAL */}
+                    {/* SECTION 4: PRO ANNUAL */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">2. SomDrive Pro Anual</span>
-                        <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 199,00/ano</span>
+                        <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">4. SomDrive Pro Anual</span>
+                        <span className="text-[10px] font-mono bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">R$ 149,90/ano</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
                         <p><strong>Limite:</strong> 15 músicas</p>
@@ -1738,11 +1788,11 @@ export default function AdminArea({
                       </div>
                     </div>
 
-                    {/* SECTION 3: PREMIUM MONTHLY */}
+                    {/* SECTION 5: PREMIUM MONTHLY */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">3. SomDrive Premium Mensal</span>
-                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 39,90/mês</span>
+                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">5. SomDrive Premium Mensal</span>
+                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 29,99/mês</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
                         <p><strong>Limite:</strong> 50 músicas</p>
@@ -1760,11 +1810,11 @@ export default function AdminArea({
                       </div>
                     </div>
 
-                    {/* SECTION 4: PREMIUM ANNUAL */}
+                    {/* SECTION 6: PREMIUM ANNUAL */}
                     <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800/80 space-y-4">
                       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">4. SomDrive Premium Anual</span>
-                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 399,00/ano</span>
+                        <span className="text-xs font-bold tracking-wider text-orange-500 uppercase">6. SomDrive Premium Anual</span>
+                        <span className="text-[10px] font-mono bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-bold">R$ 299,90/ano</span>
                       </div>
                       <div className="text-slate-400 text-[11px] space-y-1">
                         <p><strong>Limite:</strong> 50 músicas</p>
@@ -2382,10 +2432,12 @@ export default function AdminArea({
                               onChange={(e: any) => setSelectedForcePlan(e.target.value)}
                               className="bg-slate-900 border border-slate-800 text-xs text-slate-200 px-3 py-2 rounded-lg outline-none flex-1 focus:ring-1 focus:ring-orange-500"
                             >
-                              <option value="pro_mensal">SomDrive PRO - Mensal (R$ 19,90)</option>
-                              <option value="pro_anual">SomDrive PRO - Anual (R$ 199,00)</option>
-                              <option value="premium_mensal">SomDrive PREMIUM - Mensal (R$ 39,90)</option>
-                              <option value="premium_anual">SomDrive PREMIUM - Anual (R$ 399,00)</option>
+                              <option value="essencial_mensal">SomDrive ESSENCIAL - Mensal (R$ 9,99)</option>
+                              <option value="essencial_anual">SomDrive ESSENCIAL - Anual (R$ 99,90)</option>
+                              <option value="pro_mensal">SomDrive PRO - Mensal (R$ 14,99)</option>
+                              <option value="pro_anual">SomDrive PRO - Anual (R$ 149,90)</option>
+                              <option value="premium_mensal">SomDrive PREMIUM - Mensal (R$ 29,99)</option>
+                              <option value="premium_anual">SomDrive PREMIUM - Anual (R$ 299,90)</option>
                             </select>
                             <button
                               onClick={() => handleManualVerifyPayment(selectedForcePlan)}

@@ -104,6 +104,8 @@ export interface AppUser {
 }
 
 export interface PaymentSettings {
+  essencialMonthlyUrl?: string;
+  essencialAnnualUrl?: string;
   proMonthlyUrl?: string;
   proAnnualUrl?: string;
   premiumMonthlyUrl?: string;

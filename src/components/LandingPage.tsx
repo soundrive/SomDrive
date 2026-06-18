@@ -28,6 +28,7 @@ import {
   Send
 } from 'lucide-react';
 import { Artist } from '../types';
+import { PLANS_CONFIG } from '../lib/plansConfig';
 
 import { BrandLogo } from './BrandLogo';
 
@@ -139,15 +140,37 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
         { name: 'Modo carro' }
       ]
     },
+    essencial: {
+      name: PLANS_CONFIG.essencial.name,
+      description: 'Ideal para compositores com catálogo inicial.',
+      highlightText: 'Gerencie e compartilhe até 10 músicas de forma profissional.',
+      price: billingCycle === 'monthly' 
+        ? `R$ ${PLANS_CONFIG.essencial.priceMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+        : `R$ ${PLANS_CONFIG.essencial.priceYearly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
+      badge: 'Básico',
+      features: [
+        { name: `★ Até ${PLANS_CONFIG.essencial.limitTracks} músicas cadastradas`, highlight: true },
+        { name: 'Tudo do plano Free incluído' },
+        { name: 'Criação de repertórios' },
+        { name: 'Links privados' },
+        { name: 'WhatsApp e Contato' },
+        { name: 'Player profissional' },
+        { name: 'Ficha técnica e Letra' },
+        { name: 'Modo carro' }
+      ]
+    },
     pro: {
-      name: 'SomDrive Pro',
+      name: PLANS_CONFIG.pro.name,
       description: 'Organize e compartilhe seu repertório do seu jeito.',
       highlightText: 'Crie repertórios e compartilhe somente as músicas que escolher.',
-      price: billingCycle === 'monthly' ? 'R$ 19,90' : 'R$ 199,00',
+      price: billingCycle === 'monthly' 
+        ? `R$ ${PLANS_CONFIG.pro.priceMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+        : `R$ ${PLANS_CONFIG.pro.priceYearly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
       badge: 'Mais Escolhido',
       features: [
-        { name: '★ Até 15 músicas cadastradas', highlight: true },
+        { name: `★ Até ${PLANS_CONFIG.pro.limitTracks} músicas cadastradas`, highlight: true },
         { name: 'Tudo do plano Free incluído' },
         { name: 'Criação de repertórios' },
         { name: 'Organização em pastas e seleções' },
@@ -167,14 +190,16 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
       ]
     },
     premium: {
-      name: 'SomDrive Premium',
+      name: PLANS_CONFIG.premium.name,
       description: 'Para catálogos e projetos maiores.',
       highlightText: 'Organize até 50 músicas em repertórios, projetos e seleções privadas.',
-      price: billingCycle === 'monthly' ? 'R$ 39,90' : 'R$ 399,00',
+      price: billingCycle === 'monthly' 
+        ? `R$ ${PLANS_CONFIG.premium.priceMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+        : `R$ ${PLANS_CONFIG.premium.priceYearly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       period: billingCycle === 'monthly' ? '/ mês' : '/ ano',
       badge: 'Premium',
       features: [
-        { name: '★ Até 50 músicas cadastradas', highlight: true },
+        { name: `★ Até ${PLANS_CONFIG.premium.limitTracks} músicas cadastradas`, highlight: true },
         { name: 'Tudo do plano Pro incluído' },
         { name: 'Organização de catálogos maiores' },
         { name: 'Repertórios e seleções' },
@@ -891,7 +916,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
           
           {/* Soundrive Free Card */}
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
@@ -931,6 +956,55 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
                 className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
               >
                 Cadastrar grátis
+              </button>
+            </div>
+          </div>
+
+          {/* Soundrive Essencial Card */}
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
+            <div className="space-y-6">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold">{landingPlans.essencial.badge}</span>
+                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.essencial.name}</h4>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-baseline justify-end gap-0.5">
+                    <h5 className="text-3xl font-heading font-black text-white">
+                      {landingPlans.essencial.price}
+                    </h5>
+                  </div>
+                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.essencial.period}</p>
+                </div>
+              </div>
+
+              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.essencial.description}</p>
+
+              {/* Feature bullet list */}
+              <ul className="space-y-3 text-xs">
+                {landingPlans.essencial.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-slate-300">
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
+                        ★ {feat.name}
+                      </div>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-8">
+              <button 
+                onClick={() => onNavigate('auth', { isRegister: true })}
+                className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
+              >
+                Quero ser Essencial
               </button>
             </div>
           </div>
