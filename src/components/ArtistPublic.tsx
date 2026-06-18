@@ -36,6 +36,8 @@ import {
 import { Artist, Music as Track, Analytics, Repertoire } from '../types';
 import { dbService } from '../lib/db';
 import { BrandLogo } from './BrandLogo';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface ArtistPublicProps {
   artistId: string;
@@ -188,7 +190,184 @@ export default function ArtistPublic({
       setErrorMsg(null);
 
       try {
-        // 1. Recover from local cache instantly for speeds
+        const isSharedPage = !forceAllView && (!!initialRepertoireId || window.location.pathname.includes('/repertorio/')) && !!selectedRepertoireId;
+
+        if (isSharedPage) {
+          // DIRECT FIRESTORE LOADING FOR SHARED REPERTOIRE (Strictly no local cache, no localStorage fallback, no currentUser)
+          const normalizedArtistSlug = artistId.trim();
+
+          // 1. Fetch artist directly from Firestore
+          let resolvedArtist: Artist | null = null;
+          let resolvedUserId = '';
+
+          const qArtist = query(collection(db, 'artists'), where('slug', '==', normalizedArtistSlug));
+          const snapArtist = await getDocs(qArtist);
+          if (!snapArtist.empty) {
+            const docSnap = snapArtist.docs[0];
+            resolvedArtist = dbService.mapFirestoreDocToArtist(docSnap.id, docSnap.data());
+            resolvedUserId = docSnap.id;
+          } else {
+            // Direct ID fallback
+            const directSnap = await getDoc(doc(db, 'artists', normalizedArtistSlug));
+            if (directSnap.exists()) {
+              resolvedArtist = dbService.mapFirestoreDocToArtist(directSnap.id, directSnap.data());
+              resolvedUserId = directSnap.id;
+            } else {
+              // Try users collection for slug matching
+              const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedArtistSlug));
+              const snapUsers = await getDocs(qUsers);
+              if (!snapUsers.empty) {
+                const docSnap = snapUsers.docs[0];
+                resolvedArtist = dbService.mapFirestoreDocToArtist(docSnap.id, docSnap.data());
+                resolvedUserId = docSnap.id;
+              } else {
+                const directUserSnap = await getDoc(doc(db, 'users', normalizedArtistSlug));
+                if (directUserSnap.exists()) {
+                  resolvedArtist = dbService.mapFirestoreDocToArtist(directUserSnap.id, directUserSnap.data());
+                  resolvedUserId = directUserSnap.id;
+                }
+              }
+            }
+          }
+
+          if (!resolvedArtist) {
+            setErrorMsg("Artista não encontrado ou indisponível.");
+            setIsLoading(false);
+            setIsInitialLoadDone(true);
+            return;
+          }
+
+          setArtist(resolvedArtist);
+
+          // 2. Fetch specific repertoire directly from Firestore
+          let resolvedRepertoire: Repertoire | null = null;
+          const searchRepSlugOrId = selectedRepertoireId || '';
+          
+          if (searchRepSlugOrId) {
+            if (searchRepSlugOrId.startsWith('rep_')) {
+              // Try direct doc ID check ONLY if it is an ID (starts with rep_)
+              const directRepRef = doc(db, 'repertoires', searchRepSlugOrId);
+              const directRepSnap = await getDoc(directRepRef);
+              if (directRepSnap.exists()) {
+                const rd = directRepSnap.data();
+                if (rd.ownerUid === resolvedUserId) {
+                  let vis = rd.visibility || 'public';
+                  if (vis === 'active') vis = 'public';
+                  resolvedRepertoire = {
+                    id: directRepSnap.id,
+                    ownerUid: rd.ownerUid,
+                    name: rd.name,
+                    slug: rd.slug || '',
+                    description: rd.description || '',
+                    type: rd.type || 'repertoire',
+                    trackIds: rd.trackIds || [],
+                    orderedTrackIds: rd.orderedTrackIds || rd.trackIds || [],
+                    visibility: vis,
+                    createdAt: rd.createdAt || new Date().toISOString(),
+                    updatedAt: rd.updatedAt || new Date().toISOString()
+                  };
+                }
+              }
+            } else {
+              // Try query by ownerUid + slug with all three filters (strict check to avoid permission-denied via rules)
+              const qRep = query(
+                collection(db, 'repertoires'),
+                where('ownerUid', '==', resolvedUserId),
+                where('slug', '==', searchRepSlugOrId),
+                where('visibility', '==', 'public')
+              );
+              const snapRep = await getDocs(qRep);
+              if (!snapRep.empty) {
+                const repDoc = snapRep.docs[0];
+                const rd = repDoc.data();
+                let vis = rd.visibility || 'public';
+                if (vis === 'active') vis = 'public';
+                resolvedRepertoire = {
+                  id: repDoc.id,
+                  ownerUid: rd.ownerUid,
+                  name: rd.name,
+                  slug: rd.slug || '',
+                  description: rd.description || '',
+                  type: rd.type || 'repertoire',
+                  trackIds: rd.trackIds || [],
+                  orderedTrackIds: rd.orderedTrackIds || rd.trackIds || [],
+                  visibility: vis,
+                  createdAt: rd.createdAt || new Date().toISOString(),
+                  updatedAt: rd.updatedAt || new Date().toISOString()
+                };
+              }
+            }
+          }
+
+          if (!resolvedRepertoire || resolvedRepertoire.visibility !== 'public') {
+            // Repertoire wasn't found or isn't public. DO NOT set a generic errorMsg.
+            // This allows the component to cleanly render the repertoireNotFoundOrPrivate state.
+            setRepertoires([]);
+            setIsLoading(false);
+            setIsInitialLoadDone(true);
+            return;
+          }
+
+          // Use matchingDoc.id (resolvedRepertoire.id) if the state was using a slug
+          if (selectedRepertoireId !== resolvedRepertoire.id) {
+            setSelectedRepertoireId(resolvedRepertoire.id);
+          }
+
+          setRepertoires([resolvedRepertoire]);
+
+          // 3. Fetch ONLY tracks/songs linked to this repertoire directly from Firestore
+          const allowedTrackIds = resolvedRepertoire.orderedTrackIds || resolvedRepertoire.trackIds || [];
+          let fetchedTracks: Track[] = [];
+
+          const qSongs = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
+          const snapSongs = await getDocs(qSongs);
+          snapSongs.forEach(songDoc => {
+            const sd = songDoc.data();
+            const trackId = songDoc.id;
+            const isLinked = allowedTrackIds.includes(trackId) || sd.repertoireId === resolvedRepertoire?.id;
+            
+            if (sd.status !== 'inactive' && isLinked) {
+              fetchedTracks.push({
+                trackId: trackId,
+                id: trackId,
+                title: sd.title || '',
+                artistId: sd.artistId || sd.ownerId || resolvedUserId,
+                artistName: sd.artistName || resolvedArtist?.name || '',
+                audioUrl: sd.audioUrl || sd.fileUrl || '',
+                coverUrl: sd.coverUrl || '',
+                lyrics: sd.lyrics || '',
+                status: sd.status || 'active',
+                genre: sd.genre || '',
+                duration: sd.duration || 0,
+                repertoireId: sd.repertoireId || '',
+                createdAt: sd.createdAt || '',
+                playsCount: sd.playsCount || sd.plays || 0,
+                plays: sd.plays || 0,
+                orderIndex: sd.orderIndex !== undefined ? sd.orderIndex : sd.position
+              } as Track);
+            }
+          });
+
+          // Sort the tracks by the orderedTrackIds list
+          const finalSortedTracks = fetchedTracks.sort((a, b) => {
+            const idxA = allowedTrackIds.indexOf(a.trackId);
+            const idxB = allowedTrackIds.indexOf(b.trackId);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return 0;
+          });
+
+          setAllTracks(finalSortedTracks);
+          setIsLoading(false);
+          setIsInitialLoadDone(true);
+
+          // Increment views in background
+          dbService.incrementAnalyticsView(resolvedUserId, true, false);
+          return;
+        }
+
+        // ORIGINAL LOADING FLOW FALLBACK (For non-repertoire profile links)
         const cachedArtist = dbService.getArtist(artistId);
         let hasCache = false;
         if (cachedArtist) {
@@ -202,7 +381,7 @@ export default function ArtistPublic({
           hasCache = true;
         }
 
-        // 2. Fetch and synchronize fresh data from Firestore
+        // Fetch and synchronize fresh data from Firestore
         await dbService.syncArtistData(artistId);
         let syncedArtist = dbService.getArtist(artistId);
 
@@ -232,7 +411,7 @@ export default function ArtistPublic({
           setErrorMsg("Catálogo não encontrado ou ainda sem músicas disponíveis.");
         }
 
-        // 3. Increment views in background
+        // Increment views in background
         const activeArtist = dbService.getArtist(artistId);
         if (activeArtist) {
           dbService.incrementAnalyticsView(activeArtist.userId, true, false);
@@ -507,6 +686,236 @@ export default function ArtistPublic({
     setActiveMenuTrackId(null);
   };
 
+  if (openedAsRepertoireOnly && artist && currentRepertoire) {
+    return (
+      <div className="min-h-screen bg-[#000000] text-zinc-100 font-sans pb-32 relative overflow-x-hidden flex flex-col items-center w-full">
+        {/* Background Decorative Radial */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[850px] bg-emerald-500/5 rounded-full blur-[180px] pointer-events-none z-0"></div>
+        
+        {/* Header with SomDrive Logo */}
+        <header className="w-full max-w-4xl px-4 py-6 flex items-center justify-between z-10 select-none">
+          <a 
+            href="https://www.somdrive.com.br" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="cursor-pointer hover:opacity-90 flex items-center"
+          >
+            <BrandLogo size="sm" scale={0.7} />
+          </a>
+          <span className="text-[10px] sm:text-xs font-mono font-bold tracking-widest text-[#8495b4] bg-[#181818] border border-zinc-900 px-3 py-1.5 rounded-lg uppercase">
+            CONTEÚDO REGISTRADO
+          </span>
+        </header>
+
+        {/* Main Content Card Container */}
+        <main className="w-full max-w-3xl px-4 py-8 z-10 flex flex-col gap-6 relative">
+          
+          {/* Main Folder/Repertoire Card (Dark Graphite #181818 with discrete Lime Green border) */}
+          <div className="w-full bg-[#181818] border border-[#84cc16]/20 rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-[0px_0px_30px_rgba(132,204,22,0.06)] select-none">
+            <div className="space-y-4 text-left flex-1 min-w-0">
+              <span className="inline-block bg-[#eab308]/15 border border-[#eab308]/35 text-yellow-400 text-[10px] md:text-xs font-extrabold font-mono tracking-widest px-3 py-1 rounded-full uppercase">
+                REPERTÓRIO
+              </span>
+              
+              <h1 className="text-white text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight break-words pr-2 leading-tight">
+                {currentRepertoire.name}
+              </h1>
+              
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[#84cc16] font-mono text-xs sm:text-sm font-bold">
+                <span>Compositor: {artist.name}</span>
+                <span className="text-zinc-750 select-none">•</span>
+                <span>{allTracks.length} {allTracks.length === 1 ? 'faixa' : 'faixas'}</span>
+              </div>
+            </div>
+
+            {/* Actions Block: Share + Play everything */}
+            <div className="flex flex-wrap items-center gap-3.5 shrink-0">
+              <button
+                onClick={(e) => {
+                  const appBaseUrl = window.location.origin;
+                  const artistSlug = artist.slug || artist.userId;
+                  const shareUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${currentRepertoire.slug || currentRepertoire.id}`;
+                  navigator.clipboard.writeText(shareUrl);
+                  setAlertText("Link da pasta copiado!");
+                  setCopiedLinkAlert(true);
+                  setTimeout(() => setCopiedLinkAlert(false), 2800);
+                }}
+                className="px-4.5 h-[44px] rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer font-mono text-[10.5px] uppercase font-extrabold tracking-wider select-none shrink-0"
+                title="Compartilhar pasta única"
+              >
+                <Share2 className="w-3.5 h-3.5 text-[#84cc16]" />
+                <span>Compartilhar Pasta</span>
+              </button>
+
+              {allTracks.length > 0 && (
+                <button
+                  onClick={() => {
+                    const isFirstPlayed = activeTrack?.trackId === allTracks[0].trackId;
+                    if (isFirstPlayed) {
+                      onPlayPause();
+                    } else {
+                      onSelectTrack(allTracks[0], allTracks);
+                    }
+                  }}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all scale-100 hover:scale-105 active:scale-95 cursor-pointer shrink-0 ${
+                    activeTrack && allTracks.some(t => t.trackId === activeTrack.trackId) && isPlaying
+                      ? 'bg-[#84cc16] border-[#84cc16] text-black shadow-[0_0_15px_rgba(132,204,22,0.35)] hover:bg-[#99e623]'
+                      : 'bg-white border-white text-black hover:bg-zinc-100'
+                  }`}
+                  title="Tocar tudo"
+                >
+                  {activeTrack && allTracks.some(t => t.trackId === activeTrack.trackId) && isPlaying ? (
+                    <Pause className="w-4 h-4 text-black fill-black" />
+                  ) : (
+                    <Play className="w-4 h-4 text-black fill-black ml-0.5" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Section: Title of Tracks list */}
+          <div className="flex items-center justify-between mt-4 border-b border-zinc-900 pb-2 select-none">
+            <h2 className="text-[12px] font-mono font-black tracking-widest text-[#8495b4] uppercase">
+              MÚSICAS DESTE REPERTÓRIO
+            </h2>
+            <span className="text-xs text-zinc-500 font-mono">Total de faixas: {allTracks.length}</span>
+          </div>
+
+          {/* Tracks List Container */}
+          {allTracks.length === 0 ? (
+            <div className="p-12 bg-[#181818] border border-dashed border-zinc-900 rounded-2xl text-center text-zinc-500 text-xs font-mono">
+              Nenhuma música ativa foi vinculada a esta pasta.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3.5 w-full">
+              {allTracks.map((track, idx) => {
+                const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
+                const isActiveAndPlaying = isCurrentlyPlaying && isPlaying;
+                const lyricsOpen = expandedLyricsTrackId === track.trackId;
+
+                return (
+                  <div 
+                    key={track.trackId} 
+                    className={`flex flex-col border rounded-xl transition-all ${
+                      isCurrentlyPlaying 
+                        ? 'bg-[#222222] border-[#84cc16]/40 shadow-[0_0_15px_rgba(132,204,22,0.04)]' 
+                        : 'bg-[#121212] border-zinc-900/80 hover:border-zinc-800 hover:bg-[#161616]'
+                    }`}
+                  >
+                    {/* Track Header row */}
+                    <div 
+                      onClick={() => {
+                        if (isCurrentlyPlaying) {
+                          onPlayPause();
+                        } else {
+                          onSelectTrack(track, allTracks);
+                        }
+                      }}
+                      className={`flex items-center justify-between gap-4 p-4.5 cursor-pointer select-none transition-all rounded-xl ${isCurrentlyPlaying ? 'bg-zinc-950/20' : 'hover:bg-zinc-950/10'}`}
+                    >
+                      {/* Play Action + Title Block */}
+                      <div className="flex items-center gap-4 min-w-0">
+                        {/* Play button with dynamic contrast color (White when paused/stopped, Green when active/playing) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isCurrentlyPlaying) {
+                              onPlayPause();
+                            } else {
+                              onSelectTrack(track, allTracks);
+                            }
+                          }}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer outline-none shrink-0 ${
+                            isActiveAndPlaying
+                              ? 'bg-[#84cc16] border-[#84cc16] text-black hover:bg-[#99e623]'
+                              : 'bg-white border-white text-black hover:bg-zinc-100'
+                          }`}
+                        >
+                          {isActiveAndPlaying ? (
+                            <Pause className="w-4 h-4 text-black fill-black" />
+                          ) : (
+                            <Play className="w-4 h-4 text-black fill-black ml-0.5" />
+                          )}
+                        </button>
+
+                        <div className="min-w-0 text-left">
+                          <h4 className={`text-base font-extrabold uppercase truncate tracking-wide ${isCurrentlyPlaying ? 'text-[#84cc16]' : 'text-zinc-100'}`}>
+                            {track.title}
+                          </h4>
+                          {track.composer && (
+                            <p className="text-xs text-zinc-500 font-mono uppercase mt-0.5 truncate">
+                              Autor / Compositor: {track.composer}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action buttons (Letras, Carro) */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Letra toggler */}
+                        {track.lyrics && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedLyricsTrackId(lyricsOpen ? null : track.trackId);
+                            }}
+                            className={`px-3 py-1.5 border rounded-lg text-[10px] font-mono uppercase font-bold tracking-wider transition-all cursor-pointer ${
+                              lyricsOpen
+                                ? 'bg-[#84cc16]/10 border-[#84cc16] text-[#84cc16]'
+                                : 'bg-zinc-905 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                            }`}
+                            title="Ver Letra"
+                          >
+                            Letra
+                          </button>
+                        )}
+
+                        {/* Modo Carro toggler */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectTrack(track, allTracks);
+                            setCarMode(true);
+                          }}
+                          className="px-3 py-1.5 bg-zinc-905 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 rounded-lg text-[10px] font-mono uppercase font-bold tracking-wider transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                          title="Modo Carro"
+                        >
+                          <Car className="w-3.5 h-3.5 text-zinc-500" />
+                          <span className="hidden sm:inline">Carro</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inline Expandable lyrics panel inside track block */}
+                    {track.lyrics && lyricsOpen && (
+                      <div className="px-5 pb-5 pt-3 border-t border-zinc-900 bg-zinc-950/40 text-left select-text rounded-b-xl">
+                        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2 mb-3">
+                          <span className="text-[10px] font-mono tracking-widest text-[#eab308] font-extrabold uppercase">
+                            Letra Completa
+                          </span>
+                          <button 
+                            onClick={() => setExpandedLyricsTrackId(null)}
+                            className="text-[9px] text-zinc-500 hover:text-white transition font-mono tracking-wider font-bold uppercase cursor-pointer"
+                          >
+                            Fechar ✕
+                          </button>
+                        </div>
+                        <p className="text-zinc-300 font-sans text-sm leading-relaxed whitespace-pre-wrap select-text">
+                          {track.lyrics}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#111625] text-zinc-100 font-sans pb-32 relative overflow-hidden flex w-full">
       
@@ -642,117 +1051,129 @@ export default function ArtistPublic({
               </div>
             </div>
 
-            {/* Action Buttons pills matching image reference */}
-            <div className="space-y-2.5 w-full mt-4 sm:mt-5">
-              {/* Grid 2 Columns for main action pills */}
-              <div className="grid grid-cols-2 gap-2">
-                {/* Secondary Gray Ouvir Artista */}
-                {allTracks.length > 0 ? (
-                  <button 
-                    onClick={() => onSelectTrack(allTracks[0], allTracks)}
-                    className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10px] sm:text-[10.5px] font-heading font-black uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
-                  >
-                    <Play className="w-3 h-3 fill-current stroke-[2]" />
-                    <span>OUVIR</span>
-                  </button>
-                ) : (
-                  <button 
-                    disabled
-                    className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 text-zinc-650 rounded-xl text-[10.5px] font-mono uppercase tracking-wider select-none shrink-0"
-                  >
-                    Indisponível
-                  </button>
-                )}
-
-                {/* Secondary Gray Contact block */}
-                <button 
-                  onClick={handleSpeakWithArtist}
-                  className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-zinc-700/60 hover:border-zinc-500 text-zinc-200 hover:text-white rounded-xl text-[10px] sm:text-[10.5px] font-heading font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
-                >
-                  <Mail className="w-3 h-3 text-zinc-400 shrink-0" />
-                  <span>CONTATO</span>
-                </button>
-              </div>
-
-              {/* Extra social horizontal bar containing Share profile, Insta, WhatsApp */}
-              <div className="grid grid-cols-5 gap-1.5 pt-0.5">
-                <button 
-                  onClick={handleCopyLinkDissemination}
-                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-amber-500/25 hover:border-amber-500/50 rounded-xl text-yellow-400 hover:text-yellow-350 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
-                  title="Copiar Link de Divulgação"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-
-                <button 
-                  onClick={handleInstagramShare}
-                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-zinc-700/50 hover:border-zinc-550 rounded-xl text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center"
-                  title="Acessar Instagram"
-                >
-                  <Instagram className="w-3.5 h-3.5" />
-                </button>
-
-                <button 
-                  onClick={handleShareWhatsApp}
-                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl text-emerald-400 hover:text-[#00e676] transition-all cursor-pointer active:scale-95 flex items-center justify-center"
-                  title="Enviar por WhatsApp"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                </button>
-
-                <button 
-                  onClick={handleGeneralProfileShare}
-                  className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-cyan-500/25 hover:border-cyan-500/50 rounded-xl text-cyan-400 hover:text-cyan-300 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
-                  title="Compartilhar Perfil"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                </button>
-
-                <div className="relative h-full">
-                  <button 
-                    onClick={() => setActiveProfileMenu(!activeProfileMenu)}
-                    className={`h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border rounded-xl text-zinc-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center w-full ${activeProfileMenu ? 'border-yellow-500' : 'border-zinc-700/50 hover:border-zinc-650'}`}
-                  >
-                    <MoreVertical className="w-3.5 h-3.5" />
-                  </button>
-
-                  {activeProfileMenu && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setActiveProfileMenu(false)} />
-                      <div className="absolute right-0 bottom-full mb-2 w-48 bg-[#0a0f1d] border border-[#1b2a47] rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.5)] py-2 z-50 text-left">
-                        <button
-                          onClick={() => {
-                            handleCopyLinkDissemination();
-                            setActiveProfileMenu(false);
-                          }}
-                          className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
-                        >
-                          <Copy className="w-3.5 h-3.5" /> Copiar link do perfil
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleShareWhatsApp();
-                            setActiveProfileMenu(false);
-                          }}
-                          className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
-                        >
-                          <Share2 className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowEmbedModal('profile');
-                            setActiveProfileMenu(false);
-                          }}
-                          className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
-                        >
-                          <Code className="w-3.5 h-3.5 text-yellow-500" /> Incorporar perfil
-                        </button>
-                      </div>
-                    </>
+            {!selectedRepertoireId ? (
+              /* Action Buttons pills matching image reference */
+              <div className="space-y-2.5 w-full mt-4 sm:mt-5">
+                {/* Grid 2 Columns for main action pills */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Secondary Gray Ouvir Artista */}
+                  {allTracks.length > 0 ? (
+                    <button 
+                      onClick={() => onSelectTrack(allTracks[0], allTracks)}
+                      className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10px] sm:text-[10.5px] font-heading font-black uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                    >
+                      <Play className="w-3 h-3 fill-current stroke-[2]" />
+                      <span>OUVIR</span>
+                    </button>
+                  ) : (
+                    <button 
+                      disabled
+                      className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 text-zinc-650 rounded-xl text-[10.5px] font-mono uppercase tracking-wider select-none shrink-0"
+                    >
+                      Indisponível
+                    </button>
                   )}
+
+                  {/* Secondary Gray Contact block */}
+                  <button 
+                    onClick={handleSpeakWithArtist}
+                    className="w-full h-[38px] flex items-center justify-center gap-1.5 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-zinc-700/60 hover:border-zinc-500 text-zinc-200 hover:text-white rounded-xl text-[10px] sm:text-[10.5px] font-heading font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                  >
+                    <Mail className="w-3 h-3 text-zinc-400 shrink-0" />
+                    <span>CONTATO</span>
+                  </button>
+                </div>
+
+                {/* Extra social horizontal bar containing Share profile, Insta, WhatsApp */}
+                <div className="grid grid-cols-5 gap-1.5 pt-0.5">
+                  <button 
+                    onClick={handleCopyLinkDissemination}
+                    className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-amber-500/25 hover:border-amber-500/50 rounded-xl text-yellow-400 hover:text-yellow-350 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
+                    title="Copiar Link de Divulgação"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button 
+                    onClick={handleInstagramShare}
+                    className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-zinc-700/50 hover:border-zinc-550 rounded-xl text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center"
+                    title="Acessar Instagram"
+                  >
+                    <Instagram className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button 
+                    onClick={handleShareWhatsApp}
+                    className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-emerald-500/25 hover:border-emerald-500/50 rounded-xl text-emerald-400 hover:text-[#00e676] transition-all cursor-pointer active:scale-95 flex items-center justify-center"
+                    title="Enviar por WhatsApp"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button 
+                    onClick={handleGeneralProfileShare}
+                    className="h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border border-cyan-500/25 hover:border-cyan-500/50 rounded-xl text-cyan-400 hover:text-cyan-300 transition-all cursor-pointer active:scale-95 flex items-center justify-center"
+                    title="Compartilhar Perfil"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="relative h-full">
+                    <button 
+                      onClick={() => setActiveProfileMenu(!activeProfileMenu)}
+                      className={`h-[38px] bg-[#141b2e]/90 hover:bg-[#1a233d] border rounded-xl text-zinc-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center w-full ${activeProfileMenu ? 'border-yellow-500' : 'border-zinc-700/50 hover:border-zinc-650'}`}
+                    >
+                      <MoreVertical className="w-3.5 h-3.5" />
+                    </button>
+
+                    {activeProfileMenu && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setActiveProfileMenu(false)} />
+                        <div className="absolute right-0 bottom-full mb-2 w-48 bg-[#0a0f1d] border border-[#1b2a47] rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.5)] py-2 z-50 text-left">
+                          <button
+                            onClick={() => {
+                              handleCopyLinkDissemination();
+                              setActiveProfileMenu(false);
+                            }}
+                            className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Copiar link do perfil
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleShareWhatsApp();
+                              setActiveProfileMenu(false);
+                            }}
+                            className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                          >
+                            <Share2 className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowEmbedModal('profile');
+                              setActiveProfileMenu(false);
+                            }}
+                            className="w-full px-4 py-2 hover:bg-[#111e3b] text-zinc-300 text-[10.5px] font-mono uppercase tracking-wider flex items-center gap-2"
+                          >
+                            <Code className="w-3.5 h-3.5 text-yellow-500" /> Incorporar perfil
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="w-full mt-4 sm:mt-5 text-left">
+                <button
+                  onClick={clearSharedContext}
+                  className="w-full h-[38px] flex items-center justify-center gap-2 bg-[#141b2e]/90 hover:bg-[#1a233d] border border-yellow-500/25 hover:border-yellow-500/50 text-yellow-500 hover:text-yellow-400 rounded-xl text-[10px] sm:text-[10.5px] font-heading font-black uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>VER PERFIL COMPLETO</span>
+                </button>
+              </div>
+            )}
 
           </div>
         </section>
@@ -824,7 +1245,7 @@ export default function ArtistPublic({
                       onClick={() => setSelectedRepertoireId(rep.id)}
                       className={`min-w-[195px] sm:min-w-[215px] p-[1.5px] bg-gradient-to-br ${isRepActive ? neonGradients[idx % neonGradients.length] + ' ' + glowShadows[idx % glowShadows.length] : 'from-zinc-850 to-zinc-900/60 hover:from-zinc-700 hover:to-zinc-800'} rounded-2xl flex flex-col h-[162px] cursor-pointer transition-all relative group overflow-hidden active:scale-97 select-none`}
                     >
-                      <div className="w-full h-full p-4 bg-[#141b2d] rounded-[14px] flex flex-col justify-between relative z-10">
+                      <div className={`w-full h-full p-4 rounded-[14px] flex flex-col justify-between relative z-10 transition-colors duration-250 ${isRepActive ? 'bg-[#212f4d] border border-[#00e676]/20' : 'bg-[#1a253e] hover:bg-[#1e2c4a] border border-[#273554]/30'}`}>
                         {/* Ambient shine in card with neon values */}
                         <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${isRepActive ? 'from-emerald-500/12' : 'from-zinc-700/5'} to-transparent rounded-full pointer-events-none`}></div>
 

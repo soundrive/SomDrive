@@ -2144,11 +2144,12 @@ export const dbService = {
 
   async getRepertoireBySlugOrId(ownerUid: string, slugOrId: string): Promise<Repertoire | null> {
     try {
-      // 1. Try slug query first
+      // 1. Try slug query first (explicitly query 'public' visibility so public readers have read access via security rules)
       const q = query(
         collection(db, 'repertoires'),
         where('ownerUid', '==', ownerUid),
-        where('slug', '==', slugOrId)
+        where('slug', '==', slugOrId),
+        where('visibility', '==', 'public')
       );
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -2171,27 +2172,29 @@ export const dbService = {
         } as Repertoire;
       }
 
-      // 2. Fallback to direct document ID check
-      const docRef = doc(db, 'repertoires', slugOrId);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.ownerUid === ownerUid) {
-          let visibilityVal = data.visibility || 'public';
-          if (visibilityVal === 'active') visibilityVal = 'public';
-          return {
-            id: docSnap.id,
-            ownerUid: data.ownerUid,
-            name: data.name,
-            slug: data.slug || '',
-            description: data.description || '',
-            type: data.type || 'repertoire',
-            trackIds: data.trackIds || [],
-            orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-            visibility: visibilityVal,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: data.updatedAt || new Date().toISOString()
-          } as Repertoire;
+      // 2. Fallback to direct document ID check ONLY if it is a structured ID (starts with rep_)
+      if (slugOrId.startsWith('rep_')) {
+        const docRef = doc(db, 'repertoires', slugOrId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.ownerUid === ownerUid) {
+            let visibilityVal = data.visibility || 'public';
+            if (visibilityVal === 'active') visibilityVal = 'public';
+            return {
+              id: docSnap.id,
+              ownerUid: data.ownerUid,
+              name: data.name,
+              slug: data.slug || '',
+              description: data.description || '',
+              type: data.type || 'repertoire',
+              trackIds: data.trackIds || [],
+              orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+              visibility: visibilityVal,
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt || new Date().toISOString()
+            } as Repertoire;
+          }
         }
       }
     } catch (err) {

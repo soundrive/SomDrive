@@ -241,6 +241,7 @@ export default function Player({
   onNavigate,
   onSelectTrack
 }: PlayerProps) {
+  const isSharedFolderView = typeof window !== 'undefined' && window.location.pathname.includes('/repertorio/');
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
@@ -881,7 +882,7 @@ export default function Player({
                     onClick={() => setIsMobileExpanded(false)}
                     className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-[#00e676] hover:text-white transition font-mono text-[10px] tracking-wider font-extrabold uppercase rounded-lg cursor-pointer select-none active:scale-95"
                   >
-                    RECOLHER ✕
+                    {isSharedFolderView ? 'RECOLHER' : 'RECOLHER ✕'}
                   </button>
                 </div>
 
@@ -905,21 +906,23 @@ export default function Player({
 
                     <div 
                       onClick={() => {
-                        if (onNavigate && currentTrack?.artistId) {
+                        if (!isSharedFolderView && onNavigate && currentTrack?.artistId) {
                           onNavigate('public', { id: currentTrack.artistId });
                         }
                       }}
-                      className="min-w-0 text-left cursor-pointer group/mobile-meta active:scale-97 transition-all"
-                      title="Clique para voltar ao perfil do compositor"
+                      className={`min-w-0 text-left ${isSharedFolderView ? 'cursor-default' : 'cursor-pointer group/mobile-meta active:scale-97 transition-all'}`}
+                      title={isSharedFolderView ? "" : "Clique para voltar ao perfil do compositor"}
                     >
-                      <h4 id="player-track-title-mobile" className="font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none group-hover/mobile-meta:text-[#d4af37]">
+                      <h4 id="player-track-title-mobile" className={`font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none ${isSharedFolderView ? '' : 'group-hover/mobile-meta:text-[#d4af37]'}`}>
                         {currentTrack.title}
                       </h4>
                       <p id="player-track-artist-mobile" className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
                         {currentTrack.singer || "STARNEJO"}
-                        <span className="text-[7.5px] font-sans font-black text-[#d4af37] whitespace-nowrap bg-amber-500/10 border border-amber-500/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
-                          VOLTAR 📁
-                        </span>
+                        {!isSharedFolderView && (
+                          <span className="text-[7.5px] font-sans font-black text-[#d4af37] whitespace-nowrap bg-amber-500/10 border border-amber-500/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
+                            VOLTAR 📁
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1051,15 +1054,15 @@ export default function Player({
 
             <div 
               onClick={() => {
-                if (onNavigate && currentTrack?.artistId) {
+                if (!isSharedFolderView && onNavigate && currentTrack?.artistId) {
                   onNavigate('public', { id: currentTrack.artistId });
                 }
               }}
-              className="min-w-0 flex-1 text-left cursor-pointer group/desktop-meta select-none"
-              title="Clique para voltar ao perfil do compositor"
+              className={`min-w-0 flex-1 text-left ${isSharedFolderView ? 'cursor-default' : 'cursor-pointer group/desktop-meta select-none'}`}
+              title={isSharedFolderView ? "" : "Clique para voltar ao perfil do compositor"}
             >
               <div className="flex items-center gap-2.5">
-                <h4 id="player-track-title" className="font-heading font-extrabold text-sm sm:text-base tracking-tight text-zinc-100 uppercase truncate leading-none group-hover/desktop-meta:text-[#d4af37]">
+                <h4 id="player-track-title" className={`font-heading font-extrabold text-sm sm:text-base tracking-tight text-zinc-100 uppercase truncate leading-none ${isSharedFolderView ? '' : 'group-hover/desktop-meta:text-[#d4af37]'}`}>
                   {currentTrack.title}
                 </h4>
                 
@@ -1078,9 +1081,11 @@ export default function Player({
               
               <p id="player-track-artist" className="text-[10px] sm:text-xs text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-2">
                 {currentTrack.singer || "STARNEJO"}
-                <span className="text-[8px] font-sans font-bold text-zinc-400 border border-zinc-800 rounded-full px-2 py-0.5 bg-zinc-950 group-hover/desktop-meta:border-[#d4af37]/45 group-hover/desktop-meta:text-[#d4af37] transition-all whitespace-nowrap leading-none">
-                  VER COMPOSITOR 📁
-                </span>
+                {!isSharedFolderView && (
+                  <span className="text-[8px] font-sans font-bold text-zinc-400 border border-zinc-800 rounded-full px-2 py-0.5 bg-zinc-950 group-hover/desktop-meta:border-[#d4af37]/45 group-hover/desktop-meta:text-[#d4af37] transition-all whitespace-nowrap leading-none">
+                    VER COMPOSITOR 📁
+                  </span>
+                )}
               </p>
             </div>
           </div>
