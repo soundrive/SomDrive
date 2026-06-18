@@ -15,7 +15,7 @@ export interface Artist {
   instagram?: string;
   email: string;
   bio?: string;
-  plan: 'free' | 'pro' | 'premium';
+  plan: 'free' | 'essencial' | 'pro' | 'premium';
   subscriptionDate?: string;
   subscriptionStatus?: 'ativo' | 'pendente' | 'cancelado';
   createdAt: string;

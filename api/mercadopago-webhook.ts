@@ -341,31 +341,41 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
     } else {
       planKey = 'premium_mensal';
     }
-  } else {
+  } else if (planKey.includes('pro')) {
     if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
       planKey = 'pro_anual';
     } else {
       planKey = 'pro_mensal';
     }
+  } else {
+    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
+      planKey = 'essencial_anual';
+    } else {
+      planKey = 'essencial_mensal';
+    }
   }
 
   const PLANS_MAP: Record<string, {
-    plan: 'PRO' | 'PREMIUM';
+    plan: 'essencial' | 'pro' | 'premium';
     musicLimit: number;
     durationDays: number;
     billingCycle: 'monthly' | 'annual';
   }> = {
-    pro_mensal: { plan: 'PRO', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
-    premium_mensal: { plan: 'PREMIUM', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
-    pro_anual: { plan: 'PRO', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
-    premium_anual: { plan: 'PREMIUM', musicLimit: 50, durationDays: 365, billingCycle: 'annual' },
-    pro_monthly: { plan: 'PRO', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
-    premium_monthly: { plan: 'PREMIUM', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
-    pro_yearly: { plan: 'PRO', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
-    premium_yearly: { plan: 'PREMIUM', musicLimit: 50, durationDays: 365, billingCycle: 'annual' }
+    essencial_mensal: { plan: 'essencial', musicLimit: 10, durationDays: 30, billingCycle: 'monthly' },
+    essencial_anual: { plan: 'essencial', musicLimit: 10, durationDays: 365, billingCycle: 'annual' },
+    essencial_monthly: { plan: 'essencial', musicLimit: 10, durationDays: 30, billingCycle: 'monthly' },
+    essencial_yearly: { plan: 'essencial', musicLimit: 10, durationDays: 365, billingCycle: 'annual' },
+    pro_mensal: { plan: 'pro', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
+    premium_mensal: { plan: 'premium', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
+    pro_anual: { plan: 'pro', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
+    premium_anual: { plan: 'premium', musicLimit: 50, durationDays: 365, billingCycle: 'annual' },
+    pro_monthly: { plan: 'pro', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
+    premium_monthly: { plan: 'premium', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
+    pro_yearly: { plan: 'pro', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
+    premium_yearly: { plan: 'premium', musicLimit: 50, durationDays: 365, billingCycle: 'annual' }
   };
 
-  let finalPlan: 'PRO' | 'PREMIUM' = 'PRO';
+  let finalPlan: 'essencial' | 'pro' | 'premium' = 'pro';
   let musicLimit = 15;
   let durationDays = 30;
   let billingCycle = 'monthly';
@@ -379,8 +389,14 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
   } else {
     const dLower = description.toLowerCase();
     if (dLower.includes('premium')) {
-      finalPlan = 'PREMIUM';
+      finalPlan = 'premium';
       musicLimit = 50;
+    } else if (dLower.includes('pro')) {
+      finalPlan = 'pro';
+      musicLimit = 15;
+    } else if (dLower.includes('essencial') || dLower.includes('essential')) {
+      finalPlan = 'essencial';
+      musicLimit = 10;
     }
     if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('yearly') || dLower.includes('ano')) {
       billingCycle = 'annual';
@@ -397,7 +413,7 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
     expires.setDate(now.getDate() + durationDays);
 
     const updatePayload = {
-      plan: finalPlan, // "PRO" or "PREMIUM"
+      plan: finalPlan, // "essencial", "pro" or "premium"
       musicLimit: musicLimit,
       billingCycle: billingCycle,
       subscriptionStatus: "active",
@@ -419,8 +435,8 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
   } else if (status === 'refunded' && resolvedUid) {
     // Revert user/artist to FREE tier if the payment has been refunded
     const updatePayload = {
-      plan: "FREE",
-      musicLimit: 5,
+      plan: "free",
+      musicLimit: 3,
       subscriptionStatus: "refunded",
       planStatus: "refunded",
       paymentStatus: "refunded",
@@ -590,27 +606,35 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
     } else {
       planKey = 'premium_mensal';
     }
-  } else {
+  } else if (planKey.includes('pro')) {
     if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
       planKey = 'pro_anual';
     } else {
       planKey = 'pro_mensal';
     }
+  } else {
+    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
+      planKey = 'essencial_anual';
+    } else {
+      planKey = 'essencial_mensal';
+    }
   }
 
   const PLANS_MAP: Record<string, {
-    plan: 'PRO' | 'PREMIUM';
+    plan: 'essencial' | 'pro' | 'premium';
     musicLimit: number;
     durationDays: number;
     billingCycle: 'monthly' | 'annual';
   }> = {
-    pro_mensal: { plan: 'PRO', musicLimit: 15, durationDays: 31, billingCycle: 'monthly' },
-    premium_mensal: { plan: 'PREMIUM', musicLimit: 50, durationDays: 31, billingCycle: 'monthly' },
-    pro_anual: { plan: 'PRO', musicLimit: 15, durationDays: 366, billingCycle: 'annual' },
-    premium_anual: { plan: 'PREMIUM', musicLimit: 50, durationDays: 366, billingCycle: 'annual' },
+    essencial_mensal: { plan: 'essencial', musicLimit: 10, durationDays: 31, billingCycle: 'monthly' },
+    essencial_anual: { plan: 'essencial', musicLimit: 10, durationDays: 366, billingCycle: 'annual' },
+    pro_mensal: { plan: 'pro', musicLimit: 15, durationDays: 31, billingCycle: 'monthly' },
+    premium_mensal: { plan: 'premium', musicLimit: 50, durationDays: 31, billingCycle: 'monthly' },
+    pro_anual: { plan: 'pro', musicLimit: 15, durationDays: 366, billingCycle: 'annual' },
+    premium_anual: { plan: 'premium', musicLimit: 50, durationDays: 366, billingCycle: 'annual' },
   };
 
-  let finalPlan: 'PRO' | 'PREMIUM' = 'PRO';
+  let finalPlan: 'essencial' | 'pro' | 'premium' = 'pro';
   let musicLimit = 15;
   let durationDays = 31;
   let billingCycle = 'monthly';
@@ -624,8 +648,14 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
   } else {
     const dLower = description.toLowerCase();
     if (dLower.includes('premium')) {
-      finalPlan = 'PREMIUM';
+      finalPlan = 'premium';
       musicLimit = 50;
+    } else if (dLower.includes('pro')) {
+      finalPlan = 'pro';
+      musicLimit = 15;
+    } else if (dLower.includes('essencial') || dLower.includes('essential')) {
+      finalPlan = 'essencial';
+      musicLimit = 10;
     }
     if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('yearly') || dLower.includes('ano')) {
       billingCycle = 'annual';
@@ -1200,14 +1230,20 @@ export default async function handler(req: any, res: any) {
       if (userDocId) {
         const forcePlan = req.body?.forcePlan; // e.g. pro_mensal, premium_mensal, pro_anual, premium_anual
         if (forcePlan) {
-          let finalPlan: 'PRO' | 'PREMIUM' = 'PRO';
+          let finalPlan: 'essencial' | 'pro' | 'premium' = 'pro';
           let musicLimit = 15;
           let durationDays = 31;
           let billingCycle = 'monthly';
           
           if (String(forcePlan).includes('premium')) {
-            finalPlan = 'PREMIUM';
+            finalPlan = 'premium';
             musicLimit = 50;
+          } else if (String(forcePlan).includes('essencial')) {
+            finalPlan = 'essencial';
+            musicLimit = 10;
+          } else {
+            finalPlan = 'pro';
+            musicLimit = 15;
           }
           if (String(forcePlan).includes('anual')) {
             billingCycle = 'annual';
@@ -1253,7 +1289,7 @@ export default async function handler(req: any, res: any) {
             subscriptionId: "",
             transactionNumber: "MANUAL_BY_ADMIN",
             musicLimit: musicLimit,
-            amount: finalPlan === 'PREMIUM' ? 39.90 : 19.90,
+            amount: finalPlan === 'premium' ? 29.99 : (finalPlan === 'pro' ? 14.99 : (finalPlan === 'essencial' ? 9.99 : 0)),
             externalReference: "MANUAL_OVERRIDE_BY_ADMIN",
             processedAt: new Date().toISOString(),
             planActivated: true,

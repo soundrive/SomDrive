@@ -42,28 +42,36 @@ export default async function handler(req: any, res: any) {
       title: string;
       unit_price: number;
     }> = {
+      essencial_mensal: {
+        title: "SomDrive - Essencial Mensal",
+        unit_price: 9.99
+      },
+      essencial_anual: {
+        title: "SomDrive - Essencial Anual",
+        unit_price: 99.90
+      },
       pro_mensal: {
         title: "SomDrive - Pro Mensal",
-        unit_price: 19.90
+        unit_price: 14.99
       },
       premium_mensal: {
         title: "SomDrive - Premium Mensal",
-        unit_price: 39.90
+        unit_price: 29.99
       },
       pro_anual: {
         title: "SomDrive - Pro Anual",
-        unit_price: 199.00
+        unit_price: 149.90
       },
       premium_anual: {
         title: "SomDrive - Premium Anual",
-        unit_price: 399.00
+        unit_price: 299.90
       }
     };
 
     const planConfig = PLANS_MAP[planCode];
     if (!planConfig) {
       return res.status(400).json({ 
-        error: `Plano '${planCode}' inválido. Escolha entre: pro_mensal, premium_mensal, pro_anual, premium_anual.` 
+        error: `Plano '${planCode}' inválido. Escolha entre: essencial_mensal, essencial_anual, pro_mensal, premium_mensal, pro_anual, premium_anual.` 
       });
     }
 

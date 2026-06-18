@@ -92,7 +92,7 @@ export default function AdminArea({
 
   // Edit Subscription form states
   const [editSubEmail, setEditSubEmail] = useState('');
-  const [editSubPlan, setEditSubPlan] = useState<'free' | 'pro' | 'premium'>('pro');
+  const [editSubPlan, setEditSubPlan] = useState<'free' | 'essencial' | 'pro' | 'premium'>('pro');
   const [editSubCycle, setEditSubCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [editSubStatus, setEditSubStatus] = useState('authorized');
   const [editSubUserId, setEditSubUserId] = useState('');
@@ -564,7 +564,7 @@ export default function AdminArea({
     }
 
     try {
-      const limit = editSubPlan === 'premium' ? 50 : (editSubPlan === 'pro' ? 15 : 5);
+      const limit = editSubPlan === 'premium' ? 50 : (editSubPlan === 'pro' ? 15 : (editSubPlan === 'essencial' ? 10 : 3));
       const isNowActive = editSubStatus === 'authorized' || editSubStatus === 'approved' || editSubStatus === 'active';
       const actualPlan = isNowActive ? editSubPlan : 'free';
       const actualLimit = isNowActive ? limit : 5;
@@ -685,7 +685,7 @@ export default function AdminArea({
       // Calculate custom limit based on plan default if not modified
       let finalLimit = selectedUser.musicLimit;
       if (finalLimit === undefined) {
-        finalLimit = selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'pro' ? 15 : 50);
+        finalLimit = selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50));
       }
 
       const updatedFields: Partial<Artist> = {
@@ -1168,7 +1168,7 @@ export default function AdminArea({
                         {filteredUsers.map((user, idx) => {
                           const isBlocked = user.isBlocked || false;
                           const songsCount = dbService.getArtistMusics(user.userId).length;
-                          const limit = user.musicLimit !== undefined ? user.musicLimit : (user.plan === 'free' ? 3 : (user.plan === 'pro' ? 15 : 50));
+                          const limit = user.musicLimit !== undefined ? user.musicLimit : (user.plan === 'free' ? 3 : (user.plan === 'essencial' ? 10 : (user.plan === 'pro' ? 15 : 50)));
                           
                           return (
                             <tr key={user.userId || `user-row-${idx}`} className="hover:bg-slate-850/30 transition">
@@ -1333,8 +1333,8 @@ export default function AdminArea({
                     <select
                       value={selectedUser.plan}
                       onChange={(e) => {
-                        const nextPlan = e.target.value as 'free' | 'pro' | 'premium';
-                        const standardLimit = nextPlan === 'free' ? 3 : (nextPlan === 'pro' ? 15 : 50);
+                        const nextPlan = e.target.value as 'free' | 'essencial' | 'pro' | 'premium';
+                        const standardLimit = nextPlan === 'free' ? 3 : (nextPlan === 'essencial' ? 10 : (nextPlan === 'pro' ? 15 : 50));
                         setSelectedUser({
                           ...selectedUser,
                           plan: nextPlan,
@@ -1344,6 +1344,7 @@ export default function AdminArea({
                       className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
                     >
                       <option value="free">Free (Grátis)</option>
+                      <option value="essencial">Essencial (Básico)</option>
                       <option value="pro">Pro (Intermediário)</option>
                       <option value="premium">Premium (Completo)</option>
                     </select>
@@ -2577,6 +2578,7 @@ export default function AdminArea({
                             onChange={(e: any) => setEditSubPlan(e.target.value)}
                             className="w-full px-3 py-2 bg-slate-955 border border-slate-850 hover:border-slate-750 focus:border-orange-500 outline-none rounded-xl text-xs text-white"
                           >
+                            <option value="essencial">Essencial (10 músicas)</option>
                             <option value="pro">Pro (15 músicas)</option>
                             <option value="premium">Premium (50 músicas)</option>
                             <option value="free">Free (3 músicas)</option>

@@ -565,9 +565,11 @@ export default function Dashboard({
     });
   }, [currentUser]);
 
-  const getPlanTracksLimit = (plan: 'free' | 'pro' | 'premium') => {
-    if (plan === 'pro') return 15;
-    if (plan === 'premium') return 50;
+  const getPlanTracksLimit = (plan: string) => {
+    const pLower = (plan || 'free').toLowerCase();
+    if (pLower === 'essencial') return 10;
+    if (pLower === 'pro') return 15;
+    if (pLower === 'premium') return 50;
     return profile.musicLimit || 3;
   };
   const limitCount = getPlanTracksLimit(profile.plan);
@@ -1454,9 +1456,9 @@ export default function Dashboard({
             className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition cursor-pointer select-none group"
             title="Ver planos e limites"
           >
-            <span className={`w-2 h-2 rounded-full ${profile.plan === 'premium' ? 'bg-yellow-500 animate-pulse' : profile.plan === 'pro' ? 'bg-orange-500 animate-pulse' : 'bg-slate-500'}`}></span>
+            <span className={`w-2 h-2 rounded-full ${profile.plan === 'premium' ? 'bg-yellow-500 animate-pulse' : profile.plan === 'pro' ? 'bg-orange-500 animate-pulse' : profile.plan === 'essencial' ? 'bg-blue-500' : 'bg-slate-500'}`}></span>
             <span className="text-[10px] font-mono font-bold uppercase text-slate-300 group-hover:text-white">
-              Plano: {profile.plan === 'premium' ? 'Premium 🌟' : profile.plan === 'pro' ? 'Pro ⭐' : 'Free'}
+              Plano: {profile.plan === 'premium' ? 'Premium 🌟' : profile.plan === 'pro' ? 'Pro ⭐' : profile.plan === 'essencial' ? 'Essencial' : 'Free'}
             </span>
           </button>
 
@@ -1692,11 +1694,13 @@ export default function Dashboard({
             <h4 className="font-heading font-black text-lg text-orange-400 uppercase tracking-wide flex items-center gap-1.5 group-hover:text-amber-300 transition">
               <Sparkles className="w-5 h-5 text-orange-400 animate-pulse" /> 
               {profile.plan === 'free' && 'Você está no SomDrive Free (3 Músicas)'}
+              {profile.plan === 'essencial' && 'Você está no SomDrive Essencial (10 Músicas)'}
               {profile.plan === 'pro' && 'Você está no SomDrive Pro (15 Músicas)'}
               {profile.plan === 'premium' && 'Você está no SomDrive Premium (50 Músicas)'}
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
               {profile.plan === 'free' && 'Sua conta gratuita permite até 3 músicas em seu catálogo privado. Faça upgrade para expandir seu limite para até 50 faixas.'}
+              {profile.plan === 'essencial' && 'Seu plano Essencial está ativo! Agora você pode cadastrar e compartilhar até 10 músicas em seu catálogo.'}
               {profile.plan === 'pro' && 'Seu plano Pro está ativo! Agora você pode cadastrar e compartilhar até 15 músicas em MP3 de alta conversão.'}
               {profile.plan === 'premium' && 'Seu plano Premium está ativo! Aproveite o limite expandido de até 50 músicas cadastradas em seu portfólio.'}
             </p>

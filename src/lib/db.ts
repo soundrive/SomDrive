@@ -248,8 +248,8 @@ export const dbService = {
     };
 
     const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
-    const cleanPlan = (rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'pro' | 'premium';
-    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'pro' ? 15 : 50));
+    const cleanPlan = (rawPlan === 'essencial' || rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'essencial' | 'pro' | 'premium';
+    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
     const isMainAdmin = (d.email || '').toLowerCase().trim() === 'videopremieroficial@gmail.com' || (d.email || '').toLowerCase().trim() === 'sertanejopremier@gmail.com';
     const role = isMainAdmin ? 'admin' : (d.role || 'user');
 
@@ -312,8 +312,8 @@ export const dbService = {
   // Normalize and prepare user object mapping users/{userId} properties
   getNormalizedUserData(artist: Artist, songsCount = 0) {
     const planRaw = (artist.plan || 'free').toLowerCase();
-    const plan = planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
-    const defaultLimit = plan === 'free' ? 3 : (plan === 'pro' ? 15 : 50);
+    const plan = planRaw === 'essencial' || planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
+    const defaultLimit = plan === 'free' ? 3 : (plan === 'essencial' ? 10 : (plan === 'pro' ? 15 : 50));
     const emailLower = (artist.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
 

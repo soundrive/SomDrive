@@ -31,12 +31,12 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
   const [profile, setProfile] = useState<Artist>(currentUser);
   
   // Checkout flow states
-  const [selectedPlan, setSelectedPlan] = useState<'free' | 'pro' | 'premium' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'free' | 'essencial' | 'pro' | 'premium' | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<'select' | 'payment' | 'processing' | 'success'>('select');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'card'>('card');
   const [simulatedStatus, setSimulatedStatus] = useState<'ativo' | 'pendente' | 'cancelado'>('ativo');
-  const [loadingPlan, setLoadingPlan] = useState<'pro' | 'premium' | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<'essencial' | 'pro' | 'premium' | null>(null);
 
   // Mercado Pago Checkout integration settings loaded from database
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -80,10 +80,28 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
         { name: 'Modo carro', included: true }
       ]
     },
+    essencial: {
+      name: 'SomDrive Essencial',
+      description: 'Ideal para compositores com catálogo inicial.',
+      price: billingCycle === 'monthly' ? 9.99 : 99.90,
+      limitTracks: 10,
+      limitSize: 20,
+      badge: 'Básico',
+      features: [
+        { name: '★ Até 10 músicas cadastradas', included: true, highlight: true },
+        { name: 'Tudo do plano Free incluído', included: true },
+        { name: 'Criação de repertórios', included: true },
+        { name: 'Links privados', included: true },
+        { name: 'WhatsApp e Contato', included: true },
+        { name: 'Player profissional', included: true },
+        { name: 'Ficha técnica e Letra', included: true },
+        { name: 'Modo carro', included: true }
+      ]
+    },
     pro: {
       name: 'SomDrive Pro',
       description: 'Organize e compartilhe seu repertório do seu jeito.',
-      price: billingCycle === 'monthly' ? 19.90 : 199.00,
+      price: billingCycle === 'monthly' ? 14.99 : 149.90,
       limitTracks: 15,
       limitSize: 20,
       badge: 'Mais Escolhido',
@@ -110,7 +128,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     premium: {
       name: 'SomDrive Premium',
       description: 'Para catálogos e projetos maiores.',
-      price: billingCycle === 'monthly' ? 39.90 : 399.00,
+      price: billingCycle === 'monthly' ? 29.99 : 299.90,
       limitTracks: 50,
       limitSize: 20,
       badge: 'Premium',
@@ -130,19 +148,19 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     }
   };
 
-  const handleOpenCheckout = (planKey: 'pro' | 'premium') => {
+  const handleOpenCheckout = (planKey: 'essencial' | 'pro' | 'premium') => {
     setSelectedPlan(planKey);
     setIsCheckoutOpen(true);
     setCheckoutStep('payment');
   };
 
-  const handlePlanCheckout = async (planCode: 'pro_mensal' | 'pro_anual' | 'premium_mensal' | 'premium_anual') => {
+  const handlePlanCheckout = async (planCode: 'essencial_mensal' | 'essencial_anual' | 'pro_mensal' | 'pro_anual' | 'premium_mensal' | 'premium_anual') => {
     if (!currentUser || !currentUser.userId || !currentUser.email) {
       setCheckoutError("Você precisa estar autenticado com e-mail para assinar um plano. Por favor, faça login ou registre-se.");
       return;
     }
 
-    const planKey = planCode.startsWith('pro') ? 'pro' : 'premium';
+    const planKey = planCode.startsWith('essencial') ? 'essencial' : (planCode.startsWith('pro') ? 'pro' : 'premium');
     setSelectedPlan(planKey);
     setLoadingPlan(planKey);
     setCheckoutError(null);
@@ -238,6 +256,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
             <span className="text-slate-400">Plano Atual:</span>
             <span className="px-2.5 py-0.5 rounded-lg bg-orange-950 border border-orange-500/25 text-orange-400 font-mono font-bold uppercase text-[10px]">
               {profile.plan === 'free' && 'SomDrive Free'}
+              {profile.plan === 'essencial' && 'SomDrive Essencial ⚡'}
               {profile.plan === 'pro' && 'SomDrive Pro ⭐'}
               {profile.plan === 'premium' && 'SomDrive Premium 🚀'}
             </span>
@@ -288,7 +307,7 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
         </div>
 
         {/* 2. Plan Grid Structure */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch relative z-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch relative z-10">
           
           {/* Soundrive Free Card */}
           <div className={`bg-slate-900/60 border rounded-2xl p-6 flex flex-col justify-between hover:scale-101 hover:border-slate-800 transition duration-300 ${profile.plan === 'free' ? 'border-orange-500/40 shadow-xl shadow-orange-950/5' : 'border-slate-850'}`}>
@@ -335,6 +354,65 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
                   Cadastrar grátis
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Soundrive Essencial Card */}
+          <div className={`bg-slate-900/60 border rounded-2xl p-6 flex flex-col justify-between hover:scale-101 hover:border-slate-800 transition duration-300 ${profile.plan === 'essencial' ? 'border-orange-500/40 shadow-xl shadow-orange-950/5' : 'border-slate-850'}`}>
+            <div className="space-y-6">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-300 uppercase tracking-widest font-extrabold">{planDetails.essencial.badge}</span>
+                  <h4 className="text-xl font-heading font-black text-white uppercase">{planDetails.essencial.name}</h4>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-baseline justify-end gap-0.5">
+                    <span className="text-xs font-mono text-slate-400">R$</span>
+                    <h5 className="text-3xl font-heading font-black text-white">{planDetails.essencial.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h5>
+                  </div>
+                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{billingCycle === 'monthly' ? '/ mês' : '/ ano'}</p>
+                </div>
+              </div>
+
+              <p className="text-slate-400 text-xs leading-relaxed">{planDetails.essencial.description}</p>
+
+              {/* Feature bullet list */}
+              <ul className="space-y-3 text-xs">
+                {planDetails.essencial.features.map((feat, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-slate-300">
+                    {feat.highlight ? (
+                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-black tracking-wide text-xs">
+                        ★ {feat.name}
+                      </div>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 font-medium">{feat.name}</span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-8 space-y-3 bg-[#080a10] p-3 rounded-xl border border-slate-900">
+              {profile.plan === 'essencial' && (
+                <div className="w-full text-center py-2 border border-orange-500/30 text-orange-400 text-xs uppercase font-mono tracking-widest bg-orange-950/40 rounded-xl font-extrabold mb-1.5 flex items-center justify-center gap-1">
+                  Seu Plano Ativo ⚡
+                </div>
+              )}
+
+              <button 
+                onClick={() => handlePlanCheckout(billingCycle === 'monthly' ? 'essencial_mensal' : 'essencial_anual')}
+                disabled={loadingPlan !== null}
+                className="w-full py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-wider rounded-xl transition cursor-pointer select-none font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loadingPlan === 'essencial' ? 'Carregando...' : 'Pagar agora'}
+              </button>
+
+              <div className="text-[9px] text-slate-400 font-medium text-center leading-relaxed">
+                Pagamento único via Mercado Pago. O saldo cai na hora.
+              </div>
             </div>
           </div>
 
