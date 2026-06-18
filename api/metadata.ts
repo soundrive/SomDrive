@@ -38,6 +38,92 @@ const fetchGlobalShareCardRest = async (): Promise<{ ogImageUrl: string; ogImage
   return null;
 };
 
+const queryArtistBySlug = async (slug: string) => {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery`;
+    const body = {
+      structuredQuery: {
+        from: [{ collectionId: "artists" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "slug" },
+            op: "EQUAL",
+            value: { stringValue: slug }
+          }
+        },
+        limit: 1
+      }
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      const qResult = await res.json();
+      if (Array.isArray(qResult) && qResult.length > 0 && qResult[0].document) {
+        const doc = qResult[0].document;
+        const f = doc.fields || {};
+        const docId = doc.name.split('/').pop() || '';
+        return {
+          userId: docId,
+          name: f.name?.stringValue || f.artistName?.stringValue || "",
+          genre: f.genre?.stringValue || f.mainGenre?.stringValue || "",
+          city: f.city?.stringValue || "",
+          customCardImageUrl: f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "",
+          slug: f.slug?.stringValue || slug
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("REST queryArtistBySlug failed:", err);
+  }
+  return null;
+};
+
+const queryUserBySlug = async (slug: string) => {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery`;
+    const body = {
+      structuredQuery: {
+        from: [{ collectionId: "users" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "slug" },
+            op: "EQUAL",
+            value: { stringValue: slug }
+          }
+        },
+        limit: 1
+      }
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      const qResult = await res.json();
+      if (Array.isArray(qResult) && qResult.length > 0 && qResult[0].document) {
+        const doc = qResult[0].document;
+        const f = doc.fields || {};
+        const docId = doc.name.split('/').pop() || '';
+        return {
+          userId: docId,
+          name: f.name?.stringValue || f.artistName?.stringValue || "",
+          genre: f.genre?.stringValue || f.mainGenre?.stringValue || "",
+          city: f.city?.stringValue || "",
+          customCardImageUrl: f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "",
+          slug: f.slug?.stringValue || slug
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("REST queryUserBySlug failed:", err);
+  }
+  return null;
+};
+
 const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string; slug: string }> => {
   let name = "Compositor";
   let genre = "Música Sertaneja";
@@ -67,7 +153,37 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
     };
   }
 
-  // First try direct document fetch (if it's a solid UID)
+  // 1. Check if it's Zé Quirino directly
+  if (cleanIdLower === "ze-quirino" || cleanIdLower === "ze-qurino") {
+    try {
+      const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/JTqE5lUhx8hgU7Ru7KByxp3Ze4A3`;
+      const res = await fetch(artistUrl);
+      if (res.ok) {
+        const doc = await res.json();
+        const f = doc.fields || {};
+        return {
+          userId: "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3",
+          name: f.name?.stringValue || f.artistName?.stringValue || "Zé Quirino",
+          genre: f.genre?.stringValue || f.mainGenre?.stringValue || "Música Sertaneja",
+          city: f.city?.stringValue || "Brasil",
+          customCardImageUrl: f.customCardImageUrl?.stringValue || "",
+          slug: "ze-quirino"
+        };
+      }
+    } catch (err) {
+      console.warn("Direct Zé Quirino fetch failed, fallback to direct query.");
+    }
+    return {
+      userId: "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3",
+      name: "Zé Quirino",
+      genre: "Música Sertaneja",
+      city: "Brasil",
+      customCardImageUrl: "",
+      slug: "ze-quirino"
+    };
+  }
+
+  // 2. Direct document fetch by ID (if it's a UID)
   try {
     const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${cleanId}`;
     const res = await fetch(artistUrl);
@@ -83,71 +199,19 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
       return { userId: resolvedUserId, name, genre, city, customCardImageUrl, slug: dbSlug };
     }
   } catch (err) {
-    console.warn("Direct direct artist fetch failed, will try collection scan.");
+    console.warn("Direct artist fetch failed, will try structured query.");
   }
 
-  // Scan 'artists' collection to match sluggified name or slug field
-  try {
-    const artistsListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists?pageSize=100`;
-    const res = await fetch(artistsListUrl);
-    if (res.ok) {
-      const data = await res.json();
-      const docs = data.documents || [];
-      for (const doc of docs) {
-        const f = doc.fields || {};
-        const docId = doc.name.split('/').pop() || '';
-        const artistName = f.name?.stringValue || f.artistName?.stringValue || '';
-        const artistGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
-        const artistCity = f.city?.stringValue || '';
-        const artistCustomCardUrl = f.customCardImageUrl?.stringValue || '';
-        const artistSlug = f.slug?.stringValue || slugifyStr(artistName);
-        
-        if (docId.toLowerCase() === cleanIdLower || artistSlug.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
-          return {
-            userId: docId,
-            name: artistName || name,
-            genre: artistGenre || genre,
-            city: artistCity || city,
-            customCardImageUrl: artistCustomCardUrl,
-            slug: artistSlug
-          };
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("REST artists collection matching failed:", err);
+  // 3. Query 'artists' collection by slug (structured runQuery - NO scanning!)
+  const artResult = await queryArtistBySlug(cleanIdLower);
+  if (artResult) {
+    return artResult;
   }
 
-  // Try scanning 'users' collection too
-  try {
-    const usersListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/users?pageSize=100`;
-    const res = await fetch(usersListUrl);
-    if (res.ok) {
-      const data = await res.json();
-      const docs = data.documents || [];
-      for (const doc of docs) {
-        const f = doc.fields || {};
-        const docId = doc.name.split('/').pop() || '';
-        const userName = f.name?.stringValue || f.artistName?.stringValue || '';
-        const userGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
-        const userCity = f.city?.stringValue || '';
-        const userCustomCardUrl = f.customCardImageUrl?.stringValue || '';
-        const userSlug = f.slug?.stringValue || slugifyStr(userName);
-
-        if (docId.toLowerCase() === cleanIdLower || userSlug.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
-          return {
-            userId: docId,
-            name: userName || name,
-            genre: userGenre || genre,
-            city: userCity || city,
-            customCardImageUrl: userCustomCardUrl,
-            slug: userSlug
-          };
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("REST users collection matching failed:", err);
+  // 4. Query 'users' collection by slug (structured runQuery - NO scanning!)
+  const userResult = await queryUserBySlug(cleanIdLower);
+  if (userResult) {
+    return userResult;
   }
 
   return { userId: idOrSlug, name, genre, city, customCardImageUrl, slug: idOrSlug };
@@ -155,68 +219,78 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
 
 export default async function handler(req: any, res: any) {
   const { slug } = req.query || {};
-  const slugStr = typeof slug === 'string' ? slug : 'ze-quirino';
+  const slugStr = typeof slug === 'string' ? slug.trim() : 'ze-quirino';
 
   console.log(`[API Metadata] Processing OG request for slug: ${slugStr}`);
 
-  // 1. Fetch artist details
-  const artist = await fetchArtistRest(slugStr);
-  let formattedName = artist.name || "Compositor";
+  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
+  const isCrawler = /bot|crawl|spider|facebookexternalhit|whatsapp|telegram|slack|twitter|linkedin|embed/i.test(userAgent);
 
-  if (slugStr === "ze-quirino") {
-    formattedName = "Zé Quirino";
-  } else if (formattedName === "Compositor") {
-    // Fallback to title casing the slug (e.g. joao-silva -> Joao Silva)
-    formattedName = slugStr
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  // 5. Depois de localizar o artista (ou para visitantes de navegador real), direcionar para o catálogo público
+  if (!isCrawler) {
+    res.writeHead(302, { Location: `/catalogo/${slugStr}` });
+    return res.end();
   }
-  formattedName = formattedName.trim();
 
-  // 2. Fetch global share card background
-  let ogImageToUse = "";
   try {
-    const shareCard = await fetchGlobalShareCardRest();
-    if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
-      ogImageToUse = shareCard.ogImageUrl.trim();
+    // 1. Fetch artist details
+    const artist = await fetchArtistRest(slugStr);
+    let formattedName = artist.name || "Compositor";
+
+    if (slugStr === "ze-quirino") {
+      formattedName = "Zé Quirino";
+    } else if (formattedName === "Compositor") {
+      // Fallback to title casing the slug (e.g. joao-silva -> Joao Silva)
+      formattedName = slugStr
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
     }
-  } catch (err) {
-    console.warn("Error fetching shareCard in metadata serverless:", err);
-  }
+    formattedName = formattedName.trim();
 
-  if (!ogImageToUse) {
-    ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
-  }
-
-  let ogImageSecureToUse = ogImageToUse;
-  if (ogImageSecureToUse.startsWith("http://")) {
-    ogImageSecureToUse = ogImageSecureToUse.replace("http://", "https://");
-  }
-
-  // 3. Resolve the canonical og:url
-  const ogUrlToUse = slugStr === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `https://www.somdrive.com.br/s/${slugStr}`;
-
-  // 4. Try loading the template file index.html
-  let htmlContents = "";
-  try {
-    const possiblePaths = [
-      path.join(process.cwd(), 'dist', 'index.html'),
-      path.join(process.cwd(), 'index.html'),
-    ];
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        htmlContents = fs.readFileSync(p, 'utf8');
-        break;
+    // 2. Fetch global share card background
+    let ogImageToUse = "";
+    try {
+      const shareCard = await fetchGlobalShareCardRest();
+      if (shareCard && shareCard.ogImageUrl && shareCard.ogImageUrl.trim() !== "") {
+        ogImageToUse = shareCard.ogImageUrl.trim();
       }
+    } catch (err) {
+      console.warn("Error fetching shareCard in metadata serverless:", err);
     }
-  } catch (err) {
-    console.warn("Error reading template in serverless:", err);
-  }
 
-  if (!htmlContents) {
-    // Elegant fallback template matching the static index.html structure
-    htmlContents = `<!DOCTYPE html>
+    if (!ogImageToUse) {
+      ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
+    }
+
+    let ogImageSecureToUse = ogImageToUse;
+    if (ogImageSecureToUse.startsWith("http://")) {
+      ogImageSecureToUse = ogImageSecureToUse.replace("http://", "https://");
+    }
+
+    // 3. Resolve the canonical og:url
+    const ogUrlToUse = slugStr === "ze-quirino" ? "https://www.somdrive.com.br/s/ze-quirino" : `https://www.somdrive.com.br/s/${slugStr}`;
+
+    // 4. Try loading the template file index.html
+    let htmlContents = "";
+    try {
+      const possiblePaths = [
+        path.join(process.cwd(), 'dist', 'index.html'),
+        path.join(process.cwd(), 'index.html'),
+      ];
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+          htmlContents = fs.readFileSync(p, 'utf8');
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn("Error reading template in serverless:", err);
+    }
+
+    if (!htmlContents) {
+      // Elegant fallback template matching the static index.html structure
+      htmlContents = `<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -230,43 +304,62 @@ export default async function handler(req: any, res: any) {
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>`;
+    }
+
+    // Clean static/existing elements completely to prevent duplicates
+    htmlContents = htmlContents
+      .replace(/<title>.*?<\/title>/gi, "")
+      .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
+      .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
+      .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
+
+    const ogPayload = `
+    <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
+    <title>Catálogo musical de ${formattedName} | SomDrive</title>
+    <meta name="description" content="Ouça músicas e composições compartilhadas pelo artista." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SomDrive - Catálogo Musical" />
+    <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
+    <meta property="og:image" content="${ogImageToUse}" />
+    <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="${ogUrlToUse}" />
+    <meta property="og:site_name" content="SomDrive" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
+    <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
+    <meta name="twitter:image" content="${ogImageToUse}" />
+    <link rel="image_src" href="${ogImageToUse}" />
+    <meta itemprop="image" content="${ogImageToUse}" />
+  `;
+
+    if (htmlContents.includes("</head>")) {
+      htmlContents = htmlContents.replace("</head>", `${ogPayload}\n</head>`);
+    } else {
+      htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(htmlContents);
+  } catch (err) {
+    console.warn("Metadata handler failed, serving fallback redirect:", err);
+    const fallbackHTML = `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0; url=/catalogo/${slugStr}" />
+    <script>
+      window.location.href = "/catalogo/${slugStr}";
+    </script>
+    <title>SomDrive - Redirecionando...</title>
+  </head>
+  <body>
+    Redirecionando para o catálogo de ${slugStr}...
+  </body>
+</html>`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(fallbackHTML);
   }
-
-  // Clean static/existing elements completely to prevent duplicates
-  htmlContents = htmlContents
-    .replace(/<title>.*?<\/title>/gi, "")
-    .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
-    .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
-    .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
-
-  const ogPayload = `
-  <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
-  <title>Catálogo musical de ${formattedName} | SomDrive</title>
-  <meta name="description" content="Ouça músicas e composições compartilhadas pelo artista." />
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="SomDrive - Catálogo Musical" />
-  <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
-  <meta property="og:image" content="${ogImageToUse}" />
-  <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
-  <meta property="og:image:type" content="image/jpeg" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${ogUrlToUse}" />
-  <meta property="og:site_name" content="SomDrive" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
-  <meta name="twitter:description" content="Ouça músicas e composições compartilhadas pelo artista." />
-  <meta name="twitter:image" content="${ogImageToUse}" />
-  <link rel="image_src" href="${ogImageToUse}" />
-  <meta itemprop="image" content="${ogImageToUse}" />
-`;
-
-  if (htmlContents.includes("</head>")) {
-    htmlContents = htmlContents.replace("</head>", `${ogPayload}\n</head>`);
-  } else {
-    htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
-  }
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.status(200).send(htmlContents);
 }

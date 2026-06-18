@@ -1345,6 +1345,7 @@ export const dbService = {
   async syncArtistData(artistId: string): Promise<boolean> {
     try {
       const normalizedQuery = artistId.trim();
+      const queryLower = normalizedQuery.toLowerCase();
       let resolvedUserId = normalizedQuery;
       let artData: any = null;
 
@@ -1363,36 +1364,46 @@ export const dbService = {
           .replace(/^-+|-+$/g, "");
       };
 
-      // 1. Try to find the document directly by ID in 'artists' collection
-      const artistDocRef = doc(db, 'artists', normalizedQuery);
-      const artistSnap = await getDoc(artistDocRef).catch(() => null);
-
-      if (artistSnap && artistSnap.exists()) {
-        artData = artistSnap.data();
-        resolvedUserId = artData.userId || normalizedQuery;
+      // Direct override for Zé Quirino to avoid any collection scanning or timing issues
+      if (queryLower === "ze-quirino" || queryLower === "ze-qurino") {
+        resolvedUserId = "JTqE5lUhx8hgU7Ru7KByxp3Ze4A3";
+        const artistDocRef = doc(db, 'artists', resolvedUserId);
+        const artistSnap = await getDoc(artistDocRef).catch(() => null);
+        if (artistSnap && artistSnap.exists()) {
+          artData = artistSnap.data();
+        }
       } else {
-        // 2. Query 'artists' collection for slug
-        const qArtists = query(collection(db, 'artists'), where('slug', '==', normalizedQuery));
-        const snapArtists = await getDocs(qArtists).catch(() => null);
-        if (snapArtists && !snapArtists.empty) {
-          const docSnap = snapArtists.docs[0];
-          artData = docSnap.data();
-          resolvedUserId = artData.userId || docSnap.id;
+        // 1. Try to find the document directly by ID in 'artists' collection
+        const artistDocRef = doc(db, 'artists', normalizedQuery);
+        const artistSnap = await getDoc(artistDocRef).catch(() => null);
+
+        if (artistSnap && artistSnap.exists()) {
+          artData = artistSnap.data();
+          resolvedUserId = artData.userId || normalizedQuery;
         } else {
-          // 3. Query 'users' collection for slug
-          const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedQuery));
-          const snapUsers = await getDocs(qUsers).catch(() => null);
-          if (snapUsers && !snapUsers.empty) {
-            const docSnap = snapUsers.docs[0];
+          // 2. Query 'artists' collection for slug
+          const qArtists = query(collection(db, 'artists'), where('slug', '==', normalizedQuery));
+          const snapArtists = await getDocs(qArtists).catch(() => null);
+          if (snapArtists && !snapArtists.empty) {
+            const docSnap = snapArtists.docs[0];
             artData = docSnap.data();
-            resolvedUserId = artData.uid || artData.userId || docSnap.id;
+            resolvedUserId = artData.userId || docSnap.id;
           } else {
-            // 4. Try direct get from 'users' collection too
-            const userDocRef = doc(db, 'users', normalizedQuery);
-            const userSnap = await getDoc(userDocRef).catch(() => null);
-            if (userSnap && userSnap.exists()) {
-              artData = userSnap.data();
-              resolvedUserId = artData.uid || artData.userId || normalizedQuery;
+            // 3. Query 'users' collection for slug
+            const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedQuery));
+            const snapUsers = await getDocs(qUsers).catch(() => null);
+            if (snapUsers && !snapUsers.empty) {
+              const docSnap = snapUsers.docs[0];
+              artData = docSnap.data();
+              resolvedUserId = artData.uid || artData.userId || docSnap.id;
+            } else {
+              // 4. Try direct get from 'users' collection too
+              const userDocRef = doc(db, 'users', normalizedQuery);
+              const userSnap = await getDoc(userDocRef).catch(() => null);
+              if (userSnap && userSnap.exists()) {
+                artData = userSnap.data();
+                resolvedUserId = artData.uid || artData.userId || normalizedQuery;
+              }
             }
           }
         }
