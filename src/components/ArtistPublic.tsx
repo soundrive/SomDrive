@@ -726,27 +726,69 @@ export default function ArtistPublic({
                 <span className="text-zinc-750 select-none">•</span>
                 <span>{allTracks.length} {allTracks.length === 1 ? 'faixa' : 'faixas'}</span>
               </div>
+
+              {/* Action Buttons: Contato | Instagram | Compartilhar */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 select-none">
+                {!!(artist.whatsapp || artist.phone) && (
+                  <button
+                    onClick={() => {
+                      dbService.incrementAnalyticsView(artist.userId, false, false);
+                      const cleanNum = (artist.whatsapp || artist.phone || '').replace(/\D/g, '');
+                      const greeting = encodeURIComponent(`Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`);
+                      window.open(`https://wa.me/${cleanNum}?text=${greeting}`, '_blank');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#84cc16]/10 text-[#84cc16] hover:bg-[#84cc16]/20 transition-all border border-[#84cc16]/20 cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Contato</span>
+                  </button>
+                )}
+                {!!(artist.instagram && artist.instagram.trim().length > 0) && (
+                  <button
+                    onClick={() => {
+                      const igUrl = `https://instagram.com/${artist.instagram.replace(/@/g, '').trim()}`;
+                      window.open(igUrl, '_blank');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all border border-zinc-800 cursor-pointer"
+                  >
+                    <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                    <span>Instagram</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const appBaseUrl = window.location.origin;
+                    const artistSlug = artist.slug || artist.userId;
+                    const shareUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${currentRepertoire.slug || currentRepertoire.id}`;
+                    if (navigator.share) {
+                      navigator.share({
+                        title: `${currentRepertoire.name} — ${artist.name} | SomDrive`,
+                        text: `Ouça o repertório "${currentRepertoire.name}" de ${artist.name} no SomDrive!`,
+                        url: shareUrl
+                      }).catch((err) => {
+                        console.log("Erro ao compartilhar", err);
+                        navigator.clipboard.writeText(shareUrl);
+                        setAlertText("Link da pasta copiado!");
+                        setCopiedLinkAlert(true);
+                        setTimeout(() => setCopiedLinkAlert(false), 2800);
+                      });
+                    } else {
+                      navigator.clipboard.writeText(shareUrl);
+                      setAlertText("Link da pasta copiado!");
+                      setCopiedLinkAlert(true);
+                      setTimeout(() => setCopiedLinkAlert(false), 2800);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all border border-zinc-800 cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-[#84cc16]" />
+                  <span>Compartilhar</span>
+                </button>
+              </div>
             </div>
 
-            {/* Actions Block: Share + Play everything */}
+            {/* Actions Block: Standalone Play everything button */}
             <div className="flex flex-wrap items-center gap-3.5 shrink-0">
-              <button
-                onClick={(e) => {
-                  const appBaseUrl = window.location.origin;
-                  const artistSlug = artist.slug || artist.userId;
-                  const shareUrl = `${appBaseUrl}/catalogo/${artistSlug}/repertorio/${currentRepertoire.slug || currentRepertoire.id}`;
-                  navigator.clipboard.writeText(shareUrl);
-                  setAlertText("Link da pasta copiado!");
-                  setCopiedLinkAlert(true);
-                  setTimeout(() => setCopiedLinkAlert(false), 2800);
-                }}
-                className="px-4.5 h-[44px] rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer font-mono text-[10.5px] uppercase font-extrabold tracking-wider select-none shrink-0"
-                title="Compartilhar pasta única"
-              >
-                <Share2 className="w-3.5 h-3.5 text-[#84cc16]" />
-                <span>Compartilhar Pasta</span>
-              </button>
-
               {allTracks.length > 0 && (
                 <button
                   onClick={() => {
