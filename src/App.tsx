@@ -114,7 +114,13 @@ export default function App() {
     // Parse URL on start: supports '/artista/id' and '/s/slug' custom urls
     const path = window.location.pathname;
     if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
-      const parts = path.split('/');
+      let workingPath = path;
+      if (path.startsWith('/s/')) {
+        workingPath = path.replace(/^\/s\//, '/catalogo/');
+        window.history.replaceState({}, '', workingPath);
+      }
+
+      const parts = workingPath.split('/');
       const repIdx = parts.indexOf('repertorio');
       if (repIdx > 0 && repIdx < parts.length - 1) {
         const artistSlug = parts[repIdx - 1];

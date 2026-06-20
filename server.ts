@@ -1858,6 +1858,7 @@ async function startServer() {
   // This bypasses any server-side service-account PERMISSION_DENIED issues completely!
   // Also supports friendly sluggified names and ID search
   const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name: string; genre: string; city: string; customCardImageUrl: string; profileImageUrl: string; slug: string }> => {
+    // Testing small edit
     const projectId = "gen-lang-client-0946896754";
     const databaseId = "ai-studio-656139fd-0f8f-4866-ada1-753533a8c5ff";
     let name = "Compositor";
@@ -1902,119 +1903,24 @@ async function startServer() {
         .replace(/-+/g, '-');
     };
 
-    // First try direct document fetch (if it's a solid UID)
+    // We use the highly robust Native Firestore SDK instead of making a REST list call
+    // (which suffers from listing permissions / 403 Forbidden on subcollections)
     try {
-      const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${cleanId}`;
-      const res = await fetch(artistUrl);
-      if (res.ok) {
-        const doc = await res.json();
-        const f = doc.fields || {};
-        name = f.name?.stringValue || f.artistName?.stringValue || name;
-        genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
-        city = f.city?.stringValue || city;
-        customCardImageUrl = f.customCardImageUrl?.stringValue || "";
-        profileImageUrl = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || "";
-        resolvedUserId = doc.name.split('/').pop() || cleanId;
-        dbSlug = f.slug?.stringValue || slugifyStr(name);
-        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug };
+      // 1. Direct document fetch (if it is a UID)
+      const artistDoc = await db.collection("artists").doc(cleanId).get();
+      if (artistDoc.exists) {
+        const data = artistDoc.data();
+        name = data?.name || data?.artistName || name;
+        genre = data?.genre || data?.mainGenre || genre;
+        city = data?.city || city;
+        customCardImageUrl = data?.customCardImageUrl || "";
+        profileImageUrl = data?.profileImageUrl || data?.avatarUrl || data?.photoURL || "";
+        dbSlug = data?.slug || "";
+        resolvedUserId = cleanId;
+        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug || slugifyStr(name) };
       }
-    } catch (err) {
-      console.warn("Direct direct artist fetch failed, will try collection scan.");
-    }
 
-    // Scan 'artists' collection to match sluggified name or slug field
-    try {
-      const artistsListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists?pageSize=100`;
-      const res = await fetch(artistsListUrl);
-      if (res.ok) {
-        const data = await res.json();
-        const docs = data.documents || [];
-        for (const doc of docs) {
-          const f = doc.fields || {};
-          const docId = doc.name.split('/').pop() || '';
-          const artistName = f.name?.stringValue || f.artistName?.stringValue || '';
-          const artistGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
-          const artistCity = f.city?.stringValue || '';
-          const artistCustomCardUrl = f.customCardImageUrl?.stringValue || '';
-          const artistProfileImg = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || '';
-          const artistSlug = f.slug?.stringValue || slugifyStr(artistName);
-          
-          if (docId.toLowerCase() === cleanIdLower || artistSlug.toLowerCase() === cleanIdLower || slugifyStr(artistName) === cleanIdLower) {
-            return {
-              userId: docId,
-              name: artistName || name,
-              genre: artistGenre || genre,
-              city: artistCity || city,
-              customCardImageUrl: artistCustomCardUrl,
-              profileImageUrl: artistProfileImg,
-              slug: artistSlug
-            };
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("REST artists collection matching failed:", err);
-    }
-
-    // Try scanning 'users' collection too
-    try {
-      const usersListUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/users?pageSize=100`;
-      const res = await fetch(usersListUrl);
-      if (res.ok) {
-        const data = await res.json();
-        const docs = data.documents || [];
-        for (const doc of docs) {
-          const f = doc.fields || {};
-          const docId = doc.name.split('/').pop() || '';
-          const userName = f.name?.stringValue || f.artistName?.stringValue || '';
-          const userGenre = f.genre?.stringValue || f.mainGenre?.stringValue || '';
-          const userCity = f.city?.stringValue || '';
-          const userCustomCardUrl = f.customCardImageUrl?.stringValue || '';
-          const userProfileImg = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || '';
-          const userSlug = f.slug?.stringValue || slugifyStr(userName);
-          
-          if (docId.toLowerCase() === cleanIdLower || userSlug.toLowerCase() === cleanIdLower || slugifyStr(userName) === cleanIdLower) {
-            let finalName = userName || name;
-            let finalGenre = userGenre || genre;
-            let finalCity = userCity || city;
-            let finalImg = userCustomCardUrl;
-            let finalProfileImg = userProfileImg;
-            let finalSlug = userSlug;
-
-            try {
-              const artistUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/artists/${docId}`;
-              const aRes = await fetch(artistUrl);
-              if (aRes.ok) {
-                const aDoc = await aRes.json();
-                const af = aDoc.fields || {};
-                finalName = af.name?.stringValue || af.artistName?.stringValue || finalName;
-                finalGenre = af.genre?.stringValue || af.mainGenre?.stringValue || finalGenre;
-                finalCity = af.city?.stringValue || finalCity;
-                finalImg = af.customCardImageUrl?.stringValue || finalImg;
-                finalProfileImg = af.profileImageUrl?.stringValue || af.avatarUrl?.stringValue || af.photoURL?.stringValue || finalProfileImg;
-                finalSlug = af.slug?.stringValue || finalSlug;
-              }
-            } catch {}
-
-            return {
-              userId: docId,
-              name: finalName,
-              genre: finalGenre,
-              city: finalCity,
-              customCardImageUrl: finalImg,
-              profileImageUrl: finalProfileImg,
-              slug: finalSlug
-            };
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("REST users collection matching failed:", err);
-    }
-
-    // Try fallback to native SDK if possible
-    try {
-      const userDoc = await db.collection("artists").doc(cleanId).get();
+      const userDoc = await db.collection("users").doc(cleanId).get();
       if (userDoc.exists) {
         const data = userDoc.data();
         name = data?.name || data?.artistName || name;
@@ -2024,21 +1930,55 @@ async function startServer() {
         profileImageUrl = data?.profileImageUrl || data?.avatarUrl || data?.photoURL || "";
         dbSlug = data?.slug || "";
         resolvedUserId = cleanId;
-      } else {
-        const uDoc = await db.collection("users").doc(cleanId).get();
-        if (uDoc.exists) {
-          const uData = uDoc.data();
-          name = uData?.name || name;
-          genre = uData?.genre || uData?.mainGenre || genre;
-          city = uData?.city || city;
-          customCardImageUrl = uData?.customCardImageUrl || "";
-          profileImageUrl = uData?.profileImageUrl || uData?.avatarUrl || uData?.photoURL || "";
-          dbSlug = uData?.slug || "";
-          resolvedUserId = cleanId;
-        }
+        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug || slugifyStr(name) };
       }
-    } catch (adminErr) {
-      console.warn("Firestore Admin fallback exception:", adminErr);
+
+      // 2. Query by slug field in artists
+      const artistQuery = await db.collection("artists").where("slug", "==", cleanIdLower).limit(1).get();
+      if (!artistQuery.empty) {
+        const doc = artistQuery.docs[0];
+        const data = doc.data();
+        name = data?.name || data?.artistName || name;
+        genre = data?.genre || data?.mainGenre || genre;
+        city = data?.city || city;
+        customCardImageUrl = data?.customCardImageUrl || "";
+        profileImageUrl = data?.profileImageUrl || data?.avatarUrl || data?.photoURL || "";
+        dbSlug = data?.slug || "";
+        resolvedUserId = doc.id;
+        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug || slugifyStr(name) };
+      }
+
+      // 3. Query by slug field in users
+      const userQuery = await db.collection("users").where("slug", "==", cleanIdLower).limit(1).get();
+      if (!userQuery.empty) {
+        const doc = userQuery.docs[0];
+        const data = doc.data();
+        name = data?.name || data?.artistName || name;
+        genre = data?.genre || data?.mainGenre || genre;
+        city = data?.city || city;
+        customCardImageUrl = data?.customCardImageUrl || "";
+        profileImageUrl = data?.profileImageUrl || data?.avatarUrl || data?.photoURL || "";
+        dbSlug = data?.slug || "";
+        resolvedUserId = doc.id;
+
+        // Try double fetch against artists to get possible artist collection overrides
+        try {
+          const artRefDoc = await db.collection("artists").doc(doc.id).get();
+          if (artRefDoc.exists) {
+            const ad = artRefDoc.data();
+            name = ad?.name || ad?.artistName || name;
+            genre = ad?.genre || ad?.mainGenre || genre;
+            city = ad?.city || city;
+            customCardImageUrl = ad?.customCardImageUrl || customCardImageUrl;
+            profileImageUrl = ad?.profileImageUrl || ad?.avatarUrl || ad?.photoURL || profileImageUrl;
+            dbSlug = ad?.slug || dbSlug;
+          }
+        } catch {}
+
+        return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug || slugifyStr(name) };
+      }
+    } catch (sdkErr) {
+      console.warn("Native Firestore SDK fetchArtistRest queries failed:", sdkErr);
     }
 
     return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug || slugifyStr(name) };
@@ -2084,13 +2024,18 @@ async function startServer() {
     // Dynamic resolution of cover card fallback
     let resolvedCoverUrl = customCardImageUrl || profileImageUrl || "";
     if (!resolvedCoverUrl) {
-      try {
-        const globalCard = await fetchGlobalShareCardRest();
-        if (globalCard && globalCard.ogImageUrl) {
-          resolvedCoverUrl = globalCard.ogImageUrl;
+      if (artistIdOrSlug === "somdrive" || artistIdOrSlug === "default" || artistIdOrSlug === "global") {
+        try {
+          const globalCard = await fetchGlobalShareCardRest();
+          if (globalCard && globalCard.ogImageUrl) {
+            resolvedCoverUrl = globalCard.ogImageUrl;
+          }
+        } catch (err) {
+          console.warn("Could not retrieve global share card for artist cover artwork:", err);
         }
-      } catch (err) {
-        console.warn("Could not retrieve global share card for artist cover artwork:", err);
+      }
+      if (!resolvedCoverUrl) {
+        resolvedCoverUrl = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
       }
     }
 
@@ -2099,7 +2044,7 @@ async function startServer() {
     const cleanGenre = escapeXml((genre || "Música Sertaneja").trim());
     const cleanCity = escapeXml((city || "Brasil").trim());
     const cleanCardImageUrl = resolvedCoverUrl ? escapeXml(resolvedCoverUrl) : "";
-    const cleanProfileImageUrl = profileImageUrl ? escapeXml(profileImageUrl) : "";
+    const cleanProfileImageUrl = profileImageUrl ? escapeXml(profileImageUrl) : "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
 
     let subtitle = "";
     if (cleanGenre && cleanCity) {

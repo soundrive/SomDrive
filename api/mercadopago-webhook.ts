@@ -667,30 +667,67 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
   const isApproved = status === 'authorized' || status === 'active';
 
   if (isApproved && resolvedUid) {
-    const now = new Date();
-    const expires = new Date();
-    expires.setDate(now.getDate() + durationDays);
+    // Fetch user and check if they are isBillingBetaTester
+    let isBetaTester = false;
+    let fallbackBetaEmail = ["videopremieroficial@gmail.com", "test_webhook_automated@somdrive.com.br"];
+    try {
+      const userDocRef = dbInstanceLocal.collection("users").doc(resolvedUid);
+      const userDocSnap = await userDocRef.get();
+      if (userDocSnap.exists) {
+        const udata = userDocSnap.data();
+        isBetaTester = !!udata?.isBillingBetaTester || fallbackBetaEmail.includes(String(udata?.email || '').toLowerCase().trim());
+      } else {
+        const artistDocRef = dbInstanceLocal.collection("artists").doc(resolvedUid);
+        const artistDocSnap = await artistDocRef.get();
+        if (artistDocSnap.exists) {
+          const adata = artistDocSnap.data();
+          isBetaTester = !!adata?.isBillingBetaTester || fallbackBetaEmail.includes(String(adata?.email || '').toLowerCase().trim());
+        }
+      }
+    } catch (dbErr) {
+      console.warn("Error fetching beta flag status, defaulting to safe verify:", dbErr);
+    }
 
-    const updatePayload = {
-      plan: finalPlan,
-      musicLimit: musicLimit,
-      billingCycle: billingCycle,
-      subscriptionStatus: "active",
-      planStatus: "active",
-      paymentStatus: "approved",
-      mercadoPagoSubscriptionId: String(preapprovalId),
-      planActivatedAt: FieldValue.serverTimestamp(),
-      planStartedAt: FieldValue.serverTimestamp(),
-      planExpiresAt: expires,
-      accessType: "subscriber",
-      subscriptionStartedAt: now.toISOString(),
-      subscriptionEndsAt: expires.toISOString(),
-      updatedAt: FieldValue.serverTimestamp()
-    };
+    if (isBetaTester) {
+      const now = new Date();
+      const expires = new Date();
+      expires.setDate(now.getDate() + durationDays);
 
-    await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
-    await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
-    planActivated = true;
+      const preapprovalPlanIdVal = preapproval.preapproval_plan_id || "";
+      const lastPaymentIdVal = preapproval.last_payment_id || "";
+      const lastPaymentStatusVal = preapproval.last_payment_status || "";
+      const nextPaymentDateVal = preapproval.next_payment_date || preapproval.auto_recurring?.next_payment_date || null;
+
+      const updatePayload = {
+        plan: finalPlan,
+        musicLimit: musicLimit,
+        billingCycle: billingCycle,
+        subscriptionStatus: "active",
+        planStatus: "active",
+        paymentStatus: "approved",
+        mercadoPagoSubscriptionId: String(preapprovalId),
+        planActivatedAt: FieldValue.serverTimestamp(),
+        planStartedAt: FieldValue.serverTimestamp(),
+        planExpiresAt: expires,
+        accessType: "subscriber",
+        subscriptionStartedAt: now.toISOString(),
+        subscriptionEndsAt: expires.toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
+
+        // Subscriptions Specific properties requested by the user
+        billingType: "subscription",
+        preapprovalPlanId: String(preapprovalPlanIdVal),
+        lastPaymentId: String(lastPaymentIdVal),
+        lastPaymentStatus: String(lastPaymentStatusVal),
+        nextPaymentDate: nextPaymentDateVal ? String(nextPaymentDateVal) : null
+      };
+
+      await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
+      await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
+      planActivated = true;
+    } else {
+      console.warn("[MercadoPago Preapproval Webhook] Subscription activation skipped. Payer is not an active Billing Beta Tester:", resolvedUid);
+    }
   }
 
   const finalSubMap: any = {
@@ -1407,6 +1444,23 @@ export default async function handler(req: any, res: any) {
         paymentIdsFound: [String(resourceId)],
         paymentFound: result.status !== 'not_found',
         paymentStatus: result.status,
+        firestoreRecorded: result.status !== 'not_found',
+        planActivated: result.planActivated,
+        errorMessage: result.success ? null : result.message
+      }));
+
+      return res.status(200).json({ received: true, processed: true });
+    }
+
+    // Process PREAPPROVAL / SUBSCRIPTION type
+    if (eventType === 'preapproval' || eventType === 'subscription') {
+      const result = await processSinglePreapproval(String(resourceId), isManualReprocess);
+
+      console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
+        notificationType: "preapproval",
+        rawDataId: String(resourceId),
+        preapprovalFound: result.status !== 'not_found',
+        preapprovalStatus: result.status,
         firestoreRecorded: result.status !== 'not_found',
         planActivated: result.planActivated,
         errorMessage: result.success ? null : result.message

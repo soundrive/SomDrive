@@ -166,6 +166,13 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
     setLoadingPlan(planKey);
     setCheckoutError(null);
 
+    // TEST ENVIRONMENT INTERCEPT FOR ISOLATED BETA TESTER (Essencial Mensal)
+    if (profile?.isBillingBetaTester && planCode === 'essencial_mensal') {
+      console.log("[Beta Tester Checkout] Redirecting to real recurring subscription link...");
+      window.location.href = 'https://mpago.la/16nq8XA';
+      return;
+    }
+
     try {
       const response = await fetch('/api/mercadopago/create-checkout-payment', {
         method: 'POST',

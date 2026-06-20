@@ -45,6 +45,12 @@ export interface Artist {
   mercadoPagoPaymentId?: string | null;
   mercadoPagoSubscriptionId?: string | null;
   isBlocked?: boolean;
+  isBillingBetaTester?: boolean;
+  billingType?: string | null;
+  preapprovalPlanId?: string | null;
+  lastPaymentId?: string | null;
+  lastPaymentStatus?: string | null;
+  nextPaymentDate?: string | null;
   updatedAt?: string;
   phone?: string;
   artistName?: string;

@@ -495,17 +495,17 @@ export default function Player({
           }
         `}} />
 
-        {/* Specular Ambient Glow effects in Mint-Emerald and Gold-Amber */}
+        {/* Specular Ambient Glow effects in Emerald Green */}
         <div className="absolute right-[-10%] top-[10%] w-[350px] h-[350px] bg-[#10b981]/5 rounded-full blur-[100px] pointer-events-none"></div>
-        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] bg-[#eab308]/5 rounded-full blur-[90px] pointer-events-none"></div>
+        <div className="absolute left-[-10%] bottom-[10%] w-[300px] h-[300px] bg-[#05c46b]/5 rounded-full blur-[90px] pointer-events-none"></div>
 
         {/* Dynamic Header Row - Replicated precisely from Image */}
-        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-3 z-10 w-full shrink-0 relative">
+        <div className="flex items-center justify-between border-b border-zinc-90 w-full shrink-0 relative pb-3">
           
           {/* Left Block: TRANSMISSÃO BLUETOOTH */}
           <div className="flex items-center gap-2 select-none">
-            <Bluetooth className="w-4 h-4 text-emerald-400 stroke-[2] animate-pulse" />
-            <span className="text-[10px] sm:text-xs font-mono tracking-[0.2em] text-emerald-400 font-extrabold uppercase">
+            <Bluetooth className="w-4 h-4 text-[#10b981] stroke-[2] animate-pulse" />
+            <span className="text-[10px] sm:text-xs font-mono tracking-[0.2em] text-[#10b981] font-extrabold uppercase">
               TRANSMISSÃO BLUETOOTH
             </span>
           </div>
@@ -516,8 +516,8 @@ export default function Player({
               onClick={() => setCarLyricsActive(!carLyricsActive)}
               className={`flex items-center gap-1.5 px-3 py-1 transition rounded-lg border text-[9px] sm:text-xs font-sans font-bold uppercase tracking-wider cursor-pointer select-none ${
                 carLyricsActive 
-                  ? 'bg-emerald-500/10 border-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.25)]' 
-                  : 'bg-transparent border-zinc-800 text-zinc-350 hover:border-emerald-500/50 hover:text-white'
+                  ? 'bg-[#10b981]/10 border-[#10b981] text-white shadow-[0_0_12px_rgba(16,185,129,0.25)]' 
+                  : 'bg-transparent border-zinc-800 text-zinc-350 hover:border-[#10b981]/50 hover:text-white'
               }`}
             >
               <AlignLeft className="w-3.5 h-3.5" /> 
@@ -530,9 +530,9 @@ export default function Player({
                 setCarMode(false);
                 setCarLyricsActive(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1 bg-transparent border border-zinc-800 hover:border-emerald-500/50 rounded-lg transition cursor-pointer text-[9px] sm:text-xs font-sans font-bold uppercase tracking-wider text-zinc-350 hover:text-white"
+              className="flex items-center gap-1.5 px-3 py-1 bg-transparent border border-zinc-800 hover:border-[#10b981]/50 rounded-lg transition cursor-pointer text-[9px] sm:text-xs font-sans font-bold uppercase tracking-wider text-zinc-350 hover:text-white"
             >
-              <Smartphone className="w-3.5 h-3.5 text-[#84cc16]" /> 
+              <Smartphone className="w-3.5 h-3.5 text-[#10b981]" /> 
               <span>CELULAR</span>
             </button>
           </div>
@@ -542,12 +542,12 @@ export default function Player({
         <div className="flex-1 flex flex-col justify-center items-center my-2 max-w-lg mx-auto w-full z-10 min-h-0">
           <div className="flex items-center justify-center gap-6 w-full shrink-0">
             {/* Left audio equalizer wave block */}
-            <div className="flex items-end gap-[3px] h-10 select-none text-emerald-500 shrink-0">
+            <div className="flex items-end gap-[3px] h-10 select-none text-[#10b981] shrink-0">
               {[...Array(5)].map((_, i) => (
                 <span 
                   key={i} 
                   style={{ height: `${8 + i * 4}px` }}
-                  className={`w-[2.5px] bg-emerald-500 rounded-full ${isPlaying ? `animate-eq-${(i % 3) + 1}` : 'opacity-40'}`} 
+                  className={`w-[2.5px] bg-[#10b981] rounded-full ${isPlaying ? `animate-eq-${(i % 3) + 1}` : 'opacity-40'}`} 
                 />
               ))}
             </div>
@@ -555,26 +555,26 @@ export default function Player({
             {/* Central big circular orb logo with glowing green arrow */}
             <button 
               onClick={onPlayPause}
-              className="relative flex-shrink-0 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-b from-zinc-800 to-zinc-950 flex items-center justify-center border-2 border-zinc-900 shadow-2xl relative cursor-pointer active:scale-95 transition-all outline-none"
+              className="relative flex-shrink-0 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-b from-zinc-850 to-zinc-950 flex items-center justify-center border-2 border-zinc-900 shadow-2xl relative cursor-pointer active:scale-95 transition-all outline-none"
             >
               <div className="absolute inset-1.5 rounded-full bg-zinc-950 flex items-center justify-center border border-zinc-900/60 shadow-inner">
                 <div className="relative flex items-center justify-center">
                   {isPlaying ? (
-                    <Pause className="w-8 h-8 fill-emerald-500 text-emerald-500" />
+                    <Pause className="w-8 h-8 fill-[#10b981] text-[#10b981]" />
                   ) : (
-                    <Play className="w-8 h-8 fill-emerald-500 text-emerald-500 ml-1.5" />
+                    <Play className="w-8 h-8 fill-[#10b981] text-[#10b981] ml-1.5" />
                   )}
                 </div>
               </div>
             </button>
 
             {/* Right audio equalizer wave block */}
-            <div className="flex items-end gap-[3px] h-10 select-none text-emerald-500 shrink-0">
+            <div className="flex items-end gap-[3px] h-10 select-none text-[#10b981] shrink-0">
               {[...Array(5)].map((_, i) => (
                 <span 
                   key={i} 
                   style={{ height: `${20 - i * 4}px` }}
-                  className={`w-[2.5px] bg-emerald-500 rounded-full ${isPlaying ? `animate-eq-${((4 - i) % 3) + 1}` : 'opacity-40'}`} 
+                  className={`w-[2.5px] bg-[#10b981] rounded-full ${isPlaying ? `animate-eq-${((4 - i) % 3) + 1}` : 'opacity-40'}`} 
                 />
               ))}
             </div>
@@ -591,24 +591,24 @@ export default function Player({
         </div>
 
         {/* Scrollable Content: MÚSICAS or LYRICS */}
-        <div className="flex-[2] min-h-[140px] max-h-[280px] bg-[#070b12]/95 border border-zinc-900/80 rounded-2xl flex flex-col overflow-hidden max-w-md mx-auto w-full z-10 relative shadow-inner mb-3">
+        <div className="flex-[2] min-h-[140px] max-h-[280px] bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden max-w-md mx-auto w-full z-10 relative shadow-inner mb-3">
           {/* Header row */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-900 shrink-0 select-none">
             {carLyricsActive ? (
               <>
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-bold tracking-wider text-emerald-400 uppercase">LETRA</span>
+                <FileText className="w-4 h-4 text-[#10b981]" />
+                <span className="text-xs font-bold tracking-wider text-[#10b981] uppercase">LETRA</span>
               </>
             ) : (
               <>
-                <List className="w-4 h-4 text-amber-500" />
-                <span className="text-xs font-bold tracking-wider text-amber-500 uppercase">MÚSICAS</span>
+                <List className="w-4 h-4 text-[#10b981]" />
+                <span className="text-xs font-bold tracking-wider text-[#10b981] uppercase">MÚSICAS</span>
               </>
             )}
           </div>
 
           {/* Core scrollable content */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-zinc-902/30">
+          <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-zinc-90 w-full">
             {carLyricsActive ? (
               <div className="p-4 space-y-3.5 text-center font-sans tracking-wide">
                 {currentTrack.lyrics ? (
@@ -616,7 +616,7 @@ export default function Player({
                     const isHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
                     if (isHeader) {
                       return (
-                        <p key={idx} className="text-[10px] font-mono uppercase tracking-[0.15em] text-emerald-400 font-extrabold pt-2 pb-0.5">
+                        <p key={idx} className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#00b0ff] font-extrabold pt-2 pb-0.5">
                           {line}
                         </p>
                       );
@@ -629,7 +629,7 @@ export default function Player({
                   })
                 ) : (
                   <div className="space-y-2 py-6 flex flex-col items-center justify-center">
-                    <p className="text-emerald-400 text-xs font-mono uppercase tracking-[0.15em] font-bold">[ SEM LETRA CADASTRADA ]</p>
+                    <p className="text-[#10b981] text-xs font-mono uppercase tracking-[0.15em] font-bold">[ SEM LETRA CADASTRADA ]</p>
                     <p className="text-zinc-500 text-[10px] leading-relaxed max-w-xs mx-auto">O compositor não arquivou as estrofes originais no painel.</p>
                   </div>
                 )}
@@ -642,8 +642,8 @@ export default function Player({
                     <div 
                       key={track.trackId}
                       onClick={() => onSelectTrack?.(track)}
-                      className={`py-3 px-4 flex items-center justify-between cursor-pointer transition-colors duration-150 relative border-b border-zinc-950/20 hover:bg-[#111e30]/30 ${
-                        isActive ? 'border-l-[4px] border-emerald-500 bg-emerald-950/20' : ''
+                      className={`py-3 px-4 flex items-center justify-between cursor-pointer transition-colors duration-150 relative border-b border-zinc-900/40 hover:bg-zinc-800/45 ${
+                        isActive ? 'border-l-[4px] border-[#10b981] bg-zinc-800/30' : ''
                       }`}
                     >
                       {/* Left: Play icon status, Index number, Track metadata */}
@@ -651,15 +651,15 @@ export default function Player({
                         {isActive ? (
                           <button 
                             onClick={(e) => { e.stopPropagation(); onPlayPause(); }}
-                            className="w-8 h-8 rounded-full border border-emerald-500 flex items-center justify-center text-emerald-400 bg-emerald-950/40 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.3)] transition"
+                            className="w-8 h-8 rounded-full border border-[#10b981] flex items-center justify-center text-[#10b981] bg-[#10b981]/10 shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.3)] transition animate-pulse"
                           >
-                            {isPlaying ? <Pause className="w-3.5 h-3.5 fill-emerald-400" /> : <Play className="w-3.5 h-3.5 fill-emerald-400 ml-0.5" />}
+                            {isPlaying ? <Pause className="w-3.5 h-3.5 fill-[#10b981]" /> : <Play className="w-3.5 h-3.5 fill-[#10b981] ml-0.5" />}
                           </button>
                         ) : (
                           <button 
-                            className="w-8 h-8 rounded-full border border-zinc-850 hover:border-zinc-750 flex items-center justify-center text-zinc-400 hover:text-white shrink-0 transition"
+                            className="w-8 h-8 rounded-full border border-zinc-800 hover:border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white shrink-0 transition"
                           >
-                            <Play className="w-3.5 h-3.5 fill-zinc-400 text-zinc-400 ml-0.5" />
+                            <Play className="w-3.5 h-3.5 fill-zinc-400 text-zinc-405 ml-0.5" />
                           </button>
                         )}
 
@@ -678,10 +678,10 @@ export default function Player({
                       {/* Right: Wave anim / Ellipsis Option */}
                       <div className="flex items-center gap-3 shrink-0">
                         {isActive && isPlaying && (
-                          <div className="flex items-end gap-[1.5px] h-3 text-emerald-400 mr-1 select-none">
-                            <span className="w-[1.5px] h-2.5 bg-emerald-400 rounded-full animate-eq-1" />
-                            <span className="w-[1.5px] h-3.5 bg-emerald-400 rounded-full animate-eq-2" />
-                            <span className="w-[1.5px] h-2 bg-emerald-400 rounded-full animate-eq-3" />
+                          <div className="flex items-end gap-[1.5px] h-3 text-[#10b981] mr-1 select-none">
+                            <span className="w-[1.5px] h-2.5 bg-[#10b981] rounded-full animate-eq-1" />
+                            <span className="w-[1.5px] h-3.5 bg-[#10b981] rounded-full animate-eq-2" />
+                            <span className="w-[1.5px] h-2 bg-[#10b981] rounded-full animate-eq-3" />
                           </div>
                         )}
                         <MoreVertical className="w-4 h-4 text-zinc-500 hover:text-zinc-300 transition" />
@@ -704,7 +704,7 @@ export default function Player({
               max={duration || 100}
               value={currentTime}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-[#10b981]"
+              className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-155 accent-[#10b981]"
               style={{
                 background: `linear-gradient(to right, #10b981 0%, #10b981 ${(currentTime / (duration || 1)) * 100}%, #18181b ${(currentTime / (duration || 1)) * 100}%, #18181b 100%)`
               }}
@@ -720,7 +720,7 @@ export default function Player({
         <div className="w-full max-w-md mx-auto flex items-center justify-between px-2 py-2.5 z-10 select-none shrink-0">
           <button 
             onClick={() => setIsShuffle(!isShuffle)}
-            className={`transition duration-155 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center p-2.5 ${isShuffle ? 'text-emerald-400 animate-pulse' : 'text-zinc-450 hover:text-white'}`}
+            className={`transition duration-155 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center p-2.5 ${isShuffle ? 'text-[#10b981] animate-pulse' : 'text-zinc-450 hover:text-white'}`}
             title="Aleatório"
           >
             <Shuffle className="w-5.25 h-5.25" />
@@ -728,7 +728,7 @@ export default function Player({
 
           <button 
             onClick={onPrev}
-            className="transition duration-155 hover:scale-105 active:scale-95 text-zinc-100 hover:text-emerald-450 cursor-pointer flex items-center justify-center p-2.5"
+            className="transition duration-155 hover:scale-105 active:scale-95 text-zinc-100 hover:text-[#10b981] cursor-pointer flex items-center justify-center p-2.5 relative group"
             title="Música anterior"
           >
             <SkipBack className="w-5.5 h-5.5" />
@@ -736,19 +736,19 @@ export default function Player({
 
           <button 
             onClick={onPlayPause}
-            className="w-14 h-14 border-2 border-emerald-500 rounded-full flex items-center justify-center text-emerald-400 hover:bg-emerald-500/10 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.2)] bg-black/40"
+            className="w-14 h-14 border-2 border-[#10b981] rounded-full flex items-center justify-center text-[#10b981] hover:bg-[#10b981]/10 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.2)] bg-black/40"
             title={isPlaying ? "Pausar" : "Tocar"}
           >
             {isPlaying ? (
-              <Pause className="w-6 h-6 text-emerald-400" />
+              <Pause className="w-6 h-6 text-[#10b981]" />
             ) : (
-              <Play className="w-6 h-6 text-emerald-400 ml-1" />
+              <Play className="w-6 h-6 text-[#10b981] ml-1" />
             )}
           </button>
 
           <button 
             onClick={onNext}
-            className="transition duration-155 hover:scale-105 active:scale-95 text-zinc-100 hover:text-emerald-450 cursor-pointer flex items-center justify-center p-2.5"
+            className="transition duration-155 hover:scale-105 active:scale-95 text-zinc-100 hover:text-[#10b981] cursor-pointer flex items-center justify-center p-2.5 relative group"
             title="Próxima música"
           >
             <SkipForward className="w-5.5 h-5.5" />
@@ -756,7 +756,7 @@ export default function Player({
 
           <button 
             onClick={() => setIsRepeat(!isRepeat)}
-            className={`transition duration-155 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center p-2.5 ${isRepeat ? 'text-emerald-400' : 'text-zinc-450 hover:text-white'}`}
+            className={`transition duration-155 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center p-2.5 ${isRepeat ? 'text-[#10b981]' : 'text-zinc-450 hover:text-white'}`}
             title="Repetições"
           >
             <Repeat className="w-5.25 h-5.25" />
@@ -769,8 +769,8 @@ export default function Player({
             onClick={() => setCarLyricsActive(!carLyricsActive)}
             className={`flex items-center justify-center gap-2 px-4 py-3 border rounded-xl text-xs font-mono font-bold tracking-widest w-1/2 cursor-pointer transition duration-200 outline-none ${
               carLyricsActive 
-                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]' 
-                : 'border-emerald-500/80 hover:bg-emerald-500/5 text-[#10b981]'
+                ? 'border-[#10b981] bg-[#10b981]/10 text-[#10b981] shadow-[0_0_10px_rgba(16,185,129,0.15)]' 
+                : 'border-[#10b981]/80 hover:bg-[#10b981]/5 text-[#10b981]'
             }`}
           >
             <FileText className="w-4 h-4 stroke-[2.5]" />
@@ -782,7 +782,7 @@ export default function Player({
               setCarMode(false);
               setCarLyricsActive(false);
             }}
-            className="flex items-center justify-center gap-2 px-4 py-3 border border-amber-500/80 hover:bg-amber-500/5 text-amber-500 rounded-xl text-xs font-mono font-bold tracking-widest w-1/2 cursor-pointer transition duration-200 outline-none"
+            className="flex items-center justify-center gap-2 px-4 py-3 border border-zinc-700 hover:bg-zinc-800/10 text-zinc-300 rounded-xl text-xs font-mono font-bold tracking-widest w-1/2 cursor-pointer transition duration-200 outline-none"
           >
             <Car className="w-4 h-4 stroke-[2.5]" />
             <span>CARRO</span>
@@ -798,7 +798,7 @@ export default function Player({
       <div 
         id="bottom-dock-player" 
         onContextMenu={(e) => e.preventDefault()}
-        className="fixed bottom-0 left-0 right-0 z-40 bg-[#050609]/95 border-t border-zinc-800/80 backdrop-blur-2xl transition-all duration-350 shadow-[0_-10px_35px_rgba(0,0,0,0.8)] select-none"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-[#0c0c0e]/98 border-t border-zinc-800/70 backdrop-blur-2xl transition-all duration-350 shadow-[0_-12px_40px_rgba(0,0,0,0.9)] select-none"
         style={{
           paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))'
         }}
@@ -817,9 +817,9 @@ export default function Player({
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   {/* Mini Gráfico */}
                   <div className="relative w-10 h-10 rounded-lg bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0">
-                    <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+                    <div className="absolute inset-0 bg-gradient-to-tr from-[#10b981]/20 via-zinc-950 to-zinc-950"></div>
                     <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:6px_8px]"></div>
-                    <div className="relative flex flex-col items-center justify-center p-1 text-emerald-400 text-center z-10">
+                    <div className="relative flex flex-col items-center justify-center p-1 text-[#10b981] text-center z-10">
                       <div className="flex items-end gap-[1.5px] h-3.5 justify-center">
                         <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
                         <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-2' : 'h-2.5'}`}></span>
@@ -833,7 +833,7 @@ export default function Player({
                     <h4 className="font-heading font-black text-xs sm:text-sm tracking-wide text-white uppercase truncate">
                       {currentTrack.title}
                     </h4>
-                    <p className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-0.5 truncate">
+                    <p className="text-[10px] text-[#10b981]/90 uppercase font-mono tracking-wider font-extrabold mt-0.5 truncate">
                       {currentTrack.singer || currentTrack.composer || "STARNEJO"}
                     </p>
                   </div>
@@ -847,7 +847,7 @@ export default function Player({
                       e.stopPropagation();
                       onPlayPause();
                     }}
-                    className="w-10 h-10 rounded-full bg-[#050608] border border-emerald-500/85 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.2)] cursor-pointer outline-none"
+                    className="w-10 h-10 rounded-full bg-[#050608] border border-[#10b981]/85 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.2)] cursor-pointer outline-none"
                     title={isPlaying ? "Pausar" : "Tocar"}
                   >
                     {isPlaying ? (
@@ -875,12 +875,12 @@ export default function Player({
               <div className="flex flex-col w-full gap-3 py-2">
                 {/* Expanded Header Control info bar */}
                 <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5 mb-1 select-none">
-                  <span className="text-[9px] font-mono tracking-widest text-[#00e676] font-extrabold uppercase">
+                  <span className="text-[9px] font-mono tracking-widest text-[#10b981] font-extrabold uppercase">
                     GUIA ATIVA EXPANDIDA
                   </span>
                   <button 
                     onClick={() => setIsMobileExpanded(false)}
-                    className="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-[#00e676] hover:text-white transition font-mono text-[10px] tracking-wider font-extrabold uppercase rounded-lg cursor-pointer select-none active:scale-95"
+                    className="px-2.5 py-1 bg-zinc-90 w-full border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800 text-[#10b981] hover:text-white transition font-mono text-[10px] tracking-wider font-extrabold uppercase rounded-lg cursor-pointer select-none active:scale-95"
                   >
                     {isSharedFolderView ? 'RECOLHER' : 'RECOLHER ✕'}
                   </button>
@@ -893,9 +893,9 @@ export default function Player({
                       onClick={() => setShowFicha(!showFicha)}
                       className="relative w-11 h-11 rounded-xl bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0 cursor-pointer active:scale-95 transition-all"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+                      <div className="absolute inset-0 bg-gradient-to-tr from-[#10b981]/20 via-zinc-950 to-zinc-950"></div>
                       <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:6px_8px]"></div>
-                      <div className="relative flex flex-col items-center justify-center p-1 text-emerald-400 text-center z-10">
+                      <div className="relative flex flex-col items-center justify-center p-1 text-[#10b981] text-center z-10">
                         <div className="flex items-end gap-[1.5px] h-3.5 justify-center">
                           <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
                           <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-2' : 'h-2.5'}`}></span>
@@ -913,13 +913,13 @@ export default function Player({
                       className={`min-w-0 text-left ${isSharedFolderView ? 'cursor-default' : 'cursor-pointer group/mobile-meta active:scale-97 transition-all'}`}
                       title={isSharedFolderView ? "" : "Clique para voltar ao perfil do compositor"}
                     >
-                      <h4 id="player-track-title-mobile" className={`font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none ${isSharedFolderView ? '' : 'group-hover/mobile-meta:text-[#d4af37]'}`}>
+                      <h4 id="player-track-title-mobile" className={`font-heading font-extrabold text-sm tracking-tight text-white uppercase truncate leading-none ${isSharedFolderView ? '' : 'group-hover/mobile-meta:text-[#10b981]'}`}>
                         {currentTrack.title}
                       </h4>
-                      <p id="player-track-artist-mobile" className="text-[10px] text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
+                      <p id="player-track-artist-mobile" className="text-[10px] text-[#10b981] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
                         {currentTrack.singer || "STARNEJO"}
                         {!isSharedFolderView && (
-                          <span className="text-[7.5px] font-sans font-black text-[#d4af37] whitespace-nowrap bg-amber-500/10 border border-amber-500/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
+                          <span className="text-[7.5px] font-sans font-black text-[#10b981] whitespace-nowrap bg-[#10b981]/10 border border-[#10b981]/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
                             VOLTAR 📁
                           </span>
                         )}
@@ -933,7 +933,7 @@ export default function Player({
                     className="transition-all duration-300 hover:scale-110 active:scale-90 cursor-pointer shrink-0 p-1 bg-zinc-900/30 rounded-lg"
                     title={isFavorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                   >
-                    <Heart className={`w-4.5 h-4.5 transition-colors ${isFavorited ? 'fill-emerald-450 text-emerald-450 stroke-emerald-500' : 'text-zinc-500 hover:text-white'}`} />
+                    <Heart className={`w-4.5 h-4.5 transition-colors ${isFavorited ? 'fill-[#10b981] text-[#10b981] stroke-[#10b981]' : 'text-zinc-500 hover:text-white'}`} />
                   </button>
                 </div>
 
@@ -947,9 +947,9 @@ export default function Player({
                     max={duration || 100}
                     value={currentTime}
                     onChange={(e) => handleSeek(Number(e.target.value))}
-                    className="flex-1 h-[3px] bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500"
+                    className="flex-1 h-[3px] bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-[#10b981]"
                     style={{
-                      background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
+                      background: `linear-gradient(to right, #10b981 0%, #10b981 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
                     }}
                   />
                   
@@ -961,7 +961,7 @@ export default function Player({
                   {/* Shuffle */}
                   <button 
                     onClick={() => setIsShuffle(!isShuffle)}
-                    className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isShuffle ? 'text-emerald-400' : 'text-zinc-500'}`}
+                    className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isShuffle ? 'text-[#10b981]' : 'text-zinc-500'}`}
                   >
                     <Shuffle className="w-4 h-4" />
                   </button>
@@ -977,7 +977,7 @@ export default function Player({
                   {/* Large Green Glowing play/pause */}
                   <button 
                     onClick={onPlayPause}
-                    className="w-12 h-12 rounded-full bg-[#050608] border border-emerald-500/80 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.35)] cursor-pointer outline-none shrink-0"
+                    className="w-12 h-12 rounded-full bg-[#050608] border border-[#10b981]/80 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.35)] cursor-pointer outline-none shrink-0"
                   >
                     {isPlaying ? (
                       <Pause className="w-4.5 h-4.5 fill-white text-white" />
@@ -987,8 +987,7 @@ export default function Player({
                   </button>
 
                   {/* Next */}
-                  <button 
-                    onClick={onNext}
+                  <button                      onClick={onNext}
                     className="text-zinc-300 hover:text-white transition-all p-1.5 hover:scale-110 active:scale-95 cursor-pointer outline-none" 
                   >
                     <SkipForward className="w-4.5 h-4.5" />
@@ -997,7 +996,7 @@ export default function Player({
                   {/* Repeat */}
                   <button 
                     onClick={() => setIsRepeat(!isRepeat)}
-                    className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isRepeat ? 'text-emerald-400' : 'text-zinc-500'}`}
+                    className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1.5 ${isRepeat ? 'text-[#10b981]' : 'text-zinc-500'}`}
                   >
                     <Repeat className="w-4 h-4" />
                   </button>
@@ -1007,17 +1006,17 @@ export default function Player({
                 <div className="grid grid-cols-2 gap-2 w-full mt-0.5">
                   <button 
                     onClick={() => setShowLyrics(true)}
-                    className="flex items-center justify-center gap-1 py-2 bg-transparent border border-emerald-500/25 hover:border-emerald-500 text-emerald-400 hover:text-emerald-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
+                    className="flex items-center justify-center gap-1 py-2 bg-transparent border border-[#10b981]/25 hover:border-[#10b981] text-[#10b981] hover:text-[#05c46b] rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97"
                   >
-                    <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
                     <span>LETRA</span>
                   </button>
 
                   <button 
                     onClick={() => setCarMode(true)}
-                    className="flex items-center justify-center gap-1 py-2 bg-yellow-500/10 border border-yellow-500/80 hover:border-yellow-400 text-yellow-400 hover:text-yellow-300 rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97 shadow-[0_0_10px_rgba(234,179,8,0.15)]"
+                    className="flex items-center justify-center gap-1 py-2 bg-[#10b981]/10 border border-[#10b981]/80 hover:border-[#05c46b] text-[#10b981] hover:text-white rounded-xl text-[10.5px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-97 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
                   >
-                    <Car className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                    <Car className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
                     <span>CARRO</span>
                   </button>
                 </div>
@@ -1027,19 +1026,19 @@ export default function Player({
 
           {/* DESKTOP/TABLET ONLY: Left Block: Perfect Soundrive Album Thumbnail & Text Metadata */}
           <div className="hidden md:flex items-center gap-4 min-w-0 w-full md:w-auto md:max-w-[30%] select-none shrink-0">
-            <div className="relative w-14 h-14 rounded-lg bg-[#0d0f14] border border-zinc-955 flex items-center justify-center shadow-md overflow-hidden shrink-0 group">
-              {/* Premium abstract emerald to gold gradient background like screenshot */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-600/20 via-zinc-950 to-zinc-950"></div>
+            <div className="relative w-14 h-14 rounded-lg bg-[#0d0f14] border border-zinc-800 flex items-center justify-center shadow-md overflow-hidden shrink-0 group">
+              {/* Premium abstract emerald green gradient background */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-[#10b981]/20 via-zinc-950 to-zinc-950"></div>
               
-              {/* Emerald Sound representation overlay inside block */}
+              {/* Green Sound representation overlay inside block */}
               <div className="absolute inset-0 bg-[radial-gradient(#10b98115_1px,transparent_1px)] [background-size:8px_8px]"></div>
               
-              <div className="relative flex flex-col items-center justify-center p-2 text-emerald-400 text-center z-10">
+              <div className="relative flex flex-col items-center justify-center p-2 text-[#10b981] text-center z-10">
                 <div className="flex items-end gap-[2px] h-4.5 justify-center mb-0.5">
-                  <span className={`w-[2px] bg-gradient-to-t from-[#10b981] to-[#84cc16] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-1' : 'h-1.5'}`}></span>
+                  <span className={`w-[2px] bg-gradient-to-t from-[#10b981] to-[#05c46b] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-1' : 'h-1.5'}`}></span>
                   <span className={`w-[2px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-4 animate-bar-2' : 'h-2.5'}`}></span>
                   <span className={`w-[2px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-3' : 'h-2'}`}></span>
-                  <span className={`w-[2px] bg-gradient-to-t from-[#10b981] to-[#eab308] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-4' : 'h-1'}`}></span>
+                  <span className={`w-[2px] bg-gradient-to-t from-[#10b981] to-[#05c46b] rounded-full ${isPlaying && !isDataSaver ? 'h-2 animate-bar-4' : 'h-1'}`}></span>
                 </div>
               </div>
               
@@ -1048,7 +1047,7 @@ export default function Player({
                 className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-lg transition-opacity duration-305 cursor-pointer z-20"
                 title="Ficha técnica"
               >
-                <Info className="w-4 h-4 text-emerald-400" />
+                <Info className="w-4 h-4 text-[#10b981]" />
               </button>
             </div>
 
@@ -1062,7 +1061,7 @@ export default function Player({
               title={isSharedFolderView ? "" : "Clique para voltar ao perfil do compositor"}
             >
               <div className="flex items-center gap-2.5">
-                <h4 id="player-track-title" className={`font-heading font-extrabold text-sm sm:text-base tracking-tight text-zinc-100 uppercase truncate leading-none ${isSharedFolderView ? '' : 'group-hover/desktop-meta:text-[#d4af37]'}`}>
+                <h4 id="player-track-title" className={`font-heading font-extrabold text-sm sm:text-base tracking-tight text-zinc-100 uppercase truncate leading-none ${isSharedFolderView ? '' : 'group-hover/desktop-meta:text-[#10b981]'}`}>
                   {currentTrack.title}
                 </h4>
                 
@@ -1075,14 +1074,14 @@ export default function Player({
                   className="transition-all duration-300 hover:scale-110 active:scale-90 cursor-pointer shrink-0 p-1"
                   title={isFavorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                 >
-                  <Heart className={`w-4 h-4 transition-colors ${isFavorited ? 'fill-emerald-450 text-emerald-450 stroke-emerald-500' : 'text-zinc-500 hover:text-white'}`} />
+                  <Heart className={`w-4 h-4 transition-colors ${isFavorited ? 'fill-[#10b981] text-[#10b981] stroke-[#10b981]' : 'text-zinc-500 hover:text-white'}`} />
                 </button>
               </div>
               
-              <p id="player-track-artist" className="text-[10px] sm:text-xs text-[#84cc16] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-2">
+              <p id="player-track-artist" className="text-[10px] sm:text-xs text-[#10b981] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-2">
                 {currentTrack.singer || "STARNEJO"}
                 {!isSharedFolderView && (
-                  <span className="text-[8px] font-sans font-bold text-zinc-400 border border-zinc-800 rounded-full px-2 py-0.5 bg-zinc-950 group-hover/desktop-meta:border-[#d4af37]/45 group-hover/desktop-meta:text-[#d4af37] transition-all whitespace-nowrap leading-none">
+                  <span className="text-[8px] font-sans font-bold text-zinc-400 border border-zinc-850 rounded-full px-2 py-0.5 bg-zinc-950 group-hover/desktop-meta:border-[#10b981]/45 group-hover/desktop-meta:text-[#10b981] transition-all whitespace-nowrap leading-none">
                     VER COMPOSITOR 📁
                   </span>
                 )}
@@ -1093,12 +1092,12 @@ export default function Player({
           {/* DESKTOP/TABLET ONLY: Center Block: Complete exact replica playback suite */}
           <div className="hidden md:flex flex-1 w-full md:max-w-[45%] flex flex-col items-center gap-2.5">
             {/* Control buttons inside header */}
-            <div className="flex items-center gap-6.5 select-none text-zinc-455">
+            <div className="flex items-center gap-6.5 select-none text-zinc-400">
               
               {/* Shuffle button */}
               <button 
                 onClick={() => setIsShuffle(!isShuffle)}
-                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1 ${isShuffle ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-305'}`}
+                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1 ${isShuffle ? 'text-[#00b0ff]' : 'text-zinc-500 hover:text-zinc-300'}`}
                 title="Ordem aleatória"
               >
                 <Shuffle className="w-4 h-4" />
@@ -1118,7 +1117,7 @@ export default function Player({
               <button 
                 id="play-pause-btn"
                 onClick={onPlayPause}
-                className="w-12 h-12 rounded-full bg-[#050608] border border-emerald-500/50 hover:border-yellow-405 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.25)] hover:shadow-[0_0_15px_rgba(234,179,8,0.3)] cursor-pointer outline-none shrink-0"
+                className="w-12 h-12 rounded-full bg-[#050608] border border-[#10b981]/50 hover:border-[#05c46b] flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.25)] hover:shadow-[0_0_15px_rgba(5,196,107,0.3)] cursor-pointer outline-none shrink-0"
                 title={isPlaying ? "Pausar" : "Tocar"}
               >
                 {isPlaying ? (
@@ -1141,7 +1140,7 @@ export default function Player({
               {/* Repeat button */}
               <button 
                 onClick={() => setIsRepeat(!isRepeat)}
-                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1 ${isRepeat ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-303'}`}
+                className={`transition-all duration-300 hover:scale-110 cursor-pointer p-1 ${isRepeat ? 'text-[#10b981]' : 'text-zinc-500 hover:text-zinc-300'}`}
                 title="Repetir faixa"
               >
                 <Repeat className="w-4 h-4" />
@@ -1149,7 +1148,7 @@ export default function Player({
             </div>
 
             {/* Progress seek bar mimicking reference */}
-            <div className="w-full flex items-center gap-3.5 text-[11px] font-mono text-zinc-400 font-bold select-none">
+            <div className="w-full flex items-center gap-3.5 text-[11px] font-mono text-zinc-400 font-bold select-none font-bold">
               <span className="w-8 text-right select-none">{formatTime(currentTime)}</span>
               
               <input 
@@ -1159,9 +1158,9 @@ export default function Player({
                 max={duration || 100}
                 value={currentTime}
                 onChange={(e) => handleSeek(Number(e.target.value))}
-                className="flex-1 h-[3px] bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-emerald-500 hover:accent-emerald-400"
+                className="flex-1 h-[3px] bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all duration-150 accent-[#10b981] hover:accent-[#05c46b]"
                 style={{
-                  background: `linear-gradient(to right, #10b981 0%, #eab308 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
+                  background: `linear-gradient(to right, #10b981 0%, #05c46b ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
                 }}
               />
               
@@ -1175,10 +1174,10 @@ export default function Player({
             {/* Capsule 1: Ver Letras action */}
             <button 
               onClick={() => setShowLyrics(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-transparent border border-emerald-550/20 hover:border-emerald-500 text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-96"
+              className="flex items-center gap-2 px-4 py-2 bg-transparent border border-[#10b981]/20 hover:border-[#10b981] text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-96"
               title="Exibir Letra"
             >
-              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <FileText className="w-3.5 h-3.5 text-[#10b981]" />
               <span className="text-[10px] md:text-xs">Ver letras</span>
             </button>
 
@@ -1186,10 +1185,10 @@ export default function Player({
             <button 
               id="launch-car-mode-btn"
               onClick={() => setCarMode(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-transparent border border-yellow-550/20 hover:border-[#eab308] text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-96 flex-shrink-0"
+              className="flex items-center gap-2 px-4 py-2 bg-transparent border border-zinc-700 hover:border-[#10b981] text-zinc-300 hover:text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer select-none active:scale-96 flex-shrink-0"
               title="Ativar Modo Carro"
             >
-              <Car className="w-3.5 h-3.5 text-yellow-500" />
+              <Car className="w-3.5 h-3.5 text-zinc-400" />
               <span className="text-[10px] md:text-xs">Modo carro</span>
             </button>
 
@@ -1197,13 +1196,13 @@ export default function Player({
             <div className="hidden lg:flex items-center gap-2 select-none text-zinc-400">
               <button 
                 onClick={() => setIsMuted(!isMuted)} 
-                className="text-emerald-400 hover:text-white transition-colors p-1 cursor-pointer outline-none shrink-0"
+                className="text-[#10b981] hover:text-white transition-colors p-1 cursor-pointer outline-none shrink-0"
                 title={isMuted ? "Desativar mudo" : "Mudo"}
               >
                 {isMuted || volume === 0 ? (
                   <VolumeX className="w-4 h-4 text-rose-500" />
                 ) : (
-                  <Volume2 className="w-4 h-4 animate-pulse" />
+                  <Volume2 className="w-4 h-4 animate-pulse text-[#10b981]" />
                 )}
               </button>
               
@@ -1217,7 +1216,7 @@ export default function Player({
                   setVolume(Number(e.target.value));
                   if (isMuted) setIsMuted(false);
                 }}
-                className="w-16 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all accent-emerald-500 hover:accent-emerald-400"
+                className="w-16 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer outline-none transition-all accent-[#10b981] hover:accent-[#05c46b]"
                 style={{
                   background: `linear-gradient(to right, #10b981 0%, #10b981 ${(isMuted ? 0 : volume) * 100}%, #27272a ${(isMuted ? 0 : volume) * 100}%, #27272a 100%)`
                 }}
@@ -1225,7 +1224,7 @@ export default function Player({
             </div>
 
             {/* Micro Equalizer parallel lines animation exact match */}
-            <div className="hidden min-[1100px]:flex items-end gap-[2px] h-3.5 select-none text-emerald-400 shrink-0 opacity-80 hover:opacity-100 transition-all duration-300 bg-zinc-950/20 px-1 py-0.5 rounded ml-1">
+            <div className="hidden min-[1100px]:flex items-end gap-[2px] h-3.5 select-none text-[#10b981] shrink-0 opacity-80 hover:opacity-100 transition-all duration-300 bg-zinc-950/20 px-1 py-0.5 rounded ml-1">
               <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3 animate-bar-1' : 'h-1.5'}`}></span>
               <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-4.5 animate-bar-2' : 'h-3.5'}`}></span>
               <span className={`w-[1.5px] bg-[#10b981] rounded-full ${isPlaying && !isDataSaver ? 'h-3.5 animate-bar-3' : 'h-2'}`}></span>
@@ -1238,10 +1237,10 @@ export default function Player({
 
       {/* COMPACT TECHNICAL SLIDE DIALOG */}
       {showFicha && (
-        <div className="fixed bottom-24 left-4 md:left-8 bg-[#0b0e14]/95 border border-zinc-800/80 p-4 rounded-2xl shadow-2xl max-w-sm w-[calc(100vw-32px)] z-50 text-zinc-300 animate-slide-up select-none backdrop-blur-xl">
-          <div className="flex justify-between items-start border-b border-zinc-900 pb-2 mb-2 w-full">
-            <h5 className="font-heading font-black text-xs tracking-widest text-amber-400 uppercase flex items-center gap-1.5 font-bold">
-              <Disc className="w-4 h-4 text-amber-550 animate-spin-slow" /> Ficha Técnica Autor
+        <div className="fixed bottom-24 left-4 md:left-8 bg-[#18181c]/95 border border-zinc-800 p-4 rounded-2xl shadow-2xl max-w-sm w-[calc(100vw-32px)] z-50 text-zinc-350 animate-slide-up select-none backdrop-blur-xl">
+          <div className="flex justify-between items-start border-b border-zinc-800 pb-2 mb-2 w-full">
+            <h5 className="font-heading font-black text-xs tracking-widest text-[#10b981] uppercase flex items-center gap-1.5 font-bold">
+              <Disc className="w-4 h-4 text-[#10b981] animate-spin-slow" /> Ficha Técnica Autor
             </h5>
             <button 
               onClick={() => setShowFicha(false)} 
@@ -1251,16 +1250,16 @@ export default function Player({
             </button>
           </div>
           <div className="space-y-1.5 text-[11px] text-zinc-300 leading-relaxed">
-            <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Música:</strong> {currentTrack.title}</p>
-            <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Intérprete:</strong> {currentTrack.singer || "Não especificado"}</p>
-            {currentTrack.composer && <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Compositores:</strong> {currentTrack.composer}</p>}
-            {currentTrack.genre && <p><strong className="text-zinc-550 font-bold uppercase tracking-wide">Estilo:</strong> {currentTrack.genre}</p>}
+            <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Música:</strong> {currentTrack.title}</p>
+            <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Intérprete:</strong> {currentTrack.singer || "Não especificado"}</p>
+            {currentTrack.composer && <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Compositores:</strong> {currentTrack.composer}</p>}
+            {currentTrack.genre && <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Estilo:</strong> {currentTrack.genre}</p>}
             {currentTrack.description && (
-              <p className="mt-2 text-zinc-400 italic border-l-2 border-amber-500 pl-2 py-0.5 leading-relaxed bg-zinc-900/30 rounded-r">
+              <p className="mt-2 text-zinc-400 italic border-l-2 border-[#10b981] pl-2 py-0.5 leading-relaxed bg-zinc-900/30 rounded-r">
                 "{currentTrack.description}"
               </p>
             )}
-            <p className="text-[9px] text-amber-550 font-mono text-right pt-2.5 uppercase tracking-wider select-none leading-none">Registrado no acervo digital</p>
+            <p className="text-[9px] text-[#10b981] font-mono text-right pt-2.5 uppercase tracking-wider select-none leading-none">Registrado no acervo digital</p>
           </div>
         </div>
       )}
@@ -1276,18 +1275,18 @@ export default function Player({
       {/* SLIDING PREMIER LYRICS SIDE DRAWER */}
       <div 
         id="side-lyrics-drawer"
-        className={`fixed top-0 right-0 bottom-0 w-full sm:w-[420px] bg-[#090b10]/98 border-l border-zinc-900 backdrop-blur-3xl z-50 flex flex-col justify-between p-6 select-text transition-transform duration-500 ease-out shadow-2xl shadow-black/80 ${
+        className={`fixed top-0 right-0 bottom-0 w-full sm:w-[420px] bg-[#18181c]/98 border-l border-zinc-850 backdrop-blur-3xl z-50 flex flex-col justify-between p-6 select-text transition-transform duration-500 ease-out shadow-2xl shadow-black/85 ${
           showLyrics ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Specular premium gradient orb */}
-        <div className="absolute right-0 top-0 w-80 h-80 bg-amber-500/5 rounded-full blur-[90px] pointer-events-none"></div>
+        <div className="absolute right-0 top-0 w-80 h-80 bg-[#10b981]/5 rounded-full blur-[90px] pointer-events-none"></div>
 
         {/* Header Block of Lyrics Drawer */}
         <div className="relative flex items-center justify-between z-10 border-b border-zinc-900 pb-3.5 select-none w-full">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shadow-lg flex-shrink-0">
-              <Disc className={`w-5 h-5 ${isPlaying ? 'animate-spin-slow text-amber-550' : 'text-zinc-555'}`} />
+            <div className="w-10 h-10 rounded-xl bg-[#10b981]/10 border border-[#10b981]/25 flex items-center justify-center text-[#10b981] shadow-lg flex-shrink-0">
+              <Disc className={`w-5 h-5 ${isPlaying ? 'animate-spin-slow text-[#10b981]' : 'text-zinc-550'}`} />
             </div>
             <div className="min-w-0">
               <h4 className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 font-bold leading-none">Tocando Agora</h4>
@@ -1305,7 +1304,7 @@ export default function Player({
 
         {/* Dynamic scrollable lyric text block with fading masks */}
         <div className="relative flex-1 flex flex-col my-5 overflow-hidden z-10">
-          <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#090b10] to-transparent pointer-events-none z-10"></div>
+          <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#18181c] to-transparent pointer-events-none z-10"></div>
           
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 space-y-4 py-5 text-left scroll-smooth scrollbar-none">
             {currentTrack.lyrics ? (
@@ -1313,7 +1312,7 @@ export default function Player({
                 const isSectionHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
                 if (isSectionHeader) {
                   return (
-                    <p key={idx} className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-extrabold pt-3.5 pb-0.5 select-none">
+                    <p key={idx} className="text-[10px] font-mono uppercase tracking-widest text-[#10b981] font-extrabold pt-3.5 pb-0.5 select-none">
                       {line}
                     </p>
                   );
@@ -1330,15 +1329,15 @@ export default function Player({
             ) : (
               <div className="space-y-3 py-16">
                 <BookOpen className="w-8 h-8 text-zinc-700 mx-auto animate-bounce" />
-                <p className="text-zinc-555 text-[10px] font-mono uppercase tracking-widest">[ Obra instrumental / sem letra arquivada ]</p>
-                <p className="text-zinc-600 text-xs max-w-xs mx-auto leading-relaxed">
+                <p className="text-zinc-500 text-[10px] font-mono uppercase tracking-widest">[ Obra instrumental / sem letra arquivada ]</p>
+                <p className="text-zinc-650 text-xs max-w-xs mx-auto leading-relaxed">
                   O compositor de "{currentTrack.title}" ainda não disponibilizou o arquivo literário para esta demo.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-[#090b10] to-transparent pointer-events-none z-10"></div>
+          <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-[#18181c] to-transparent pointer-events-none z-10"></div>
         </div>
 
         {/* Micro Synced Player Controls inside Drawer */}
@@ -1352,7 +1351,7 @@ export default function Player({
               max={duration || 100}
               value={currentTime}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500 transition outline-none"
+              className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#10b981] transition outline-none"
             />
             <span>{formatTime(duration)}</span>
           </div>
@@ -1369,7 +1368,7 @@ export default function Player({
             
             <button 
               onClick={onPlayPause} 
-              className="p-3.5 bg-gradient-to-r from-amber-500 to-orange-555 text-zinc-950 rounded-full hover:brightness-110 shadow-lg shadow-amber-555/15 transition cursor-pointer font-bold"
+              className="p-3.5 bg-gradient-to-r from-[#10b981] to-[#05c46b] text-zinc-950 rounded-full hover:brightness-110 shadow-lg shadow-[#10b981]/15 transition cursor-pointer font-bold"
               title={isPlaying ? "Deter" : "Tocar"}
             >
               {isPlaying ? <Pause className="w-5 h-5 fill-slate-950 text-zinc-950" /> : <Play className="w-5 h-5 fill-slate-950 text-zinc-950 ml-0.5" />}

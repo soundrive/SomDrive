@@ -40,8 +40,165 @@ import {
   Lock,
   Folder,
   FolderClosed,
-  FolderOpen
+  FolderOpen,
+  MoreVertical,
+  MoreHorizontal
 } from 'lucide-react';
+
+const FOLDER_COLORS = [
+  {
+    name: 'verde_somdrive',
+    primary: '#1ed760',
+    border: 'border-[#1ed760]/30',
+    hoverBorder: 'hover:border-[#1ed760]/60',
+    glow: 'shadow-[#1ed760]/10 hover:shadow-[#1ed760]/20',
+    ring: 'ring-[#1ed760]/20',
+    text: 'text-[#1ed760]',
+    bg: 'bg-[#121c16]',
+    textAccent: 'text-[#1ed760]'
+  },
+  {
+    name: 'dourado',
+    primary: '#f59e0b',
+    border: 'border-[#f59e0b]/30',
+    hoverBorder: 'hover:border-[#f59e0b]/60',
+    glow: 'shadow-[#f59e0b]/10 hover:shadow-[#f59e0b]/20',
+    ring: 'ring-[#f59e0b]/20',
+    text: 'text-[#f59e0b]',
+    bg: 'bg-[#1b1611]',
+    textAccent: 'text-[#f59e0b]'
+  },
+  {
+    name: 'azul',
+    primary: '#3b82f6',
+    border: 'border-[#3b82f6]/30',
+    hoverBorder: 'hover:border-[#3b82f6]/60',
+    glow: 'shadow-[#3b82f6]/10 hover:shadow-[#3b82f6]/20',
+    ring: 'ring-[#3b82f6]/20',
+    text: 'text-[#3b82f6]',
+    bg: 'bg-[#111623]',
+    textAccent: 'text-[#3b82f6]'
+  },
+  {
+    name: 'roxo',
+    primary: '#a855f7',
+    border: 'border-[#a855f7]/30',
+    hoverBorder: 'hover:border-[#a855f7]/60',
+    glow: 'shadow-[#a855f7]/10 hover:shadow-[#a855f7]/20',
+    ring: 'ring-[#a855f7]/20',
+    text: 'text-[#a855f7]',
+    bg: 'bg-[#171120]',
+    textAccent: 'text-[#a855f7]'
+  },
+  {
+    name: 'ciano',
+    primary: '#06b6d4',
+    border: 'border-[#06b6d4]/30',
+    hoverBorder: 'hover:border-[#06b6d4]/60',
+    glow: 'shadow-[#06b6d4]/10 hover:shadow-[#06b6d4]/20',
+    ring: 'ring-[#06b6d4]/20',
+    text: 'text-[#06b6d4]',
+    bg: 'bg-[#111920]',
+    textAccent: 'text-[#06b6d4]'
+  },
+  {
+    name: 'laranja',
+    primary: '#f97316',
+    border: 'border-[#f97316]/30',
+    hoverBorder: 'hover:border-[#f97316]/60',
+    glow: 'shadow-[#f97316]/10 hover:shadow-[#f97316]/20',
+    ring: 'ring-[#f97316]/20',
+    text: 'text-[#f97316]',
+    bg: 'bg-[#1b1411]',
+    textAccent: 'text-[#f97316]'
+  },
+  {
+    name: 'cinza_premium',
+    primary: '#cbd5e1',
+    border: 'border-[#cbd5e1]/30',
+    hoverBorder: 'hover:border-[#cbd5e1]/60',
+    glow: 'shadow-[#cbd5e1]/10 hover:shadow-[#cbd5e1]/20',
+    ring: 'ring-[#cbd5e1]/20',
+    text: 'text-[#cbd5e1]',
+    bg: 'bg-[#151920]',
+    textAccent: 'text-[#cbd5e1]'
+  }
+];
+
+const getFolderColor = (index: number) => {
+  return FOLDER_COLORS[index % FOLDER_COLORS.length];
+};
+
+const getCategoryIcon = (index: number, color: string) => {
+  const iconIdx = index % 8;
+  switch (iconIdx) {
+    case 0:
+      // Sertanejo: Music Note
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color}>
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      );
+    case 1:
+      // Românticas: Star
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color}>
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      );
+    case 2:
+      // Inéditas: Heart
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color}>
+          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+        </svg>
+      );
+    case 3:
+      // Participações: Mic
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color}>
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8" />
+        </svg>
+      );
+    case 4:
+      // Modão: Guitar
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round">
+          <path d="m16 9.5 3-3M17.5 11l3-3M12.5 13H15M8.5 16.5C7.5 16.5 6 15 6 13.5c0-1.5 2-3 4-3s4.5.5 4.5 2.5-2 3.5-6 3.5Z" />
+          <path d="M14.5 10.5 21 4" />
+        </svg>
+      );
+    case 5:
+      // Trabalhos: Playlist Lines
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 10h11M3 6h18M3 14h11" />
+          <path d="M17 14v6" />
+          <circle cx="15" cy="20" r="2" />
+        </svg>
+      );
+    case 6:
+      // Ao Vivo: Flame
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color}>
+          <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+        </svg>
+      );
+    default:
+      // Outros: Ellipsis (three dots)
+      return (
+        <svg className="w-8 h-8 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke={color}>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+          <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+          <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      );
+  }
+};
+
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
 import { dbService } from '../lib/db';
 import { db } from '../lib/firebase';
@@ -272,6 +429,7 @@ export default function Dashboard({
   const [editingRepertoire, setEditingRepertoire] = useState<Repertoire | null>(null);
   const [viewingRepertoireTracks, setViewingRepertoireTracks] = useState<Repertoire | null>(null);
   const [managingRepTrackId, setManagingRepTrackId] = useState<string | null>(null); // Repertoire ID for checkboxes modal
+  const [openMenuRepId, setOpenMenuRepId] = useState<string | null>(null);
 
   // Projects list & creations
   const [dashboardProjects, setDashboardProjects] = useState<any[]>([]);
@@ -1421,7 +1579,7 @@ export default function Dashboard({
   const totalPlays = tracks.reduce((sum, t) => sum + t.playsCount, 0);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans pb-32">
+    <div className="min-h-screen bg-[#0f121d] text-white font-sans pb-32">
       
       {/* Top action header */}
       <header className="border-b border-slate-900 bg-slate-900/40 backdrop-blur-md sticky top-0 z-30 px-6 py-4 flex items-center justify-between">
@@ -2236,112 +2394,185 @@ export default function Dashboard({
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {combinedRepertoires.map((rep) => {
+                    {combinedRepertoires.map((rep, index) => {
                       const repTracksCount = rep.trackIds?.length || 0;
                       const slugToUse = rep.slug || rep.id;
                       const shareUrl = `${window.location.origin}/s/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
                       const isPrivate = rep.visibility === 'private';
                       const isCopied = repCopiedId === rep.id;
+                      const folderColor = getFolderColor(index);
+
+                      // Play all songs helper
+                      const handlePlayAll = () => {
+                        const repSongs = tracks.filter(t => t.repertoireId === rep.id || (rep.trackIds && rep.trackIds.includes(t.trackId)));
+                        if (repSongs.length > 0) {
+                          onSelectTrack(repSongs[0], repSongs);
+                        } else {
+                          alert('Esta pasta não possui músicas para reproduzir.');
+                        }
+                      };
 
                       return (
                         <div 
                           key={rep.id}
-                          className="bg-slate-900/60 rounded-2xl border border-slate-850 p-5 flex flex-col justify-between hover:border-slate-700 transition space-y-4 shadow-xl"
+                          onClick={() => setViewingRepertoireTracks(rep)}
+                          className={`relative w-full h-[255px] sm:h-[275px] bg-[#121622]/90 hover:bg-[#151a29] rounded-2xl border ${folderColor.border} ${folderColor.hoverBorder} p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 shadow-md hover:shadow-lg shadow-black/40 hover:shadow-${folderColor.name === 'verde_somdrive' ? 'emerald' : 'blue'}-500/5 group select-none cursor-pointer active:scale-[0.98] overflow-visible`}
                         >
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={`text-[9px] font-mono tracking-wider font-extrabold px-2 py-0.5 rounded border uppercase ${
-                                isPrivate ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
-                              }`}>
-                                {isPrivate ? 'Privado' : 'Público'}
-                              </span>
-                              
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
-                              </span>
-                            </div>
+                          {/* Soft inner glow matching the folder's theme */}
+                          <div className={`absolute -top-10 -left-10 w-24 h-24 rounded-full bg-gradient-to-br from-${folderColor.name === 'verde_somdrive' ? 'emerald' : 'blue'}-500/5 to-transparent blur-2xl pointer-events-none`}></div>
 
-                            <h4 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">
-                              📁 {rep.name}
-                            </h4>
-                            
-                            <p className="text-slate-400 text-xs font-sans line-clamp-2 min-h-[32px]">
-                              {rep.description || 'Sem descrição.'}
-                            </p>
+                          {/* A. CARD HEADER: Private/Public badge & options dropdown trigger */}
+                          <div className="flex items-center justify-between w-full relative z-10 pl-1">
+                            <span className={`text-[8px] font-mono tracking-widest font-extrabold px-1.5 py-0.5 rounded border uppercase inline-block ${
+                              isPrivate ? 'bg-rose-950/30 border-rose-500/20 text-rose-400' : 'bg-emerald-950/30 border-emerald-500/20 text-[#1ed760]'
+                            }`}>
+                              {isPrivate ? 'Privado' : 'Público'}
+                            </span>
+
+                            <div className="flex items-center gap-1.5 relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuRepId(openMenuRepId === rep.id ? null : rep.id);
+                                }}
+                                className="w-6 h-6 rounded-md bg-black/45 hover:bg-black/65 text-slate-400 hover:text-white transition duration-150 flex items-center justify-center cursor-pointer border border-white/5 active:scale-90"
+                                title="Opções"
+                              >
+                                <MoreHorizontal className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Absolute dropdown options menu (compact / small) */}
+                              {openMenuRepId === rep.id && (
+                                <>
+                                  <div 
+                                    className="fixed inset-0 z-40" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuRepId(null);
+                                    }}
+                                  />
+                                  <div 
+                                    className="absolute right-0 mt-7 w-36 bg-[#161d2d] border border-slate-800 rounded-xl shadow-2xl py-1.5 z-50 animate-fade-in text-left"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuRepId(null);
+                                        setEditingRepertoire(rep);
+                                        setNewRepName(rep.name);
+                                        setNewRepDesc(rep.description || '');
+                                        setNewRepVisibility(rep.visibility === 'active' ? 'public' : (rep.visibility || 'public') as any);
+                                        setShowCreateRep(true);
+                                      }}
+                                      className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2"
+                                    >
+                                      <Pencil className="w-3 h-3 text-slate-450" />
+                                      <span>Editar Pasta</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isPrivate}
+                                      onClick={() => {
+                                        setOpenMenuRepId(null);
+                                        navigator.clipboard.writeText(shareUrl);
+                                        setRepCopiedId(rep.id);
+                                        setTimeout(() => setRepCopiedId(null), 2000);
+                                      }}
+                                      className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
+                                    >
+                                      <Share2 className="w-3 h-3 text-slate-450" />
+                                      <span>Compartilhar</span>
+                                    </button>
+                                    <div className="h-[1px] bg-slate-800/80 my-1"></div>
+                                    <button
+                                      type="button"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        setOpenMenuRepId(null);
+                                        if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
+                                          await dbService.deleteRepertoire(rep.id, profile.userId);
+                                          refreshData();
+                                        }
+                                      }}
+                                      className="w-full px-3 py-2 text-[11px] text-rose-455 hover:bg-rose-950/20 transition flex items-center gap-2 font-bold"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                      <span>Excluir Pasta</span>
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="flex flex-col gap-2 pt-3 border-t border-slate-850">
-                            <div className="flex gap-2 w-full">
-                              {/* ABRIR BUTTON */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setViewingRepertoireTracks(rep);
-                                }}
-                                className="flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-orange-600 hover:bg-orange-500 text-slate-950 px-3 font-mono font-bold"
-                                title="Abrir Repertório"
-                              >
-                                <FolderClosed className="w-3.5 h-3.5 stroke-[2.5]" />
-                                <span>Abrir</span>
-                              </button>
-
-                              {/* COMPARTILHAR BUTTON */}
-                              <button
-                                type="button"
-                                disabled={isPrivate}
-                                onClick={() => {
-                                  navigator.clipboard.writeText(shareUrl);
-                                  setRepCopiedId(rep.id);
-                                  setTimeout(() => setRepCopiedId(null), 2000);
-                                }}
-                                className={`flex-1 py-1.5 text-xs font-bold uppercase rounded-xl transition flex items-center justify-center gap-1.5 font-mono font-bold ${
-                                  isPrivate
-                                    ? 'bg-slate-950/45 border border-slate-850/60 text-slate-600 cursor-not-allowed'
-                                    : isCopied
-                                    ? 'bg-emerald-600 text-slate-950'
-                                    : 'bg-slate-800 hover:bg-slate-755 text-slate-200 cursor-pointer'
-                                }`}
-                                title={isPrivate ? "Repertórios privados não podem ser compartilhados publicamente." : "Copiar link de compartilhamento"}
-                              >
-                                <Share2 className="w-3.5 h-3.5" />
-                                <span>{isPrivate ? 'Privado' : isCopied ? 'Copiado!' : 'Compartilhar'}</span>
-                              </button>
+                          {/* B. MIDDLE SECTION: Center big category icon representing style inside physical folder */}
+                          <div className="relative w-full h-[95px] flex items-center justify-center mt-1 select-none pointer-events-none">
+                            <div className="absolute inset-x-0 top-0 bottom-0 pointer-events-none flex items-center justify-center">
+                              <svg viewBox="0 0 100 75" className="w-[120px] h-[90px]" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path 
+                                  d="M10,21 L10,13 C10,10.5 12,8.5 14.5,8.5 L36,8.5 C38.5,8.5 40.2,10 41.8,12 L47,21 Z"
+                                  fill={folderColor.primary}
+                                  className="transition-all duration-300"
+                                />
+                                <rect 
+                                  x="10" 
+                                  y="21" 
+                                  width="80" 
+                                  height="45" 
+                                  rx="6" 
+                                  fill={`${folderColor.primary}05`}
+                                  stroke={folderColor.primary} 
+                                  strokeWidth="1.8" 
+                                  className="transition-all duration-300"
+                                />
+                              </svg>
                             </div>
+                            
+                            <div className="relative z-10 transition-transform duration-300 group-hover:scale-110 mt-2 flex items-center justify-center">
+                              {getCategoryIcon(index, folderColor.primary)}
+                            </div>
+                          </div>
 
-                            <div className="flex items-center gap-2 pt-1 w-full">
-                              {/* EDITAR BUTTON */}
+                          {/* C. FOLDER INFORMATION: Highlighted Name, Description & Tracks Count */}
+                          <div className="space-y-0.5 text-center w-full relative z-10 px-1 mt-1.5 pointer-events-none">
+                            <h4 className="font-sans font-extrabold text-[12.5px] sm:text-[13px] text-white uppercase tracking-wider truncate max-w-full group-hover:text-[#1ed760] transition duration-150">
+                              {rep.name}
+                            </h4>
+                            
+                            <span className="text-[10px] sm:text-[11px] font-sans font-medium text-slate-400 block">
+                              {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
+                            </span>
+                          </div>
+
+                          {/* D. CARD FOOTER ACTIONS: Clean Play & Chevron Navigation row */}
+                          <div className="flex items-center justify-between w-full pt-2.5 mt-2.5 border-t border-slate-800/60 relative z-10 select-none px-1">
+                            {repTracksCount > 0 ? (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setEditingRepertoire(rep);
-                                  setNewRepName(rep.name);
-                                  setNewRepDesc(rep.description || '');
-                                  setNewRepVisibility(rep.visibility === 'active' ? 'public' : (rep.visibility || 'public') as any);
-                                  setShowCreateRep(true);
-                                }}
-                                className="flex-1 py-1.5 px-3 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition cursor-pointer flex items-center justify-center gap-1 text-xs font-bold uppercase font-mono"
-                                title="Editar Repertório"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                <span>Editar</span>
-                              </button>
-
-                              {/* EXCLUIR BUTTON */}
-                              <button
-                                type="button"
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm(`Tem certeza que deseja excluir o repertório "${rep.name}"? As músicas não serão apagadas, apenas a pasta.`)) {
-                                    await dbService.deleteRepertoire(rep.id, profile.userId);
-                                    refreshData();
-                                  }
+                                  handlePlayAll();
                                 }}
-                                className="py-1.5 px-3 bg-[#2a1318]/50 hover:bg-[#3d1a22] border border-rose-500/20 text-rose-455 rounded-xl transition cursor-pointer flex items-center justify-center"
-                                title="Excluir Repertório"
+                                className="w-7.5 h-7.5 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg hover:scale-105 active:scale-90"
+                                style={{ backgroundColor: folderColor.primary }}
+                                title="Tocar todas as músicas dessa pasta"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Play className="w-3 h-3 fill-slate-950 text-slate-950 stroke-[3] ml-0.5" />
                               </button>
-                            </div>
+                            ) : (
+                              <div className="w-7.5 h-7.5" />
+                            )}
+
+                            {isCopied ? (
+                              <span className="text-[9px] font-mono font-bold text-emerald-455 transition-all animate-pulse">COPIADO!</span>
+                            ) : null}
+
+                            <ChevronRight 
+                              className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5 shrink-0"
+                              style={{ color: folderColor.primary }}
+                            />
                           </div>
                         </div>
                       );

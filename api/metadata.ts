@@ -328,10 +328,11 @@ export default async function handler(req: any, res: any) {
 
     // 2. Non-crawler & Non-image request -> Redirect visitors to the SPA public paths
     if (!isCrawler && !isImageRequest) {
+      const redirectLocation = repertoireIdStr 
+        ? `/catalogo/${slugStr}/repertorio/${repertoireIdStr}`
+        : `/catalogo/${slugStr}`;
       res.writeHead(302, {
-        Location: repertoire 
-          ? `/catalogo/${artist.slug || artist.userId}/repertorio/${repertoire.slug || repertoire.id}`
-          : `/catalogo/${artist.slug || artist.userId}`
+        Location: redirectLocation
       });
       return res.end();
     }
@@ -344,17 +345,25 @@ export default async function handler(req: any, res: any) {
 
       let resolvedCoverUrl = artist.customCardImageUrl || artist.profileImageUrl || "";
       if (!resolvedCoverUrl) {
-        try {
-          const globalCard = await fetchGlobalShareCardRest();
-          if (globalCard && globalCard.ogImageUrl) {
-            resolvedCoverUrl = globalCard.ogImageUrl;
-          }
-        } catch {}
+        // Only use the global share card for the root/general index; never fall back to another artist's cover for custom profiles
+        if (slugStr === "somdrive" || slugStr === "default" || slugStr === "global") {
+          try {
+            const globalCard = await fetchGlobalShareCardRest();
+            if (globalCard && globalCard.ogImageUrl) {
+              resolvedCoverUrl = globalCard.ogImageUrl;
+            }
+          } catch {}
+        }
+        if (!resolvedCoverUrl) {
+          resolvedCoverUrl = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
+        }
       }
 
       // Convert images to Base64 to ensure sharp handles them flawlessly
       const cleanCardImageUrl = resolvedCoverUrl ? await getBase64Image(resolvedCoverUrl) : "";
-      const cleanProfileImageUrl = artist.profileImageUrl ? await getBase64Image(artist.profileImageUrl) : "";
+      const cleanProfileImageUrl = artist.profileImageUrl 
+        ? await getBase64Image(artist.profileImageUrl) 
+        : await getBase64Image("https://www.somdrive.com.br/somdrive-player-artwork-512.png");
 
       let subtitle = "";
       if (cleanGenre && cleanCity) {
