@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { IncomingMessage, ServerResponse } from 'http';
 import sharp from 'sharp';
 
 const projectId = "gen-lang-client-0946896754";
@@ -42,31 +41,9 @@ const getBase64Image = async (url: string): Promise<string> => {
       return `data:${contentType};base64,${base64}`;
     }
   } catch (err) {
-    console.warn("Base64 image fetch failed for URL:", url, err);
+    console.warn("Base64 fetch failed:", url, err);
   }
   return "";
-};
-
-const fetchGlobalShareCardRest = async (): Promise<{ ogImageUrl: string; ogImageVersion: string; updatedAt: string } | null> => {
-  try {
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/settings/shareCard`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const doc = await res.json();
-      const f = doc.fields || {};
-      const ogImageUrl = f.ogImageUrl?.stringValue || "";
-      const ogImageVersion = f.ogImageVersion?.stringValue || "";
-      const updatedAtStr = f.updatedAt?.stringValue || f.updatedAt?.timestampValue || doc.updateTime || new Date().toISOString();
-      return {
-        ogImageUrl,
-        ogImageVersion,
-        updatedAt: updatedAtStr
-      };
-    }
-  } catch (err: any) {
-    console.warn("REST global share card fetch failed in api/metadata:", err.message || err);
-  }
-  return null;
 };
 
 const queryArtistBySlug = async (slug: string) => {
@@ -108,7 +85,7 @@ const queryArtistBySlug = async (slug: string) => {
       }
     }
   } catch (err) {
-    console.warn("REST queryArtistBySlug failed:", err);
+    console.warn("REST queryArtistBySlug error:", err);
   }
   return null;
 };
@@ -145,14 +122,14 @@ const queryUserBySlug = async (slug: string) => {
           name: f.name?.stringValue || f.artistName?.stringValue || "",
           genre: f.genre?.stringValue || f.mainGenre?.stringValue || "",
           city: f.city?.stringValue || "",
-          customCardImageUrl: f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || f.avatarUrl?.stringValue || "",
-          profileImageUrl: f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || "",
+          customCardImageUrl: f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "",
+          profileImageUrl: f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.photoUrl?.stringValue || "",
           slug: f.slug?.stringValue || slug
         };
       }
     }
   } catch (err) {
-    console.warn("REST queryUserBySlug failed:", err);
+    console.warn("REST queryUserBySlug error:", err);
   }
   return null;
 };
@@ -170,20 +147,13 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
   const cleanIdLower = cleanId.toLowerCase();
 
   if (cleanIdLower === "default" || cleanIdLower === "global" || cleanIdLower === "somdrive") {
-    let globalCover = "";
-    try {
-      const globalCard = await fetchGlobalShareCardRest();
-      if (globalCard && globalCard.ogImageUrl) {
-        globalCover = globalCard.ogImageUrl;
-      }
-    } catch {}
     return {
       userId: "default",
       name: "SOMDRIVE",
       genre: "Divulgue seu Repertório",
       city: "Brasil",
-      customCardImageUrl: globalCover,
-      profileImageUrl: globalCover,
+      customCardImageUrl: "",
+      profileImageUrl: "",
       slug: "somdrive"
     };
   }
@@ -350,100 +320,76 @@ const fetchRepertoireById = async (repertoireId: string) => {
 };
 
 export default async function handler(req: any, res: any) {
-  const { slug, repertoireId, image } = req.query || {};
-  const slugStr = typeof slug === 'string' ? slug.trim() : 'somdrive';
-  const repertoireIdStr = typeof repertoireId === 'string' ? repertoireId.trim() : '';
-  const isImageRequest = typeof image === 'string' && (image === 'true' || image === '1');
+  const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const type = urlObj.searchParams.get('type') || 'profile';
+  const artistSlug = urlObj.searchParams.get('artistSlug') || '';
+  const repertoireSlug = urlObj.searchParams.get('repertoireSlug') || '';
 
-  console.log(`[API Metadata] Processing request. Slug: ${slugStr}, Repertoire: ${repertoireIdStr}, Image: ${isImageRequest}`);
-
-  const userAgent = (req.headers['user-agent'] || '').toLowerCase();
-  const isCrawler = /bot|crawl|spider|facebookexternalhit|whatsapp|telegram|slack|twitter|linkedin|embed/i.test(userAgent);
+  if (!artistSlug) {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    return res.end('Missing artistSlug parameter.');
+  }
 
   try {
     // 1. Fetch artist details
-    const artist = await fetchArtistRest(slugStr);
+    const artist = await fetchArtistRest(artistSlug);
     let repertoire: { id: string; name: string; slug: string; trackCount: number } | null = null;
 
-    if (repertoireIdStr) {
-      // Try to fetch repertoire by ID directly
-      repertoire = await fetchRepertoireById(repertoireIdStr);
-      // If direct fetch fails and it's a slug, query by ownerUid and slug
+    if (type === 'repertoire' && repertoireSlug) {
+      // Fetch repertoire by slug first, fallback to direct ID lookup
+      repertoire = await queryRepertoireBySlug(artist.userId, repertoireSlug);
       if (!repertoire) {
-        repertoire = await queryRepertoireBySlug(artist.userId, repertoireIdStr);
+        repertoire = await fetchRepertoireById(repertoireSlug);
       }
     }
 
-    // 2. Non-crawler & Non-image request -> Redirect visitors to the SPA public paths
-    if (!isCrawler && !isImageRequest) {
-      const redirectLocation = repertoireIdStr 
-        ? `/catalogo/${slugStr}/repertorio/${repertoireIdStr}`
-        : `/catalogo/${slugStr}`;
-      res.writeHead(302, {
-        Location: redirectLocation
-      });
-      return res.end();
+    const cleanName = escapeXml((artist.name || "Compositor").trim().toUpperCase());
+    const cleanGenre = escapeXml((artist.genre || "Música Sertaneja").trim());
+    const cleanCity = escapeXml((artist.city || "Brasil").trim());
+
+    // Never mix other artist's images or admin settings!
+    let resolvedCoverUrl = artist.customCardImageUrl || artist.profileImageUrl || "";
+    if (!resolvedCoverUrl) {
+      resolvedCoverUrl = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
     }
 
-    // 3. Image Request -> Generate and render the physical CD/Vinyl card
-    if (isImageRequest) {
-      const cleanName = escapeXml((artist.name || "Compositor").trim().toUpperCase());
-      const cleanGenre = escapeXml((artist.genre || "Música Sertaneja").trim());
-      const cleanCity = escapeXml((artist.city || "Brasil").trim());
+    // Convert images to Base64 so sharp compiles beautifully
+    const cleanCardImageUrl = resolvedCoverUrl ? await getBase64Image(resolvedCoverUrl) : "";
+    const cleanProfileImageUrl = artist.profileImageUrl 
+      ? await getBase64Image(artist.profileImageUrl) 
+      : await getBase64Image("https://www.somdrive.com.br/somdrive-player-artwork-512.png");
 
-      let resolvedCoverUrl = artist.customCardImageUrl || artist.profileImageUrl || "";
-      if (!resolvedCoverUrl) {
-        // Only use the global share card for the root/general index; never fall back to another artist's cover for custom profiles
-        if (slugStr === "somdrive" || slugStr === "default" || slugStr === "global") {
-          try {
-            const globalCard = await fetchGlobalShareCardRest();
-            if (globalCard && globalCard.ogImageUrl) {
-              resolvedCoverUrl = globalCard.ogImageUrl;
-            }
-          } catch {}
-        }
-        if (!resolvedCoverUrl) {
-          resolvedCoverUrl = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
-        }
+    let subtitle = "";
+    if (cleanGenre && cleanCity) {
+      subtitle = `${cleanGenre} &#8226; ${cleanCity}`;
+    } else if (cleanGenre) {
+      subtitle = cleanGenre;
+    } else if (cleanCity) {
+      subtitle = cleanCity;
+    } else {
+      subtitle = "Catálogo de Músicas";
+    }
+
+    let pillText = "CATÁLOGO OFICIAL";
+    let mainTitle = "Ouça minhas composições";
+    let composerText = cleanName;
+    let descText = subtitle;
+    const isRepertoire = !!repertoire;
+
+    if (repertoire) {
+      pillText = "PASTA DE MÚSICAS";
+      mainTitle = escapeXml((repertoire.name || "Pasta Compartilhada").trim().toUpperCase());
+      if (mainTitle.length > 24) {
+        mainTitle = mainTitle.substring(0, 23) + "...";
       }
+      composerText = `por ${cleanName}`;
+      descText = `${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'MÚSICA AUTORAL' : 'MÚSICAS AUTORAIS'} \u2022 ${cleanGenre}`;
+    }
 
-      // Convert images to Base64 to ensure sharp handles them flawlessly
-      const cleanCardImageUrl = resolvedCoverUrl ? await getBase64Image(resolvedCoverUrl) : "";
-      const cleanProfileImageUrl = artist.profileImageUrl 
-        ? await getBase64Image(artist.profileImageUrl) 
-        : await getBase64Image("https://www.somdrive.com.br/somdrive-player-artwork-512.png");
+    const initialLetter = escapeXml((repertoire ? (repertoire.name || "P") : (artist.name || "S")).trim().substring(0, 1).toUpperCase());
 
-      let subtitle = "";
-      if (cleanGenre && cleanCity) {
-        subtitle = `${cleanGenre} &#8226; ${cleanCity}`;
-      } else if (cleanGenre) {
-        subtitle = cleanGenre;
-      } else if (cleanCity) {
-        subtitle = cleanCity;
-      } else {
-        subtitle = "Catálogo de Músicas";
-      }
-
-      let pillText = "CATÁLOGO OFICIAL";
-      let mainTitle = "Ouça minhas composições";
-      let composerText = cleanName;
-      let descText = subtitle;
-      const isRepertoire = !!repertoire;
-
-      if (repertoire) {
-        pillText = "PASTA DE MÚSICAS";
-        mainTitle = escapeXml((repertoire.name || "Pasta Compartilhada").trim().toUpperCase());
-        if (mainTitle.length > 24) {
-          mainTitle = mainTitle.substring(0, 23) + "...";
-        }
-        composerText = `por ${cleanName}`;
-        descText = `${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'MÚSICA AUTORAL' : 'MÚSICAS AUTORAIS'} \u2022 ${cleanGenre}`;
-      }
-
-      const initialLetter = escapeXml((repertoire ? (repertoire.name || "P") : (artist.name || "S")).trim().substring(0, 1).toUpperCase());
-
-      // Premium visual layout SVG matching exact guidelines
-      const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+    // Premium high-fidelity layout SVG
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
     <style type="text/css"><![CDATA[
       .title-text {
@@ -628,144 +574,21 @@ export default async function handler(req: any, res: any) {
   </g>
 </svg>`;
 
-      try {
-        const buffer = await sharp(Buffer.from(svgContent)).png().toBuffer();
-        res.setHeader("Content-Type", "image/png");
-        res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
-        return res.status(200).send(buffer);
-      } catch (sharpErr) {
-        console.error("Sharp PNG generation fell back to SVG:", sharpErr);
-        res.setHeader("Content-Type", "image/svg+xml");
-        res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400");
-        return res.status(200).send(svgContent);
-      }
-    }
-
-    // 4. Crawler HTML head payload metatags generation
-    const host = req.headers.host || "www.somdrive.com.br";
-    const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
-    const appBaseUrl = `${protocol}://${host}`;
-
-    let titleText = "";
-    let descText = "";
-    let canonicalUrl = "";
-    const artistSlug = artist.slug || artist.userId;
-
-    if (repertoire) {
-      titleText = `${repertoire.name} — ${artist.name} | SomDrive`;
-      descText = `Ouça este repertório com ${repertoire.trackCount} faixas no SomDrive.`;
-      canonicalUrl = `${appBaseUrl}/s/${artistSlug}/repertorio/${repertoire.slug || repertoire.id}`;
-    } else {
-      titleText = `Catálogo musical de ${artist.name} | SomDrive`;
-      descText = `Ouça as músicas e repertórios de ${artist.name}.`;
-      canonicalUrl = `${appBaseUrl}/s/${artistSlug}`;
-    }
-
-    const getObjHash = (str: string) => {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = (hash << 5) - hash + str.charCodeAt(i);
-        hash |= 0;
-      }
-      return Math.abs(hash).toString(36);
-    };
-
-    const stateToHash = `${artist.name}_${artist.profileImageUrl || ''}_${artist.customCardImageUrl || ''}_${repertoire ? (repertoire.name + '_' + repertoire.trackCount) : ''}`;
-    const hashVersion = getObjHash(stateToHash);
-
-    // Point exactly to the api/og source according to guidelines!
-    const ogImageToUse = repertoire
-      ? `${appBaseUrl}/api/og?type=repertoire&artistSlug=${artistSlug}&repertoireSlug=${repertoire.slug || repertoire.id}&v=${hashVersion}`
-      : `${appBaseUrl}/api/og?type=profile&artistSlug=${artistSlug}&v=${hashVersion}`;
-
-    let htmlContents = "";
     try {
-      const possiblePaths = [
-        path.join(process.cwd(), 'dist', 'index.html'),
-        path.join(process.cwd(), 'index.html'),
-      ];
-      for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-          htmlContents = fs.readFileSync(p, 'utf8');
-          break;
-        }
-      }
-    } catch (err) {
-      console.warn("Error reading template in serverless:", err);
+      const buffer = await sharp(Buffer.from(svgContent)).png().toBuffer();
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.status(200).send(buffer);
+    } catch (sharpErr) {
+      console.error("Sharp fallback to SVG in api/og:", sharpErr);
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.status(200).send(svgContent);
     }
 
-    if (!htmlContents) {
-      htmlContents = `<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SomDrive</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.svg" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>`;
-    }
-
-    // Pristine metadata purging to avoid any double tags
-    htmlContents = htmlContents
-      .replace(/<title>.*?<\/title>/gi, "")
-      .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
-      .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
-      .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
-
-    const ogPayload = `
-    <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
-    <title>${escapeXml(titleText)}</title>
-    <meta name="description" content="${escapeXml(descText)}" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="${escapeXml(titleText)}" />
-    <meta property="og:description" content="${escapeXml(descText)}" />
-    <meta property="og:image" content="${escapeXml(ogImageToUse)}" />
-    <meta property="og:image:secure_url" content="${escapeXml(ogImageToUse)}" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="${escapeXml(canonicalUrl)}" />
-    <meta property="og:site_name" content="SomDrive" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${escapeXml(titleText)}" />
-    <meta name="twitter:description" content="${escapeXml(descText)}" />
-    <meta name="twitter:image" content="${escapeXml(ogImageToUse)}" />
-    <link rel="image_src" href="${escapeXml(ogImageToUse)}" />
-    <meta itemprop="image" content="${escapeXml(ogImageToUse)}" />
-  `;
-
-    if (htmlContents.includes("</head>")) {
-      htmlContents = htmlContents.replace("</head>", `${ogPayload}\n</head>`);
-    } else {
-      htmlContents = htmlContents.replace("<head>", `<head>\n${ogPayload}`);
-    }
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(htmlContents);
-
-  } catch (err) {
-    console.warn("Metadata handler failed, serving fallback redirect:", err);
-    const fallbackHTML = `<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="refresh" content="0; url=/catalogo/${slugStr}" />
-    <script>
-      window.location.href = "/catalogo/${slugStr}";
-    </script>
-    <title>SomDrive - Redirecionando...</title>
-  </head>
-  <body>
-    Redirecionando para o catálogo de ${slugStr}...
-  </body>
-</html>`;
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(fallbackHTML);
+  } catch (err: any) {
+    console.error("Fatal in /api/og:", err);
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    return res.end('Error generating card image: ' + (err.message || err));
   }
 }

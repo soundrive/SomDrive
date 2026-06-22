@@ -1047,13 +1047,22 @@ async function startServer() {
       }
     }
 
-    // Dynamic image url generating path (handles profile and repertoire)
-    let ogImageToUse = "";
-    if (repertoireId && repertoireName && !isRepertoirePrivate) {
-      ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}?repertoireId=${resolvedRepertoireId || repertoireId}`;
-    } else {
-      ogImageToUse = `${appBaseUrl}/api/og/artista/${resolvedArtistId}`;
-    }
+    const getObjHash = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash).toString(36);
+    };
+
+    const stateToHash = `${name}_${profileImageUrl || ''}_${customCardImageUrl || ''}_${repertoireId && repertoireName && !isRepertoirePrivate ? (repertoireName + '_' + repertoireTrackCount) : ''}`;
+    const hashVersion = getObjHash(stateToHash);
+
+    // Dynamic image url generating path pointing exactly to the /api/og source with custom hash versioning
+    const ogImageToUse = repertoireId && repertoireName && !isRepertoirePrivate
+      ? `${appBaseUrl}/api/og?type=repertoire&artistSlug=${cleanSlug}&repertoireSlug=${repertoireId}&v=${hashVersion}`
+      : `${appBaseUrl}/api/og?type=profile&artistSlug=${cleanSlug}&v=${hashVersion}`;
 
     const ogUrlToUse = repertoireId && repertoireName && !isRepertoirePrivate
       ? `${appBaseUrl}/s/${cleanSlug}/repertorio/${repertoireId}`
@@ -2310,6 +2319,42 @@ async function startServer() {
       return res.status(200).send(buffer);
     } catch (err: any) {
       console.error("Erro crítico na rota de imagem OG:", err);
+      // Fallback response with basic generic SVG graphic
+      const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+        <rect width="1200" height="630" fill="#081224" />
+        <text x="100" y="300" font-family="sans-serif" font-size="40" fill="#ffffff">SOMDRIVE</text>
+      </svg>`;
+      try {
+        const fall = await sharp(Buffer.from(errorSvg)).png().toBuffer();
+        res.setHeader("Content-Type", "image/png");
+        return res.status(200).send(fall);
+      } catch (sharpE) {
+        res.setHeader("Content-Type", "image/svg+xml");
+        return res.status(200).send(errorSvg);
+      }
+    }
+  });
+
+  // API Route to match Unified /api/og specification for sharing preview images
+  app.get("/api/og", async (req, res) => {
+    try {
+      const type = req.query.type || "profile";
+      const artistSlug = req.query.artistSlug ? String(req.query.artistSlug) : null;
+      const repertoireSlug = req.query.repertoireSlug ? String(req.query.repertoireSlug) : null;
+
+      if (!artistSlug) {
+        return res.status(400).send("Missing artistSlug parameter.");
+      }
+
+      const { buffer, contentType } = await generateArtistPngBuffer(
+        artistSlug,
+        type === "repertoire" ? repertoireSlug : null
+      );
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.status(200).send(buffer);
+    } catch (err: any) {
+      console.error("Erro crítico na rota /api/og do servidor local:", err);
       // Fallback response with basic generic SVG graphic
       const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
         <rect width="1200" height="630" fill="#081224" />
