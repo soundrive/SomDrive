@@ -426,7 +426,44 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
 
   if (!mpResponse.ok) {
     if (mpResponse.status === 404 || mpResponse.status === 400 || mpResponse.status === 403) {
+      try {
+        await dbInstanceLocal.collection("mp_subscriptions").doc(String(paymentId)).set({
+          id: String(paymentId),
+          status: "not_found",
+          paymentId: String(paymentId),
+          subscriptionId: "",
+          userId: "unknown",
+          uid: "unknown",
+          email: "unknown",
+          plan: "unknown",
+          planCode: "unknown",
+          processedAt: new Date().toISOString(),
+          updatedAt: FieldValue.serverTimestamp(),
+          errorMessage: `ID não localizado na API do Mercado Pago (Status ${mpResponse.status})`
+        }, { merge: true });
+      } catch (logErr) {
+        console.error("Error logging not_found payment to mp_subscriptions:", logErr);
+      }
       return { success: false, status: "not_found", message: `ID não encontrado ou sem correspondência na API do MP (Status ${mpResponse.status})` };
+    }
+
+    try {
+      await dbInstanceLocal.collection("mp_subscriptions").doc(String(paymentId)).set({
+        id: String(paymentId),
+        status: "api_error",
+        paymentId: String(paymentId),
+        subscriptionId: "",
+        userId: "unknown",
+        uid: "unknown",
+        email: "unknown",
+        plan: "unknown",
+        planCode: "unknown",
+        processedAt: new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
+        errorMessage: `Erro HTTP ${mpResponse.status} na API do Mercado Pago`
+      }, { merge: true });
+    } catch (logErr) {
+      console.error("Error logging api_error payment to mp_subscriptions:", logErr);
     }
     throw new Error(`Retorno HTTP ${mpResponse.status} na API do Mercado Pago`);
   }
@@ -522,8 +559,8 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
 
     await syncUserAndArtistPlans(resolvedUid, updatePayload);
     planActivated = true;
-  } else if (status === 'refunded' && resolvedUid) {
-    // Revert user/artist to FREE tier if the payment has been refunded
+  } else if ((status === 'refunded' || status === 'cancelled' || status === 'charged_back' || status === 'chargedback') && resolvedUid) {
+    // Revert user/artist to FREE tier if the payment has been refunded, cancelled, or charged back
     await syncUserAndArtistRefund(resolvedUid);
   }
 
@@ -622,7 +659,44 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
 
   if (!mpResponse.ok) {
     if (mpResponse.status === 404 || mpResponse.status === 400 || mpResponse.status === 403) {
+      try {
+        await dbInstanceLocal.collection("mp_subscriptions").doc(String(preapprovalId)).set({
+          id: String(preapprovalId),
+          status: "not_found",
+          paymentId: "",
+          subscriptionId: String(preapprovalId),
+          userId: "unknown",
+          uid: "unknown",
+          email: "unknown",
+          plan: "unknown",
+          planCode: "unknown",
+          processedAt: new Date().toISOString(),
+          updatedAt: FieldValue.serverTimestamp(),
+          errorMessage: `Assinatura não localizada na API do Mercado Pago (Status ${mpResponse.status})`
+        }, { merge: true });
+      } catch (logErr) {
+        console.error("Error logging not_found preapproval to mp_subscriptions:", logErr);
+      }
       return { success: false, status: "not_found", message: `Assinatura não encontrada ou formato de ID inválido na API de Assinaturas do MP (Status ${mpResponse.status})` };
+    }
+
+    try {
+      await dbInstanceLocal.collection("mp_subscriptions").doc(String(preapprovalId)).set({
+        id: String(preapprovalId),
+        status: "api_error",
+        paymentId: "",
+        subscriptionId: String(preapprovalId),
+        userId: "unknown",
+        uid: "unknown",
+        email: "unknown",
+        plan: "unknown",
+        planCode: "unknown",
+        processedAt: new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
+        errorMessage: `Erro HTTP ${mpResponse.status} na API de Assinaturas do Mercado Pago`
+      }, { merge: true });
+    } catch (logErr) {
+      console.error("Error logging api_error preapproval to mp_subscriptions:", logErr);
     }
     throw new Error(`Retorno HTTP ${mpResponse.status} na API de Assinaturas do Mercado Pago`);
   }
@@ -1307,16 +1381,41 @@ export default async function handler(req: any, res: any) {
 
 
   // 2. WEBHOOK NOTIFICATIONS INCOMING FLOW
-  let eventType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || '';
+  const rawType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || '';
   const actionField = req.body?.action || '';
 
-  if (!eventType) {
-    if (actionField.startsWith('payment.')) {
+  // Normalize eventType to match 'payment', 'preapproval', or 'merchant_order'
+  let eventType = '';
+  const etLower = String(rawType).toLowerCase().trim();
+  const actLower = String(actionField).toLowerCase().trim();
+
+  if (etLower === 'payment' || etLower.startsWith('payment') || actLower.startsWith('payment.')) {
+    eventType = 'payment';
+  } else if (
+    etLower === 'preapproval' || 
+    etLower.startsWith('preapproval') || 
+    etLower.includes('subscription') || 
+    actLower.startsWith('subscription.') || 
+    actLower.startsWith('preapproval.')
+  ) {
+    eventType = 'preapproval';
+  } else if (
+    etLower === 'merchant_order' || 
+    etLower.startsWith('merchant_order') || 
+    etLower.includes('order') || 
+    actLower.startsWith('merchant_order.')
+  ) {
+    eventType = 'merchant_order';
+  } else {
+    // Default fallback based on action or rawType
+    if (actLower.startsWith('payment.')) {
       eventType = 'payment';
-    } else if (actionField.startsWith('merchant_order.')) {
+    } else if (actLower.startsWith('merchant_order.')) {
       eventType = 'merchant_order';
+    } else if (actLower.startsWith('subscription.') || actLower.startsWith('preapproval.')) {
+      eventType = 'preapproval';
     } else {
-      eventType = 'payment';
+      eventType = 'payment'; // Default fallback
     }
   }
 
@@ -1345,6 +1444,29 @@ export default async function handler(req: any, res: any) {
     if (webhookSecret && !isManualReprocess) {
       const isVerified = verifySignature(req, webhookSecret);
       if (!isVerified) {
+        // Log the signature failure in mp_subscriptions for clear diagnosis!
+        try {
+          const dbInstanceLocal = getDb();
+          const signatureHeaderVal = req.headers['x-signature'] || req.headers['X-Signature'] || '';
+          const logId = `sig_fail_${resourceId || Date.now()}`;
+          await dbInstanceLocal.collection("mp_subscriptions").doc(logId).set({
+            id: logId,
+            status: "signature_error",
+            paymentId: eventType === 'payment' ? String(resourceId || "") : "",
+            subscriptionId: eventType === 'preapproval' ? String(resourceId || "") : "",
+            userId: "unknown",
+            uid: "unknown",
+            email: "unknown",
+            plan: "unknown",
+            planCode: "unknown",
+            processedAt: new Date().toISOString(),
+            updatedAt: FieldValue.serverTimestamp(),
+            errorMessage: `Assinatura HMAC falhou para x-signature: ${String(signatureHeaderVal).substring(0, 30)}...`
+          }, { merge: true });
+        } catch (logErr) {
+          console.error("Error logging signature_error to mp_subscriptions:", logErr);
+        }
+
         return res.status(400).json({ received: false, error: "Webhook signature verification failed" });
       }
     }
@@ -1369,7 +1491,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // Process PREAPPROVAL / SUBSCRIPTION type
-    if (eventType === 'preapproval' || eventType === 'subscription') {
+    if (eventType === 'preapproval') {
       const result = await processSinglePreapproval(String(resourceId), isManualReprocess);
 
       console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
@@ -1436,7 +1558,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // Default return for other types
-    return res.status(200).json({ received: true, ignored: true, reason: `ignored_event_type_${eventType}` });
+    return res.status(200).json({ received: true, ignored: true, reason: `ignored_event_type_${eventType || rawType}` });
 
   } catch (err: any) {
     console.error("[MercadoPago Webhook Fatal Error]: ", err);
