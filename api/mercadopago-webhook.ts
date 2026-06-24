@@ -251,6 +251,163 @@ async function findUserByEmailInFirestore(email: string): Promise<string | null>
   return null;
 }
 
+// Global robust plan properties resolver
+function resolvePlanDetails(planCode: string, preapprovalPlanId: string, description: string) {
+  const code = (planCode || '').toLowerCase().trim();
+  const planId = (preapprovalPlanId || '').toLowerCase().trim();
+  const desc = (description || '').toLowerCase().trim();
+
+  let plan: 'essencial' | 'pro' | 'premium' = 'pro';
+  let musicLimit = 15;
+  let billingCycle: 'monthly' | 'annual' = 'monthly';
+  let durationDays = 30;
+
+  // 1. Check preapproval plan ID matching standard configurations
+  if (planId === '122938c4f106404d843032de86628512') {
+    plan = 'pro';
+    musicLimit = 15;
+    billingCycle = 'monthly';
+    durationDays = 31;
+  } else if (planId === 'ea683f4d101746bb86c3933530814aa8') {
+    plan = 'pro';
+    musicLimit = 15;
+    billingCycle = 'annual';
+    durationDays = 366;
+  } else if (planId === 'dbb8c10eacbb4c87ad6f5ee5ad15cd4a') {
+    plan = 'premium';
+    musicLimit = 50;
+    billingCycle = 'monthly';
+    durationDays = 31;
+  } else if (planId === '986deaf44cf144d9af93c718b4870ca5') {
+    plan = 'premium';
+    musicLimit = 50;
+    billingCycle = 'annual';
+    durationDays = 366;
+  }
+  // 2. Otherwise check planCode
+  else if (code.includes('premium')) {
+    plan = 'premium';
+    musicLimit = 50;
+    if (code.includes('anual') || code.includes('annual') || code.includes('yearly') || code.includes('year')) {
+      billingCycle = 'annual';
+      durationDays = 365;
+    } else {
+      billingCycle = 'monthly';
+      durationDays = 30;
+    }
+  } else if (code.includes('essencial') || code.includes('essential')) {
+    plan = 'essencial';
+    musicLimit = 10;
+    if (code.includes('anual') || code.includes('annual') || code.includes('yearly') || code.includes('year')) {
+      billingCycle = 'annual';
+      durationDays = 365;
+    } else {
+      billingCycle = 'monthly';
+      durationDays = 30;
+    }
+  } else if (code.includes('pro')) {
+    plan = 'pro';
+    musicLimit = 15;
+    if (code.includes('anual') || code.includes('annual') || code.includes('yearly') || code.includes('year')) {
+      billingCycle = 'annual';
+      durationDays = 365;
+    } else {
+      billingCycle = 'monthly';
+      durationDays = 30;
+    }
+  }
+  // 3. Otherwise fall back to description matching
+  else {
+    if (desc.includes('premium')) {
+      plan = 'premium';
+      musicLimit = 50;
+    } else if (desc.includes('essencial') || desc.includes('essential')) {
+      plan = 'essencial';
+      musicLimit = 10;
+    } else {
+      plan = 'pro';
+      musicLimit = 15;
+    }
+    if (desc.includes('anual') || desc.includes('annual') || desc.includes('yearly') || desc.includes('ano')) {
+      billingCycle = 'annual';
+      durationDays = 365;
+    } else {
+      billingCycle = 'monthly';
+      durationDays = 30;
+    }
+  }
+
+  return { plan, musicLimit, billingCycle, durationDays };
+}
+
+// Secure double sync target synchronizer
+async function syncUserAndArtistPlans(uid: string, updatePayload: any) {
+  const dbInstanceLocal = getDb();
+  const fieldsToSync = {
+    plan: updatePayload.plan,
+    musicLimit: updatePayload.musicLimit,
+    billingCycle: updatePayload.billingCycle,
+    subscriptionStatus: updatePayload.subscriptionStatus,
+    planStatus: updatePayload.planStatus,
+    paymentStatus: updatePayload.paymentStatus,
+    planActivatedAt: updatePayload.planActivatedAt || FieldValue.serverTimestamp(),
+    planStartedAt: updatePayload.planStartedAt || FieldValue.serverTimestamp(),
+    planExpiresAt: updatePayload.planExpiresAt,
+    accessType: updatePayload.accessType,
+    subscriptionStartedAt: updatePayload.subscriptionStartedAt,
+    subscriptionEndsAt: updatePayload.subscriptionEndsAt,
+    updatedAt: FieldValue.serverTimestamp()
+  };
+
+  if (updatePayload.mercadoPagoPaymentId) {
+    (fieldsToSync as any).mercadoPagoPaymentId = updatePayload.mercadoPagoPaymentId;
+  }
+  if (updatePayload.mercadoPagoSubscriptionId) {
+    (fieldsToSync as any).mercadoPagoSubscriptionId = updatePayload.mercadoPagoSubscriptionId;
+  }
+  if (updatePayload.billingType) {
+    (fieldsToSync as any).billingType = updatePayload.billingType;
+  }
+  if (updatePayload.preapprovalPlanId) {
+    (fieldsToSync as any).preapprovalPlanId = updatePayload.preapprovalPlanId;
+  }
+  if (updatePayload.lastPaymentId) {
+    (fieldsToSync as any).lastPaymentId = updatePayload.lastPaymentId;
+  }
+  if (updatePayload.lastPaymentStatus) {
+    (fieldsToSync as any).lastPaymentStatus = updatePayload.lastPaymentStatus;
+  }
+  if (updatePayload.nextPaymentDate) {
+    (fieldsToSync as any).nextPaymentDate = updatePayload.nextPaymentDate;
+  }
+  if (updatePayload.paymentId) {
+    (fieldsToSync as any).paymentId = updatePayload.paymentId;
+  }
+  if (updatePayload.preapprovalId) {
+    (fieldsToSync as any).preapprovalId = updatePayload.preapprovalId;
+  }
+
+  await dbInstanceLocal.collection("users").doc(uid).set(fieldsToSync, { merge: true });
+  await dbInstanceLocal.collection("artists").doc(uid).set(fieldsToSync, { merge: true });
+}
+
+// Revert plans to FREE sync helper
+async function syncUserAndArtistRefund(uid: string) {
+  const dbInstanceLocal = getDb();
+  const updatePayload = {
+    plan: "free",
+    musicLimit: 3,
+    subscriptionStatus: "refunded",
+    planStatus: "refunded",
+    paymentStatus: "refunded",
+    accessType: "free",
+    planExpiresAt: null,
+    updatedAt: FieldValue.serverTimestamp()
+  };
+  await dbInstanceLocal.collection("users").doc(uid).set(updatePayload, { merge: true });
+  await dbInstanceLocal.collection("artists").doc(uid).set(updatePayload, { merge: true });
+}
+
 // CORE FUNCTION: PROCESS SINGLE PAYMENT ID
 async function processSinglePayment(paymentId: string, merchantOrderId = "", forceUpdate = false) {
   const accessTokenRaw = process.env.MERCADOPAGO_ACCESS_TOKEN;
@@ -334,75 +491,7 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
     resolvedUid = await findUserByEmailInFirestore(payerEmail);
   }
 
-  let planKey = (resolvedPlanCode || '').toLowerCase().trim();
-  if (planKey.includes('premium')) {
-    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
-      planKey = 'premium_anual';
-    } else {
-      planKey = 'premium_mensal';
-    }
-  } else if (planKey.includes('pro')) {
-    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
-      planKey = 'pro_anual';
-    } else {
-      planKey = 'pro_mensal';
-    }
-  } else {
-    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
-      planKey = 'essencial_anual';
-    } else {
-      planKey = 'essencial_mensal';
-    }
-  }
-
-  const PLANS_MAP: Record<string, {
-    plan: 'essencial' | 'pro' | 'premium';
-    musicLimit: number;
-    durationDays: number;
-    billingCycle: 'monthly' | 'annual';
-  }> = {
-    essencial_mensal: { plan: 'essencial', musicLimit: 10, durationDays: 30, billingCycle: 'monthly' },
-    essencial_anual: { plan: 'essencial', musicLimit: 10, durationDays: 365, billingCycle: 'annual' },
-    essencial_monthly: { plan: 'essencial', musicLimit: 10, durationDays: 30, billingCycle: 'monthly' },
-    essencial_yearly: { plan: 'essencial', musicLimit: 10, durationDays: 365, billingCycle: 'annual' },
-    pro_mensal: { plan: 'pro', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
-    premium_mensal: { plan: 'premium', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
-    pro_anual: { plan: 'pro', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
-    premium_anual: { plan: 'premium', musicLimit: 50, durationDays: 365, billingCycle: 'annual' },
-    pro_monthly: { plan: 'pro', musicLimit: 15, durationDays: 30, billingCycle: 'monthly' },
-    premium_monthly: { plan: 'premium', musicLimit: 50, durationDays: 30, billingCycle: 'monthly' },
-    pro_yearly: { plan: 'pro', musicLimit: 15, durationDays: 365, billingCycle: 'annual' },
-    premium_yearly: { plan: 'premium', musicLimit: 50, durationDays: 365, billingCycle: 'annual' }
-  };
-
-  let finalPlan: 'essencial' | 'pro' | 'premium' = 'pro';
-  let musicLimit = 15;
-  let durationDays = 30;
-  let billingCycle = 'monthly';
-
-  const matchedConfig = PLANS_MAP[planKey];
-  if (matchedConfig) {
-    finalPlan = matchedConfig.plan;
-    musicLimit = matchedConfig.musicLimit;
-    durationDays = matchedConfig.durationDays;
-    billingCycle = matchedConfig.billingCycle;
-  } else {
-    const dLower = description.toLowerCase();
-    if (dLower.includes('premium')) {
-      finalPlan = 'premium';
-      musicLimit = 50;
-    } else if (dLower.includes('pro')) {
-      finalPlan = 'pro';
-      musicLimit = 15;
-    } else if (dLower.includes('essencial') || dLower.includes('essential')) {
-      finalPlan = 'essencial';
-      musicLimit = 10;
-    }
-    if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('yearly') || dLower.includes('ano')) {
-      billingCycle = 'annual';
-      durationDays = 365;
-    }
-  }
+  const { plan: finalPlan, musicLimit, billingCycle, durationDays } = resolvePlanDetails(resolvedPlanCode, "", description);
 
   let planActivated = false;
 
@@ -420,6 +509,8 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
       planStatus: "active",
       paymentStatus: "approved",
       mercadoPagoPaymentId: String(paymentId),
+      paymentId: String(paymentId),
+      preapprovalId: "",
       planActivatedAt: FieldValue.serverTimestamp(),
       planStartedAt: FieldValue.serverTimestamp(),
       planExpiresAt: expires,
@@ -429,23 +520,17 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
       updatedAt: FieldValue.serverTimestamp()
     };
 
-    await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
-    await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
+    await syncUserAndArtistPlans(resolvedUid, updatePayload);
     planActivated = true;
   } else if (status === 'refunded' && resolvedUid) {
     // Revert user/artist to FREE tier if the payment has been refunded
-    const updatePayload = {
-      plan: "free",
-      musicLimit: 3,
-      subscriptionStatus: "refunded",
-      planStatus: "refunded",
-      paymentStatus: "refunded",
-      accessType: "free",
-      planExpiresAt: null,
-      updatedAt: FieldValue.serverTimestamp()
-    };
-    await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
-    await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
+    await syncUserAndArtistRefund(resolvedUid);
+  }
+
+  // Handle orphan payment status log as requested
+  let finalStatusToSave = status;
+  if (status === 'approved' && !resolvedUid) {
+    finalStatusToSave = 'orphan_payment';
   }
 
   // Save the record in mp_subscriptions
@@ -455,9 +540,9 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
     uid: resolvedUid || "unknown",
     email: payerEmail || "unknown",
     plan: finalPlan.toLowerCase(),
-    planCode: planKey,
+    planCode: resolvedPlanCode || finalPlan,
     billingCycle: billingCycle,
-    status: status,
+    status: finalStatusToSave,
     paymentId: String(paymentId),
     merchantOrderId: String(merchantOrderId || payment.order?.id || ""),
     transactionNumber: String(transactionNumber || ""),
@@ -482,7 +567,7 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
   console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
     paymentId: String(paymentId),
     paymentStatus: status,
-    planCode: planKey,
+    planCode: resolvedPlanCode || finalPlan,
     metadataUid: payment.metadata?.uid || payment.metadata?.user_id || "",
     externalReferenceUid: externalReference ? externalReference.split('|')[0] : "",
     matchedUid: resolvedUid || "",
@@ -504,7 +589,7 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
     if (resolvedUid) {
       displayMessage = `Pagamento verificado com sucesso! Plano ${finalPlan} ativado para o e-mail: ${payerEmail}.`;
     } else {
-      displayMessage = `Pagamento aprovado, porém nenhum usuário associado (e-mail: ${payerEmail}) foi encontrado.`;
+      displayMessage = `Pagamento aprovado, porém nenhum usuário associado (e-mail: ${payerEmail}) foi encontrado. Registrado como orphan_payment.`;
     }
   } else if (status === 'refunded') {
     displayMessage = "O pagamento foi reembolsado e está cancelado.";
@@ -513,7 +598,7 @@ async function processSinglePayment(paymentId: string, merchantOrderId = "", for
   return {
     success: status === 'approved' && resolvedUid !== null,
     paymentId: String(paymentId),
-    status: status,
+    status: finalStatusToSave,
     planActivated: planActivated,
     message: displayMessage
   };
@@ -599,135 +684,58 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
     resolvedUid = await findUserByEmailInFirestore(payerEmail);
   }
 
-  let planKey = (resolvedPlanCode || '').toLowerCase().trim();
-  if (planKey.includes('premium')) {
-    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
-      planKey = 'premium_anual';
-    } else {
-      planKey = 'premium_mensal';
-    }
-  } else if (planKey.includes('pro')) {
-    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
-      planKey = 'pro_anual';
-    } else {
-      planKey = 'pro_mensal';
-    }
-  } else {
-    if (planKey.includes('anual') || planKey.includes('annual') || planKey.includes('yearly')) {
-      planKey = 'essencial_anual';
-    } else {
-      planKey = 'essencial_mensal';
-    }
-  }
-
-  const PLANS_MAP: Record<string, {
-    plan: 'essencial' | 'pro' | 'premium';
-    musicLimit: number;
-    durationDays: number;
-    billingCycle: 'monthly' | 'annual';
-  }> = {
-    essencial_mensal: { plan: 'essencial', musicLimit: 10, durationDays: 31, billingCycle: 'monthly' },
-    essencial_anual: { plan: 'essencial', musicLimit: 10, durationDays: 366, billingCycle: 'annual' },
-    pro_mensal: { plan: 'pro', musicLimit: 15, durationDays: 31, billingCycle: 'monthly' },
-    premium_mensal: { plan: 'premium', musicLimit: 50, durationDays: 31, billingCycle: 'monthly' },
-    pro_anual: { plan: 'pro', musicLimit: 15, durationDays: 366, billingCycle: 'annual' },
-    premium_anual: { plan: 'premium', musicLimit: 50, durationDays: 366, billingCycle: 'annual' },
-  };
-
-  let finalPlan: 'essencial' | 'pro' | 'premium' = 'pro';
-  let musicLimit = 15;
-  let durationDays = 31;
-  let billingCycle = 'monthly';
-
-  const matchedConfig = PLANS_MAP[planKey];
-  if (matchedConfig) {
-    finalPlan = matchedConfig.plan;
-    musicLimit = matchedConfig.musicLimit;
-    durationDays = matchedConfig.durationDays;
-    billingCycle = matchedConfig.billingCycle;
-  } else {
-    const dLower = description.toLowerCase();
-    if (dLower.includes('premium')) {
-      finalPlan = 'premium';
-      musicLimit = 50;
-    } else if (dLower.includes('pro')) {
-      finalPlan = 'pro';
-      musicLimit = 15;
-    } else if (dLower.includes('essencial') || dLower.includes('essential')) {
-      finalPlan = 'essencial';
-      musicLimit = 10;
-    }
-    if (dLower.includes('anual') || dLower.includes('annual') || dLower.includes('yearly') || dLower.includes('ano')) {
-      billingCycle = 'annual';
-      durationDays = 366;
-    }
-  }
+  const preapprovalPlanIdVal = preapproval.preapproval_plan_id || "";
+  const { plan: finalPlan, musicLimit, billingCycle, durationDays } = resolvePlanDetails(resolvedPlanCode, preapprovalPlanIdVal, description);
 
   let planActivated = false;
   const isApproved = status === 'authorized' || status === 'active';
 
   if (isApproved && resolvedUid) {
-    // Fetch user and check if they are isBillingBetaTester
-    let isBetaTester = false;
-    let fallbackBetaEmail = ["videopremieroficial@gmail.com", "test_webhook_automated@somdrive.com.br"];
-    try {
-      const userDocRef = dbInstanceLocal.collection("users").doc(resolvedUid);
-      const userDocSnap = await userDocRef.get();
-      if (userDocSnap.exists) {
-        const udata = userDocSnap.data();
-        isBetaTester = !!udata?.isBillingBetaTester || fallbackBetaEmail.includes(String(udata?.email || '').toLowerCase().trim());
-      } else {
-        const artistDocRef = dbInstanceLocal.collection("artists").doc(resolvedUid);
-        const artistDocSnap = await artistDocRef.get();
-        if (artistDocSnap.exists) {
-          const adata = artistDocSnap.data();
-          isBetaTester = !!adata?.isBillingBetaTester || fallbackBetaEmail.includes(String(adata?.email || '').toLowerCase().trim());
-        }
-      }
-    } catch (dbErr) {
-      console.warn("Error fetching beta flag status, defaulting to safe verify:", dbErr);
-    }
+    const now = new Date();
+    const expires = new Date();
+    expires.setDate(now.getDate() + durationDays);
 
-    if (isBetaTester) {
-      const now = new Date();
-      const expires = new Date();
-      expires.setDate(now.getDate() + durationDays);
+    const lastPaymentIdVal = preapproval.last_payment_id || "";
+    const lastPaymentStatusVal = preapproval.last_payment_status || "";
+    const nextPaymentDateVal = preapproval.next_payment_date || preapproval.auto_recurring?.next_payment_date || null;
 
-      const preapprovalPlanIdVal = preapproval.preapproval_plan_id || "";
-      const lastPaymentIdVal = preapproval.last_payment_id || "";
-      const lastPaymentStatusVal = preapproval.last_payment_status || "";
-      const nextPaymentDateVal = preapproval.next_payment_date || preapproval.auto_recurring?.next_payment_date || null;
+    const updatePayload = {
+      plan: finalPlan,
+      musicLimit: musicLimit,
+      billingCycle: billingCycle,
+      subscriptionStatus: "active",
+      planStatus: "active",
+      paymentStatus: "approved",
+      mercadoPagoSubscriptionId: String(preapprovalId),
+      preapprovalId: String(preapprovalId),
+      paymentId: "",
+      planActivatedAt: FieldValue.serverTimestamp(),
+      planStartedAt: FieldValue.serverTimestamp(),
+      planExpiresAt: expires,
+      accessType: "subscriber",
+      subscriptionStartedAt: now.toISOString(),
+      subscriptionEndsAt: expires.toISOString(),
+      updatedAt: FieldValue.serverTimestamp(),
 
-      const updatePayload = {
-        plan: finalPlan,
-        musicLimit: musicLimit,
-        billingCycle: billingCycle,
-        subscriptionStatus: "active",
-        planStatus: "active",
-        paymentStatus: "approved",
-        mercadoPagoSubscriptionId: String(preapprovalId),
-        planActivatedAt: FieldValue.serverTimestamp(),
-        planStartedAt: FieldValue.serverTimestamp(),
-        planExpiresAt: expires,
-        accessType: "subscriber",
-        subscriptionStartedAt: now.toISOString(),
-        subscriptionEndsAt: expires.toISOString(),
-        updatedAt: FieldValue.serverTimestamp(),
+      // Subscriptions Specific properties requested by the user
+      billingType: "subscription",
+      preapprovalPlanId: String(preapprovalPlanIdVal),
+      lastPaymentId: String(lastPaymentIdVal),
+      lastPaymentStatus: String(lastPaymentStatusVal),
+      nextPaymentDate: nextPaymentDateVal ? String(nextPaymentDateVal) : null
+    };
 
-        // Subscriptions Specific properties requested by the user
-        billingType: "subscription",
-        preapprovalPlanId: String(preapprovalPlanIdVal),
-        lastPaymentId: String(lastPaymentIdVal),
-        lastPaymentStatus: String(lastPaymentStatusVal),
-        nextPaymentDate: nextPaymentDateVal ? String(nextPaymentDateVal) : null
-      };
+    await syncUserAndArtistPlans(resolvedUid, updatePayload);
+    planActivated = true;
+  } else if ((status === 'paused' || status === 'cancelled') && resolvedUid) {
+    // Revert plan to FREE if paused or cancelled
+    await syncUserAndArtistRefund(resolvedUid);
+  }
 
-      await dbInstanceLocal.collection("users").doc(resolvedUid).set(updatePayload, { merge: true });
-      await dbInstanceLocal.collection("artists").doc(resolvedUid).set(updatePayload, { merge: true });
-      planActivated = true;
-    } else {
-      console.warn("[MercadoPago Preapproval Webhook] Subscription activation skipped. Payer is not an active Billing Beta Tester:", resolvedUid);
-    }
+  // Handle orphan payment status log as requested
+  let finalStatusToSave = status;
+  if (isApproved && !resolvedUid) {
+    finalStatusToSave = 'orphan_payment';
   }
 
   const finalSubMap: any = {
@@ -736,9 +744,9 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
     uid: resolvedUid || "unknown",
     email: payerEmail || "unknown",
     plan: finalPlan.toLowerCase(),
-    planCode: planKey,
+    planCode: resolvedPlanCode || finalPlan,
     billingCycle: billingCycle,
-    status: status,
+    status: finalStatusToSave,
     paymentId: "",
     subscriptionId: String(preapprovalId),
     transactionNumber: String(preapprovalId),
@@ -759,14 +767,14 @@ async function processSinglePreapproval(preapprovalId: string, forceUpdate = fal
     if (resolvedUid) {
       displayMessage = `Assinatura verificada com sucesso! Plano ${finalPlan} liberado para o e-mail: ${payerEmail}.`;
     } else {
-      displayMessage = `Assinatura autorizada, mas nenhum usuário associado (e-mail: ${payerEmail}) foi encontrado.`;
+      displayMessage = `Assinatura autorizada, mas nenhum usuário associado (e-mail: ${payerEmail}) foi encontrado. Registrado como orphan_payment.`;
     }
   }
 
   return {
     success: isApproved && resolvedUid !== null,
     paymentId: String(preapprovalId),
-    status: status,
+    status: finalStatusToSave,
     planActivated: planActivated,
     message: displayMessage
   };
@@ -832,23 +840,7 @@ async function searchPaymentsAndProcess(targetId: string, accessToken: string) {
       console.warn("Error search by order.id:", e);
     }
 
-    // 4. Search by payer.email if email matches pattern
-    if (targetClean.includes('@')) {
-      try {
-        const emailUrl = `https://api.mercadopago.com/v1/payments/search?payer.email=${encodeURIComponent(targetClean.toLowerCase())}`;
-        const emailRes = await fetch(emailUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        if (emailRes.ok) {
-          const data = await emailRes.json();
-          if (data.results && data.results.length > 0) {
-            addUniquePayments(data.results);
-          }
-        }
-      } catch (e) {
-        console.warn("Error search by email:", e);
-      }
-    }
-
-    // 5. Scan last 100 payments as a bulletproof safety net
+    // 4. Scan last 100 payments as a bulletproof safety net (filter by email, ref, description, etc.)
     try {
       const scanUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=100`;
       const scanRes = await fetch(scanUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
@@ -858,26 +850,18 @@ async function searchPaymentsAndProcess(targetId: string, accessToken: string) {
         const matchLower = targetClean.toLowerCase();
         const matchedRecent = results.filter((p: any) => {
           if (!p) return false;
-          // Direct ID match
           if (String(p.id) === matchLower) return true;
-          // order ID match
           if (p.order && String(p.order.id) === matchLower) return true;
-          // external_reference starts with, contains, or equals
           const extRef = String(p.external_reference || '').toLowerCase();
           if (extRef === matchLower || extRef.includes(matchLower)) return true;
-          // preference_id match
           const prefId = String(p.preference_id || '').toLowerCase();
           if (prefId === matchLower || prefId.includes(matchLower)) return true;
-          // description match
           if (String(p.description || '').toLowerCase().includes(matchLower)) return true;
-          // transaction number
           const txNum = String(p.transaction_number || '').toLowerCase();
           const detailsTxId = String(p.transaction_details?.transaction_id || '').toLowerCase();
           const detailsInstitutionTxId = String(p.transaction_details?.financial_institution || '').toLowerCase();
           if (txNum === matchLower || detailsTxId === matchLower || detailsInstitutionTxId === matchLower) return true;
-          // Payer email match
           if (p.payer && String(p.payer.email || '').toLowerCase() === matchLower) return true;
-          // Metadata comparison
           if (p.metadata) {
             const metaUid = String(p.metadata.uid || p.metadata.user_id || p.metadata.userId || '').toLowerCase();
             const metaEmail = String(p.metadata.email || '').toLowerCase();
@@ -894,7 +878,7 @@ async function searchPaymentsAndProcess(targetId: string, accessToken: string) {
       console.warn("Error scanning last 100 payments:", e);
     }
 
-    // 6. Search preapprovals by external_reference as fallback
+    // 5. Search preapprovals by external_reference as fallback
     try {
       const preappSearchUrl = `https://api.mercadopago.com/preapproval/search?external_reference=${encodeURIComponent(targetClean)}`;
       const preappSearchRes = await fetch(preappSearchUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
@@ -1053,28 +1037,104 @@ export default async function handler(req: any, res: any) {
       let finalStatus = 'unknown';
       let atLeastOneActivated = false;
       let processedPaymentIds: string[] = [];
+      const dbInstanceLocal = getDb();
 
-      // Step A: Attempt processing as direct paymentId
+      // Step A: If targetId is an email address, process it dynamically
+      if (targetId.includes('@')) {
+        console.log(`[Admin Reprocess] Reprocessing by customer email: ${targetId}`);
+        const userDocId = await findUserByEmailInFirestore(targetId);
+
+        // A1. Search preapproval subscriptions in Mercado Pago by email
+        try {
+          const preappSearchUrl = `https://api.mercadopago.com/preapproval/search?email=${encodeURIComponent(targetId.toLowerCase().trim())}`;
+          const preappSearchRes = await fetch(preappSearchUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+          if (preappSearchRes.ok) {
+            const preappData = await preappSearchRes.json();
+            const preappResults = preappData.results || [];
+            for (const item of preappResults) {
+              if (item && item.id) {
+                const pId = String(item.id);
+                const pRes = await processSinglePreapproval(pId, true);
+                if (!processedPaymentIds.includes(pId)) processedPaymentIds.push(pId);
+                if (pRes.planActivated) {
+                  atLeastOneActivated = true;
+                  paymentFound = true;
+                  finalStatus = pRes.status;
+                }
+              }
+            }
+          }
+        } catch (errPre) {
+          console.warn("[Admin Reprocess Error] Preapproval email search failed:", errPre);
+        }
+
+        // A2. Search payments by external_reference using found UID
+        if (userDocId) {
+          try {
+            const extRefUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(userDocId)}`;
+            const extRefRes = await fetch(extRefUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+            if (extRefRes.ok) {
+              const data = await extRefRes.json();
+              const results = data.results || [];
+              for (const p of results) {
+                if (p && p.id) {
+                  const pId = String(p.id);
+                  const pRes = await processSinglePayment(pId, "", true);
+                  if (!processedPaymentIds.includes(pId)) processedPaymentIds.push(pId);
+                  if (pRes.planActivated) {
+                    atLeastOneActivated = true;
+                    paymentFound = true;
+                    finalStatus = pRes.status;
+                  }
+                }
+              }
+            }
+          } catch (errExtRef) {
+            console.warn("[Admin Reprocess Error] External reference payments search failed:", errExtRef);
+          }
+        }
+
+        // A3. Scan last 100 payments for general email matching
+        const scanResult = await searchPaymentsAndProcess(targetId, accessToken);
+        if (scanResult.found) {
+          paymentFound = true;
+          if (scanResult.planActivated) atLeastOneActivated = true;
+          finalStatus = scanResult.status;
+          scanResult.paymentIds.forEach(id => {
+            if (!processedPaymentIds.includes(id)) processedPaymentIds.push(id);
+          });
+        }
+
+        if (paymentFound) {
+          return res.status(200).json({
+            success: atLeastOneActivated,
+            paymentId: processedPaymentIds[0] || targetId,
+            status: finalStatus,
+            planActivated: atLeastOneActivated,
+            message: `Reprocessamento por e-mail concluído! Sincronizadas ${processedPaymentIds.length} transações no Mercado Pago. Ativação do plano: ${atLeastOneActivated ? 'SUCESSO' : 'PENDENTE DE APROVAÇÃO'}`
+          });
+        }
+      }
+
+      // Step B: Attempt direct preapproval subscription processing
+      try {
+        const preappResult = await processSinglePreapproval(targetId, true);
+        if (preappResult.status !== 'not_found' && preappResult.success !== undefined) {
+          console.log(`[Admin Reprocess] Successfully processed preapproval subscription ID: ${targetId}`);
+          return res.status(200).json(preappResult);
+        }
+      } catch (errPre) {
+        console.warn("[Admin Reprocess] Direct preapproval check failed:", errPre);
+      }
+
+      // Step C: Attempt direct payment processing
       const paymentResult = await processSinglePayment(targetId, "", true);
-      
       if (paymentResult.status !== 'not_found' && paymentResult.success !== undefined) {
-        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-          manualVerificationRequested: true,
-          paymentId: targetId,
-          paymentFound: true,
-          paymentStatus: paymentResult.status,
-          firebaseAdminInitialized: true,
-          resolvedUid: null,
-          resolvedPlanCode: null,
-          firestoreUpdated: paymentResult.planActivated,
-          alreadyProcessed: !!paymentResult.alreadyProcessed,
-          errorMessage: null
-        }));
-
+        console.log(`[Admin Reprocess] Successfully processed payment ID: ${targetId}`);
         return res.status(200).json(paymentResult);
       }
 
-      // Step B: Try searching payments by external_reference (matching additional reference)
+      // Step D: Try comprehensive payments search by references
       const searchRefResult = await searchPaymentsAndProcess(targetId, accessToken);
       if (searchRefResult.found) {
         paymentFound = true;
@@ -1082,29 +1142,16 @@ export default async function handler(req: any, res: any) {
         atLeastOneActivated = searchRefResult.planActivated;
         processedPaymentIds = searchRefResult.paymentIds;
 
-        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-          manualVerificationRequested: true,
-          paymentId: targetId,
-          paymentFound: true,
-          paymentStatus: finalStatus,
-          firebaseAdminInitialized: true,
-          resolvedUid: null,
-          resolvedPlanCode: null,
-          firestoreUpdated: atLeastOneActivated,
-          alreadyProcessed: false,
-          errorMessage: null
-        }));
-
         return res.status(200).json({
-          success: true,
+          success: atLeastOneActivated,
           paymentId: processedPaymentIds[0] || targetId,
           status: finalStatus,
           planActivated: atLeastOneActivated,
-          message: `Código de Referência Adicional identificado via pesquisa! Sincronizado ${processedPaymentIds.length} pagamento(s).`
+          message: `Código identificado via pesquisa detalhada! Sincronizados ${processedPaymentIds.length} pagamento(s).`
         });
       }
 
-      // Step C: Try fetching as merchant_order
+      // Step E: Try fetching merchant order
       const orderUrl = `https://api.mercadopago.com/merchant_orders/${targetId}`;
       const orderResponse = await fetch(orderUrl, {
         headers: { "Authorization": `Bearer ${accessToken}` }
@@ -1115,19 +1162,6 @@ export default async function handler(req: any, res: any) {
         const paymentsList = merchantOrder.payments || [];
 
         if (paymentsList.length === 0) {
-          console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-            manualVerificationRequested: true,
-            paymentId: targetId,
-            paymentFound: false,
-            paymentStatus: 'not_found',
-            firebaseAdminInitialized: true,
-            resolvedUid: null,
-            resolvedPlanCode: null,
-            firestoreUpdated: false,
-            alreadyProcessed: false,
-            errorMessage: "Ordem encontrada mas sem pagamentos"
-          }));
-
           return res.status(200).json({
             success: false,
             paymentId: targetId,
@@ -1146,19 +1180,6 @@ export default async function handler(req: any, res: any) {
           finalStatus = pResult.status;
         }
 
-        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-          manualVerificationRequested: true,
-          paymentId: targetId,
-          paymentFound: true,
-          paymentStatus: finalStatus,
-          firebaseAdminInitialized: true,
-          resolvedUid: null,
-          resolvedPlanCode: null,
-          firestoreUpdated: atLeastOneActivated,
-          alreadyProcessed: false,
-          errorMessage: null
-        }));
-
         return res.status(200).json({
           success: true,
           paymentId: targetId,
@@ -1168,87 +1189,12 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // Step D: Try checking /v1/payments/search?order.id={targetId} as fallback for merchant order
-      try {
-        const searchOrderUrl = `https://api.mercadopago.com/v1/payments/search?order.id=${encodeURIComponent(targetId)}`;
-        const searchOrderResponse = await fetch(searchOrderUrl, {
-          headers: { "Authorization": `Bearer ${accessToken}` }
-        });
-        if (searchOrderResponse.ok) {
-          const respData = await searchOrderResponse.json();
-          const results = respData.results || [];
-          if (results.length > 0) {
-            for (const p of results) {
-              if (p.id) {
-                const pIdStr = String(p.id);
-                processedPaymentIds.push(pIdStr);
-                const pResult = await processSinglePayment(pIdStr, targetId, true);
-                if (pResult.planActivated) {
-                  atLeastOneActivated = true;
-                }
-                finalStatus = pResult.status;
-              }
-            }
-
-            console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-              manualVerificationRequested: true,
-              paymentId: targetId,
-              paymentFound: true,
-              paymentStatus: finalStatus,
-              firebaseAdminInitialized: true,
-              resolvedUid: null,
-              resolvedPlanCode: null,
-              firestoreUpdated: atLeastOneActivated,
-              alreadyProcessed: false,
-              errorMessage: null
-            }));
-
-            return res.status(200).json({
-              success: true,
-              paymentId: targetId,
-              status: finalStatus,
-              planActivated: atLeastOneActivated,
-              message: `Código de Ordem (Pesquisa) identificado com sucesso! Sincronizado ${results.length} pagamento(s).`
-            });
-          }
-        }
-      } catch (errQuery) {
-        console.warn("[MercadoPago Order Search Warning] Error searching by order.id:", errQuery);
-      }
-
-      // Step DA: Try searching/processing as preapproval subscription ID direct
-      try {
-        const preappResult = await processSinglePreapproval(targetId, true);
-        if (preappResult.status !== 'not_found' && preappResult.success !== undefined) {
-          console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-            manualVerificationRequested: true,
-            paymentId: targetId,
-            paymentFound: true,
-            paymentStatus: preappResult.status,
-            firebaseAdminInitialized: true,
-            resolvedUid: null,
-            resolvedPlanCode: null,
-            firestoreUpdated: preappResult.planActivated,
-            alreadyProcessed: !!preappResult.alreadyProcessed,
-            errorMessage: null
-          }));
-
-          return res.status(200).json(preappResult);
-        }
-      } catch (errPre) {
-        console.warn("[MercadoPago Preapproval Direct Warning] Error processing direct preapproval ID:", errPre);
-      }
-
-      // Step EA: Find if targetId matches any registered user's email or uid directly in our db as a fallback for direct release
-      let userDocId: string | null = null;
+      // Step F: Local DB Fallback for manual release
+      let userDocId = await findUserByEmailInFirestore(targetId);
       let userEmailFound = '';
       
-      const dbInstanceLocal = getDb();
-      if (targetId.includes('@')) {
-        userDocId = await findUserByEmailInFirestore(targetId);
-        if (userDocId) {
-          userEmailFound = targetId.toLowerCase().trim();
-        }
+      if (userDocId) {
+        userEmailFound = targetId.toLowerCase().trim();
       } else {
         // Try direct lookup of UID
         const uDoc = await dbInstanceLocal.collection("users").doc(targetId).get();
@@ -1265,40 +1211,23 @@ export default async function handler(req: any, res: any) {
       }
 
       if (userDocId) {
-        const forcePlan = req.body?.forcePlan; // e.g. pro_mensal, premium_mensal, pro_anual, premium_anual
+        const forcePlan = req.body?.forcePlan;
         if (forcePlan) {
-          let finalPlan: 'essencial' | 'pro' | 'premium' = 'pro';
-          let musicLimit = 15;
-          let durationDays = 31;
-          let billingCycle = 'monthly';
-          
-          if (String(forcePlan).includes('premium')) {
-            finalPlan = 'premium';
-            musicLimit = 50;
-          } else if (String(forcePlan).includes('essencial')) {
-            finalPlan = 'essencial';
-            musicLimit = 10;
-          } else {
-            finalPlan = 'pro';
-            musicLimit = 15;
-          }
-          if (String(forcePlan).includes('anual')) {
-            billingCycle = 'annual';
-            durationDays = 366;
-          }
-          
+          const resolved = resolvePlanDetails(forcePlan, "", "");
           const now = new Date();
           const expires = new Date();
-          expires.setDate(now.getDate() + durationDays);
+          expires.setDate(now.getDate() + resolved.durationDays);
 
           const updatePayload = {
-            plan: finalPlan,
-            musicLimit: musicLimit,
-            billingCycle: billingCycle,
+            plan: resolved.plan,
+            musicLimit: resolved.musicLimit,
+            billingCycle: resolved.billingCycle,
             subscriptionStatus: "active",
             planStatus: "active",
             paymentStatus: "approved",
             mercadoPagoPaymentId: `MANUAL_FORCE_${Date.now()}`,
+            paymentId: `MANUAL_FORCE_${Date.now()}`,
+            preapprovalId: "",
             planActivatedAt: FieldValue.serverTimestamp(),
             planStartedAt: FieldValue.serverTimestamp(),
             planExpiresAt: expires,
@@ -1308,25 +1237,23 @@ export default async function handler(req: any, res: any) {
             updatedAt: FieldValue.serverTimestamp()
           };
 
-          await dbInstanceLocal.collection("users").doc(userDocId).set(updatePayload, { merge: true });
-          await dbInstanceLocal.collection("artists").doc(userDocId).set(updatePayload, { merge: true });
+          await syncUserAndArtistPlans(userDocId, updatePayload);
 
-          // Record in mp_subscriptions as manual
           const manualSubId = `sub_manual_${userDocId}_${Date.now().toString().slice(-6)}`;
           await dbInstanceLocal.collection("mp_subscriptions").doc(manualSubId).set({
             id: manualSubId,
             userId: userDocId,
             uid: userDocId,
             email: userEmailFound,
-            plan: finalPlan.toLowerCase(),
+            plan: resolved.plan,
             planCode: forcePlan,
-            billingCycle: billingCycle,
+            billingCycle: resolved.billingCycle,
             status: "approved",
             paymentId: "",
             subscriptionId: "",
             transactionNumber: "MANUAL_BY_ADMIN",
-            musicLimit: musicLimit,
-            amount: finalPlan === 'premium' ? 29.99 : (finalPlan === 'pro' ? 14.99 : (finalPlan === 'essencial' ? 9.99 : 0)),
+            musicLimit: resolved.musicLimit,
+            amount: resolved.plan === 'premium' ? 29.99 : (resolved.plan === 'pro' ? 14.99 : (resolved.plan === 'essencial' ? 9.99 : 0)),
             externalReference: "MANUAL_OVERRIDE_BY_ADMIN",
             processedAt: new Date().toISOString(),
             planActivated: true,
@@ -1339,7 +1266,7 @@ export default async function handler(req: any, res: any) {
             paymentId: manualSubId,
             status: 'approved',
             planActivated: true,
-            message: `Plano ${finalPlan} (${billingCycle === 'annual' ? 'Anual' : 'Mensal'}) ativado FORÇADAMENTE com sucesso pelo administrador para o usuário: ${userEmailFound}`
+            message: `Plano ${resolved.plan.toUpperCase()} (${resolved.billingCycle === 'annual' ? 'Anual' : 'Mensal'}) ativado FORÇADAMENTE com sucesso pelo administrador para o usuário: ${userEmailFound}`
           });
         }
 
@@ -1356,26 +1283,13 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // Step E: If both are 404
-      console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-        manualVerificationRequested: true,
-        paymentId: targetId,
-        paymentFound: false,
-        paymentStatus: 'not_found',
-        firebaseAdminInitialized: true,
-        resolvedUid: null,
-        resolvedPlanCode: null,
-        firestoreUpdated: false,
-        alreadyProcessed: false,
-        errorMessage: "Id nao encontrado em payments nem merchant_orders"
-      }));
-
+      // Step G: If everything is 404
       return res.status(200).json({
         success: false,
         paymentId: targetId,
         status: 'not_found',
         planActivated: false,
-        message: "Identificador não encontrado como paymentId, subscriptionId ou email no Mercado Pago, e nenhum usuário cadastrado com este e-mail/ID foi localizado no banco."
+        message: "Nenhum pagamento, assinatura, e-mail de cliente ou UID correspondente foi localizado no Mercado Pago ou em nossa base de dados local."
       });
 
     } catch (err: any) {
@@ -1389,6 +1303,8 @@ export default async function handler(req: any, res: any) {
       });
     }
   }
+
+
 
   // 2. WEBHOOK NOTIFICATIONS INCOMING FLOW
   let eventType = req.body?.type || req.body?.topic || req.query?.topic || req.query?.type || '';
