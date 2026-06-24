@@ -203,6 +203,7 @@ import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from
 import { dbService } from '../lib/db';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, Timestamp } from 'firebase/firestore';
+import { AnnouncementsPanel } from './AnnouncementsPanel';
 import PlansScreen from './PlansScreen';
 import { motion } from 'motion/react';
 
@@ -243,6 +244,8 @@ export default function Dashboard({
   const [editGenre, setEditGenre] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editLyrics, setEditLyrics] = useState('');
+  const [newAudioFile, setNewAudioFile] = useState<File | null>(null);
+  const [modalMessage, setModalMessage] = useState<string | null>(null);
   
   // Storage Upload state block
   const [isUploading, setIsUploading] = useState(false);
@@ -309,6 +312,13 @@ export default function Dashboard({
   const [loadingRepertoires, setLoadingRepertoires] = useState(true);
   const [repertoiresError, setRepertoiresError] = useState<string | null>(null);
   const [isSyncingRepertoire, setIsSyncingRepertoire] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   useEffect(() => {
     if (!currentUser?.userId) return;
@@ -1419,6 +1429,121 @@ export default function Dashboard({
     }
   };
 
+  const handleRemoveFromRepertoire = async (track: Track, rep: Repertoire) => {
+    if (!window.confirm(`Deseja remover a música "${track.title}" desta pasta? Ela continuará disponível no seu catálogo geral.`)) {
+      return;
+    }
+    
+    try {
+      // 1. Remove from trackIds and orderedTrackIds
+      const nextTrackIds = (rep.trackIds || []).filter(id => id !== track.trackId);
+      const nextOrderedTrackIds = (rep.orderedTrackIds || []).filter(id => id !== track.trackId);
+      
+      const updatedRep: Repertoire = {
+        ...rep,
+        trackIds: nextTrackIds,
+        orderedTrackIds: nextOrderedTrackIds,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await dbService.saveRepertoire(updatedRep);
+      
+      // Update local state for viewingRepertoireTracks so the modal reflects the change immediately
+      setViewingRepertoireTracks(updatedRep);
+      
+      // 2. Adjust legacy repertoireId for the song
+      // Let's check other repertoires of this user that contain this track (excluding the current one)
+      const otherReps = dashboardRepertoires.filter(r => r.id !== rep.id && r.trackIds && r.trackIds.includes(track.trackId));
+      let nextRepertoireId: string | null = null;
+      
+      if (track.repertoireId === rep.id) {
+        if (otherReps.length > 0) {
+          nextRepertoireId = otherReps[0].id;
+        } else {
+          nextRepertoireId = null;
+        }
+        
+        await dbService.updateMusic(profile.userId, track.trackId, {
+          repertoireId: nextRepertoireId,
+          publicationDestination: nextRepertoireId ? 'repertoire' : 'general'
+        });
+      }
+      
+      // Update local tracks state
+      setTracks(prev => prev.map(t => t.trackId === track.trackId ? {
+        ...t,
+        repertoireId: nextRepertoireId !== undefined ? nextRepertoireId : t.repertoireId,
+        publicationDestination: nextRepertoireId ? 'repertoire' : 'general'
+      } : t));
+      
+      // Trigger refresh
+      refreshData();
+      setToastMessage?.("Música removida da pasta com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao remover música da pasta:", err);
+      alert(err.message || "Erro ao remover música da pasta.");
+    }
+  };
+
+  const handleDeleteMusicFromPasta = async (track: Track) => {
+    const confirmed = window.confirm(`Tem certeza de que deseja excluir esta música definitivamente? Ela também será removida de todas as pastas em que estiver incluída.`);
+    if (!confirmed) return;
+    
+    try {
+      setModalMessage("Excluindo música...");
+      
+      // 1. Localizar todas as pastas do usuário que contêm o trackId
+      const repsWithTrack = dashboardRepertoires.filter(r => r.trackIds && r.trackIds.includes(track.trackId));
+      
+      // 2. Remover de todas as pastas
+      for (const rep of repsWithTrack) {
+        const nextTrackIds = (rep.trackIds || []).filter(id => id !== track.trackId);
+        const nextOrderedTrackIds = (rep.orderedTrackIds || []).filter(id => id !== track.trackId);
+        
+        const updatedRep: Repertoire = {
+          ...rep,
+          trackIds: nextTrackIds,
+          orderedTrackIds: nextOrderedTrackIds,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await dbService.saveRepertoire(updatedRep);
+      }
+      
+      // 3. Chamar a função atual deleteMusic
+      const deleteResult = await dbService.deleteMusic(profile.userId, track.trackId);
+      if (!deleteResult) {
+        throw new Error("Não foi possível excluir o documento no banco de dados.");
+      }
+      
+      // 4. Atualizar o estado local
+      setTracks(prev => prev.filter(t => t.trackId !== track.trackId));
+      
+      // If we are currently viewing this repertoire, let's update viewingRepertoireTracks
+      if (viewingRepertoireTracks) {
+        const updatedRep = {
+          ...viewingRepertoireTracks,
+          trackIds: (viewingRepertoireTracks.trackIds || []).filter(id => id !== track.trackId),
+          orderedTrackIds: (viewingRepertoireTracks.orderedTrackIds || []).filter(id => id !== track.trackId)
+        };
+        setViewingRepertoireTracks(updatedRep);
+      }
+      
+      // If the deleted track was the active playing track, stop playing
+      if (activeTrack?.trackId === track.trackId) {
+        onSelectTrack(null as any, []);
+      }
+      
+      refreshData();
+      setToastMessage?.("Música excluída com sucesso!");
+      setModalMessage(null);
+    } catch (err: any) {
+      console.error("Erro ao excluir música definitivamente:", err);
+      alert(`Erro: ${err.message || 'Falha ao excluir música.'}`);
+      setModalMessage(null);
+    }
+  };
+
   const handleStartEdit = (track: Track, event: React.MouseEvent) => {
     event.stopPropagation();
     setEditingTrack(track);
@@ -1450,10 +1575,33 @@ export default function Dashboard({
     }
 
     setIsUploading(true);
-    setUploadProgress(40);
+    setUploadProgress(5);
 
     try {
-      setUploadProgress(70);
+      let finalAudioUrl = editingTrack.audioUrl;
+      let finalStoragePath = editingTrack.storagePath;
+      let finalFileSize = editingTrack.fileSize;
+      let finalMimeType = editingTrack.mimeType;
+      let finalOriginalFileName = editingTrack.originalFileName;
+
+      if (newAudioFile) {
+        setUploadProgress(10);
+        const uploadResult = await uploadAudioToR2(
+          profile.userId,
+          editingTrack.trackId,
+          newAudioFile,
+          (percent) => {
+            setUploadProgress(Math.min(80, 10 + Math.round(percent * 0.7)));
+          }
+        );
+        finalAudioUrl = uploadResult.publicAudioUrl;
+        finalStoragePath = uploadResult.storagePath;
+        finalFileSize = newAudioFile.size;
+        finalMimeType = newAudioFile.type || 'audio/mpeg';
+        finalOriginalFileName = newAudioFile.name;
+      }
+
+      setUploadProgress(85);
       const updatedTrack = await dbService.updateMusic(profile.userId, editingTrack.trackId, {
         title: editTitle.trim(),
         composer: editComposer.trim(),
@@ -1465,10 +1613,15 @@ export default function Dashboard({
         lyrics: editLyrics.trim(),
         status: editTrackStatus,
         repertoireId: editRepertoireId === 'all_songs' ? null : editRepertoireId,
-        publicationDestination: editRepertoireId === 'all_songs' ? 'general' : 'repertoire'
+        publicationDestination: editRepertoireId === 'all_songs' ? 'general' : 'repertoire',
+        audioUrl: finalAudioUrl,
+        storagePath: finalStoragePath,
+        fileSize: finalFileSize,
+        mimeType: finalMimeType,
+        originalFileName: finalOriginalFileName,
       });
 
-      setUploadProgress(85);
+      setUploadProgress(90);
       // Move track across repertoires
       const allReps = await dbService.getRepertoires(profile.userId);
       for (const rep of allReps) {
@@ -1510,7 +1663,9 @@ export default function Dashboard({
       setUploadProgress(100);
       setShowEditForm(false);
       setEditingTrack(null);
+      setNewAudioFile(null); // Clear new audio file selection
       refreshData();
+      setToastMessage?.("Música atualizada com sucesso!");
     } catch (err: any) {
       console.error("Error updating music:", err);
       setFormError(err.message || 'Erro ao salvar alterações da música.');
@@ -1697,6 +1852,9 @@ export default function Dashboard({
             </div>
           );
         })()}
+        
+        {/* Avisos & Audições Panel */}
+        <AnnouncementsPanel />
         
         {/* Welcome Block + Share URL */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 bg-slate-900 border border-slate-850 p-6 rounded-3xl relative overflow-hidden">
@@ -3956,7 +4114,7 @@ export default function Dashboard({
 
       {/* MODAL / EDIT MUSIC LAYOVER DIALOG */}
       {showEditForm && editingTrack && (
-        <div id="edit-music-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div id="edit-music-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
             
             {isUploading && (
@@ -4108,6 +4266,45 @@ export default function Dashboard({
                   rows={4}
                   className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition font-sans"
                 ></textarea>
+              </div>
+
+              {/* Substituição do Áudio */}
+              <div className="pt-2 pb-1 border-t border-slate-850/60 space-y-1">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block mb-1">Substituir Arquivo de Áudio (Opcional)</label>
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-2 hover:border-orange-500/50 transition relative">
+                  <input 
+                    type="file" 
+                    accept="audio/*" 
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setNewAudioFile(e.target.files[0]);
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                  <UploadCloud className="w-8 h-8 text-slate-500" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-300 font-bold font-sans">
+                      {newAudioFile ? newAudioFile.name : 'Clique ou arraste um novo áudio aqui'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      {newAudioFile ? `${(newAudioFile.size / (1024 * 1024)).toFixed(2)} MB` : 'Deixe em branco para manter o arquivo atual'}
+                    </p>
+                  </div>
+                  {newAudioFile && (
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setNewAudioFile(null);
+                      }}
+                      className="px-3 py-1.5 bg-rose-950/40 border border-rose-500/20 text-rose-400 text-[10px] font-mono font-bold rounded-lg hover:bg-rose-950/80 transition relative z-10 cursor-pointer"
+                    >
+                      Remover seleção
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Visibilidade do Catálogo */}
@@ -4682,112 +4879,243 @@ export default function Dashboard({
         <div id="view-repertoire-tracks-modal-container" className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 md:p-8 space-y-6 shadow-2xl relative my-10 max-h-[90vh] overflow-y-auto">
             
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div className="text-left">
-                <h3 className="font-heading font-black text-lg uppercase text-white tracking-tight flex items-center gap-2">
-                  <FolderOpen className="w-5 h-5 text-orange-400" />
-                  {viewingRepertoireTracks.name}
-                </h3>
-                <p className="text-xs text-slate-400 font-mono mt-1">
-                  {viewingRepertoireTracks.description || "Nenhuma descrição informada."}
-                </p>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setViewingRepertoireTracks(null)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            {(() => {
+              // 1. Resolve tracks belonging to this repertoire using the hybrid logic
+              const orderedIds = viewingRepertoireTracks.orderedTrackIds || viewingRepertoireTracks.trackIds || [];
+              const matchedSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id || orderedIds.includes(t.trackId));
+              
+              // 2. Arrange/order them according to the ordered list
+              const orderedSongs: Track[] = [];
+              const matchedMap = new Map<string, Track>(matchedSongs.map(t => [t.trackId, t]));
+              
+              orderedIds.forEach(id => {
+                const track = matchedMap.get(id);
+                if (track) {
+                  orderedSongs.push(track);
+                  matchedMap.delete(id);
+                }
+              });
+              
+              matchedMap.forEach((track: Track) => {
+                orderedSongs.push(track);
+              });
 
-            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
-              {(() => {
-                const repSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id);
-                if (repSongs.length === 0) {
-                  return (
-                    <div className="text-center py-12 bg-slate-955 rounded-2xl border border-slate-850">
-                      <Music className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                      <p className="text-slate-400 text-xs font-mono">Esta pasta ainda não possui nenhuma música vinculada.</p>
-                      <p className="text-slate-500 text-[10px] max-w-xs mx-auto mt-1">
-                        Use o botão Editar em alguma música da sua lista geral para movê-la para cá.
+              // Calculate stats
+              const totalSongsCount = orderedSongs.length;
+              const activeSongsCount = orderedSongs.filter(t => (t.status || 'active') === 'active').length;
+              const inactiveSongsCount = totalSongsCount - activeSongsCount;
+              const totalPlays = orderedSongs.reduce((sum, t) => sum + (t.plays || t.playsCount || 0), 0);
+
+              return (
+                <>
+                  {/* Folder Summary Header */}
+                  <div className="flex flex-col border-b border-slate-800 pb-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <h3 className="font-heading font-black text-lg uppercase text-white tracking-tight flex items-center gap-2">
+                          <FolderOpen className="w-5 h-5 text-orange-400" />
+                          {viewingRepertoireTracks.name}
+                        </h3>
+                        {viewingRepertoireTracks.description && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            {viewingRepertoireTracks.description}
+                          </p>
+                        )}
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setViewingRepertoireTracks(null)}
+                        className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Stats summary grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950 p-3 rounded-2xl border border-slate-850">
+                      <div className="text-left p-2 rounded-xl bg-slate-900/40 border border-slate-800/40">
+                        <span className="block text-[9px] text-slate-500 font-mono uppercase">Músicas</span>
+                        <span className="text-sm font-black text-white font-mono">{totalSongsCount}</span>
+                      </div>
+                      <div className="text-left p-2 rounded-xl bg-slate-900/40 border border-slate-800/40">
+                        <span className="block text-[9px] text-emerald-500/80 font-mono uppercase">Ativas</span>
+                        <span className="text-sm font-black text-[#1ed760] font-mono">{activeSongsCount}</span>
+                      </div>
+                      <div className="text-left p-2 rounded-xl bg-slate-900/40 border border-slate-800/40">
+                        <span className="block text-[9px] text-rose-500/80 font-mono uppercase">Inativas</span>
+                        <span className="text-sm font-black text-rose-400 font-mono">{inactiveSongsCount}</span>
+                      </div>
+                      <div className="text-left p-2 rounded-xl bg-slate-900/40 border border-slate-800/40">
+                        <span className="block text-[9px] text-orange-500/80 font-mono uppercase">Plays da Pasta</span>
+                        <span className="text-sm font-black text-orange-400 font-mono">{totalPlays}</span>
+                      </div>
+                    </div>
+
+                    <div className="text-left px-1">
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Total de plays das músicas desta pasta: <strong className="text-white">{totalPlays}</strong>
                       </p>
                     </div>
-                  );
-                }
-                return repSongs.map((track) => {
-                  const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
-                  const isPublicActive = (track.status || 'active') === 'active';
-                  
-                  return (
-                    <div 
-                      key={track.trackId}
-                      className="bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-2xl p-3.5 flex items-center justify-between gap-4 transition hover:bg-slate-900/60"
-                    >
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectTrack(track, tracks);
-                          }}
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition border ${
-                            isCurrentlyPlaying
-                              ? 'bg-[#d4af37] text-slate-950 border-[#d4af37]/40 shadow-lg shadow-[#d4af37]/10'
-                              : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-orange-400'
-                          } cursor-pointer`}
-                        >
-                          {isCurrentlyPlaying ? (
-                            <div className="flex items-end gap-0.5 h-3">
-                              <span className="w-1 bg-slate-950 rounded-full animate-pulse h-3 block"></span>
-                              <span className="w-1 bg-slate-950 rounded-full animate-pulse h-2 block"></span>
-                              <span className="w-1 bg-slate-950 rounded-full animate-pulse h-3 block"></span>
-                            </div>
-                          ) : (
-                            <Play className="w-4 h-4 fill-current stroke-none pl-0.5" />
-                          )}
-                        </button>
-                        
-                        <div className="text-left">
-                          <h5 className="font-heading font-black text-xs text-white uppercase tracking-tight line-clamp-1">{track.title}</h5>
-                          <p className="text-slate-500 text-[10px] font-mono mt-0.5">{track.composer || 'Sem compositor'}</p>
-                        </div>
-                      </div>
+                  </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded border ${
-                          isPublicActive ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400' : 'bg-rose-950/20 border-rose-500/20 text-rose-400'
-                        }`}>
-                          {isPublicActive ? 'Ativo' : 'Inativo'}
-                        </span>
-
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewingRepertoireTracks(null);
-                            handleStartEdit(track, e);
-                          }}
-                          className="p-1 text-slate-405 hover:text-white rounded hover:bg-slate-850 cursor-pointer"
-                          title="Editar"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                  {modalMessage && (
+                    <div className="p-3 bg-slate-950 border border-orange-500/30 text-orange-400 text-xs font-mono rounded-xl text-center flex items-center justify-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      {modalMessage}
                     </div>
-                  );
-                });
-              })()}
-            </div>
+                  )}
 
-            <div className="flex justify-end pt-2">
-              <button 
-                type="button"
-                onClick={() => setViewingRepertoireTracks(null)}
-                className="px-5 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 text-xs font-bold uppercase transition rounded-xl cursor-pointer"
-              >
-                Fechar
-              </button>
-            </div>
+                  {/* Songs list with details */}
+                  <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-2">
+                    {orderedSongs.length === 0 ? (
+                      <div className="text-center py-12 bg-slate-955 rounded-2xl border border-slate-850">
+                        <Music className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs font-mono">Esta pasta ainda não possui nenhuma música vinculada.</p>
+                        <p className="text-slate-500 text-[10px] max-w-xs mx-auto mt-1">
+                          Use o botão Editar em alguma música da sua lista geral para movê-la para cá.
+                        </p>
+                      </div>
+                    ) : (
+                      orderedSongs.map((track) => {
+                        const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
+                        const isPublicActive = (track.status || 'active') === 'active';
+                        const trackPlays = track.plays || track.playsCount || 0;
+                        const trackSinger = track.singer || track.performer || '';
+                        
+                        return (
+                          <div 
+                            key={track.trackId}
+                            className="bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition hover:bg-slate-900/60 text-left"
+                          >
+                            {/* Play button, Title, Composer, Singer/Performer */}
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {/* Play Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onSelectTrack(track, orderedSongs);
+                                }}
+                                className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition border ${
+                                  isCurrentlyPlaying
+                                    ? 'bg-[#1ed760] text-slate-950 border-[#1ed760]/40 shadow-lg shadow-[#1ed760]/10'
+                                    : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-[#1ed760]'
+                                } cursor-pointer`}
+                              >
+                                {isCurrentlyPlaying && isPlaying ? (
+                                  <div className="flex items-end gap-0.5 h-3">
+                                    <span className="w-1 bg-slate-950 rounded-full animate-bounce h-3 block" style={{ animationDelay: '0.1s' }}></span>
+                                    <span className="w-1 bg-slate-950 rounded-full animate-bounce h-2 block" style={{ animationDelay: '0.3s' }}></span>
+                                    <span className="w-1 bg-slate-950 rounded-full animate-bounce h-3 block" style={{ animationDelay: '0.2s' }}></span>
+                                  </div>
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current stroke-none pl-0.5" />
+                                )}
+                              </button>
+                              
+                              {/* Title & Creators */}
+                              <div className="min-w-0 flex-1">
+                                <h5 className="font-heading font-black text-sm text-white uppercase tracking-tight line-clamp-1">{track.title}</h5>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                                  <span className="text-slate-400 text-[10px] font-mono">
+                                    Compositor: <span className="text-slate-300 font-sans font-medium">{track.composer || 'N/A'}</span>
+                                  </span>
+                                  {trackSinger && (
+                                    <>
+                                      <span className="text-slate-600 text-[10px] font-mono">•</span>
+                                      <span className="text-slate-400 text-[10px] font-mono">
+                                        Intérprete: <span className="text-slate-300 font-sans font-medium">{trackSinger}</span>
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Plays, Status and Actions */}
+                            <div className="flex items-center justify-between sm:justify-end gap-4 border-t border-slate-900/60 pt-3 sm:pt-0 sm:border-none">
+                              {/* Plays count & Status label */}
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  <span className="block text-[8px] text-slate-500 font-mono uppercase">Plays</span>
+                                  <span className="text-xs font-bold text-white font-mono">{trackPlays}</span>
+                                </div>
+
+                                <span className={`text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded border ${
+                                  isPublicActive ? 'bg-emerald-950/20 border-emerald-500/20 text-[#1ed760]' : 'bg-rose-950/20 border-rose-500/20 text-rose-400'
+                                }`}>
+                                  {isPublicActive ? 'Ativo' : 'Inativo'}
+                                </span>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex items-center gap-1.5">
+                                {/* Edit */}
+                                <button 
+                                  onClick={(e) => {
+                                    handleStartEdit(track, e);
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-900 border border-transparent hover:border-slate-800 transition cursor-pointer"
+                                  title="Editar música"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-orange-400" />
+                                </button>
+
+                                {/* Remove from folder */}
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveFromRepertoire(track, viewingRepertoireTracks);
+                                  }}
+                                  className="p-2 text-slate-405 hover:text-rose-400 rounded-xl hover:bg-slate-900 border border-transparent hover:border-rose-950/30 transition cursor-pointer"
+                                  title="Remover desta pasta"
+                                >
+                                  <Link2Off className="w-3.5 h-3.5 text-slate-400 hover:text-rose-400" />
+                                </button>
+
+                                {/* Delete definitely */}
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteMusicFromPasta(track);
+                                  }}
+                                  className="p-2 text-slate-405 hover:text-red-500 rounded-xl hover:bg-slate-900 border border-transparent hover:border-red-950/40 transition cursor-pointer"
+                                  title="Excluir definitivamente"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Footer buttons */}
+                  <div className="flex justify-end pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setViewingRepertoireTracks(null)}
+                      className="px-5 py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-300 text-xs font-bold uppercase transition rounded-xl cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+
           </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-[100] bg-slate-900 border border-[#1ed760]/30 shadow-2xl p-4 rounded-2xl flex items-center gap-3 max-w-sm">
+          <div className="w-2 h-2 rounded-full bg-[#1ed760] animate-ping"></div>
+          <p className="text-xs font-mono text-white font-bold">{toastMessage}</p>
+          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white ml-auto cursor-pointer">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

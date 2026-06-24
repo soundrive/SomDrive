@@ -162,3 +162,27 @@ export interface Project {
   updatedAt?: string;
 }
 
+export type AnnouncementType = 'audition' | 'opportunity' | 'announcement' | 'invitation';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  type: AnnouncementType;
+  summary: string;
+  content?: string;
+  imageUrl?: string;
+  imageStoragePath?: string;
+  whatsappNumber?: string;
+  whatsappMessage?: string;
+  buttonText?: string;
+  buttonUrl?: string;
+  priority: number;
+  isActive: boolean;
+  startsAt: string; // ISO string in UI, Timestamp in DB
+  endsAt?: string | null; // ISO string in UI, Timestamp in DB or null
+  createdAt: string; // ISO string in UI, Timestamp in DB
+  updatedAt: string; // ISO string in UI, Timestamp in DB
+  createdBy: string;
+}
+
+

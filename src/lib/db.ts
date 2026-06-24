@@ -1,4 +1,4 @@
-import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project, Announcement, AnnouncementType } from '../types';
 
 // Strict in-memory shadowing to replace browser persistent storage for core user/folder/music data
 const MEMORY_KV_STORE: Record<string, string> = {};
@@ -192,7 +192,7 @@ import {
   updateDoc,
   increment
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType } from './firebase';
 import { signInAnonymously } from 'firebase/auth';
 
@@ -210,6 +210,28 @@ export function createSlug(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+const parseTimestamp = (val: any): string | null => {
+  if (!val) return null;
+  if (val instanceof Timestamp) return val.toDate().toISOString();
+  if (typeof val.toDate === 'function') return val.toDate().toISOString();
+  if (val && typeof val === 'object' && typeof val._seconds === 'number') {
+    return new Date(val._seconds * 1000).toISOString();
+  }
+  if (val && typeof val === 'object' && typeof val.seconds === 'number') {
+    return new Date(val.seconds * 1000).toISOString();
+  }
+  if (typeof val === 'string') {
+    return val;
+  }
+  try {
+    const parsedDate = new Date(val);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString();
+    }
+  } catch {}
+  return null;
+};
+
 // Database Actions Layer
 export const dbService = {
   // Map and parse raw Firestore user/artist documents to complete Artist object format with precise field naming and UTC timestamp support
@@ -224,28 +246,6 @@ export const dbService = {
         createdAt: new Date().toISOString()
       };
     }
-
-    const parseTimestamp = (val: any): string | null => {
-      if (!val) return null;
-      if (val instanceof Timestamp) return val.toDate().toISOString();
-      if (typeof val.toDate === 'function') return val.toDate().toISOString();
-      if (val && typeof val === 'object' && typeof val._seconds === 'number') {
-        return new Date(val._seconds * 1000).toISOString();
-      }
-      if (val && typeof val === 'object' && typeof val.seconds === 'number') {
-        return new Date(val.seconds * 1000).toISOString();
-      }
-      if (typeof val === 'string') {
-        return val;
-      }
-      try {
-        const parsedDate = new Date(val);
-        if (!isNaN(parsedDate.getTime())) {
-          return parsedDate.toISOString();
-        }
-      } catch {}
-      return null;
-    };
 
     const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
     const cleanPlan = (rawPlan === 'essencial' || rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'essencial' | 'pro' | 'premium';
@@ -1922,6 +1922,22 @@ export const dbService = {
         songsPayload.coverUrl = updatedTrack.coverUrl;
       }
 
+      if (updatedTrack.audioUrl) {
+        songsPayload.audioUrl = updatedTrack.audioUrl;
+      }
+      if (updatedTrack.storagePath) {
+        songsPayload.storagePath = updatedTrack.storagePath;
+      }
+      if (updatedTrack.fileSize !== undefined) {
+        songsPayload.fileSize = updatedTrack.fileSize;
+      }
+      if (updatedTrack.mimeType) {
+        songsPayload.mimeType = updatedTrack.mimeType;
+      }
+      if (updatedTrack.originalFileName) {
+        songsPayload.originalFileName = updatedTrack.originalFileName;
+      }
+
       if (updatedTrack.repertoireId !== undefined) {
         songsPayload.repertoireId = updatedTrack.repertoireId;
       }
@@ -2396,6 +2412,145 @@ export const dbService = {
       });
     } catch (e) {
       console.error("Deletion error in deleteProject:", e);
+    }
+  },
+
+  async getAnnouncements(onlyActive: boolean): Promise<Announcement[]> {
+    try {
+      if (!auth.currentUser) {
+        return [];
+      }
+      let q;
+      if (onlyActive) {
+        q = query(collection(db, 'announcements'), where('isActive', '==', true));
+      } else {
+        q = query(collection(db, 'announcements'));
+      }
+      
+      const snap = await getDocs(q);
+      const list: Announcement[] = [];
+      
+      snap.forEach(d => {
+        const data = d.data() as any;
+        list.push({
+          id: d.id,
+          title: data.title || '',
+          type: data.type || 'announcement',
+          summary: data.summary || '',
+          content: data.content || '',
+          imageUrl: data.imageUrl || '',
+          imageStoragePath: data.imageStoragePath || '',
+          whatsappNumber: data.whatsappNumber || '',
+          whatsappMessage: data.whatsappMessage || '',
+          buttonText: data.buttonText || '',
+          buttonUrl: data.buttonUrl || '',
+          priority: typeof data.priority === 'number' ? data.priority : 0,
+          isActive: typeof data.isActive === 'boolean' ? data.isActive : false,
+          startsAt: parseTimestamp(data.startsAt) || new Date().toISOString(),
+          endsAt: data.endsAt ? parseTimestamp(data.endsAt) : null,
+          createdAt: parseTimestamp(data.createdAt) || new Date().toISOString(),
+          updatedAt: parseTimestamp(data.updatedAt) || new Date().toISOString(),
+          createdBy: data.createdBy || '',
+        });
+      });
+
+      // Sort by priority desc, then createdAt desc
+      list.sort((a, b) => {
+        if (b.priority !== a.priority) {
+          return b.priority - a.priority;
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+      return list;
+    } catch (e) {
+      console.error("Error loading announcements:", e);
+      return [];
+    }
+  },
+
+  async saveAnnouncement(announcement: Announcement): Promise<void> {
+    try {
+      const docRef = doc(db, 'announcements', announcement.id);
+      
+      const firestoreData: any = {
+        id: announcement.id,
+        title: announcement.title,
+        type: announcement.type,
+        summary: announcement.summary,
+        priority: Number(announcement.priority),
+        isActive: Boolean(announcement.isActive),
+        startsAt: Timestamp.fromDate(new Date(announcement.startsAt)),
+        createdAt: Timestamp.fromDate(new Date(announcement.createdAt)),
+        updatedAt: Timestamp.fromDate(new Date()),
+        createdBy: announcement.createdBy
+      };
+
+      if (announcement.content !== undefined && announcement.content !== null) {
+        firestoreData.content = announcement.content;
+      }
+      if (announcement.imageUrl !== undefined && announcement.imageUrl !== null) {
+        firestoreData.imageUrl = announcement.imageUrl;
+      }
+      if (announcement.imageStoragePath !== undefined && announcement.imageStoragePath !== null) {
+        firestoreData.imageStoragePath = announcement.imageStoragePath;
+      }
+      if (announcement.whatsappNumber !== undefined && announcement.whatsappNumber !== null) {
+        firestoreData.whatsappNumber = announcement.whatsappNumber;
+      }
+      if (announcement.whatsappMessage !== undefined && announcement.whatsappMessage !== null) {
+        firestoreData.whatsappMessage = announcement.whatsappMessage;
+      }
+      if (announcement.buttonText !== undefined && announcement.buttonText !== null) {
+        firestoreData.buttonText = announcement.buttonText;
+      }
+      if (announcement.buttonUrl !== undefined && announcement.buttonUrl !== null) {
+        firestoreData.buttonUrl = announcement.buttonUrl;
+      }
+      if (announcement.endsAt) {
+        firestoreData.endsAt = Timestamp.fromDate(new Date(announcement.endsAt));
+      }
+
+      await setDoc(docRef, firestoreData, { merge: true });
+    } catch (e) {
+      console.error("Error saving announcement to Firestore:", e);
+      throw e;
+    }
+  },
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'announcements', id);
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.error("Error deleting announcement from Firestore:", e);
+      throw e;
+    }
+  },
+
+  async uploadAnnouncementImage(announcementId: string, file: File): Promise<{ imageUrl: string, imageStoragePath: string }> {
+    try {
+      const cleanName = file.name.replace(/[^a-zA-Z0-9ms._-]/g, '').slice(-40);
+      const uniqueId = `img-${Date.now()}-${Math.floor(Math.random() * 899) + 100}`;
+      const imageStoragePath = `announcements/${announcementId}/${uniqueId}_${cleanName}`;
+      const storageRef = ref(storage, imageStoragePath);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      const imageUrl = await getDownloadURL(snapshot.ref);
+      return { imageUrl, imageStoragePath };
+    } catch (error) {
+      console.error("Error uploading announcement image to storage:", error);
+      throw error;
+    }
+  },
+
+  async deleteAnnouncementImage(imageStoragePath: string): Promise<void> {
+    try {
+      const imageRef = ref(storage, imageStoragePath);
+      await deleteObject(imageRef);
+    } catch (e) {
+      console.error("Error deleting announcement image from storage:", e);
+      throw e;
     }
   }
 };

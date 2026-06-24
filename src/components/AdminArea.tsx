@@ -23,9 +23,11 @@ import {
   TrendingUp,
   CreditCard,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Megaphone
 } from 'lucide-react';
 import { Artist, ShareCardSettings } from '../types';
+import AnnouncementsManager from './admin/AnnouncementsManager';
 import { dbService } from '../lib/db';
 import { motion } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
@@ -55,7 +57,7 @@ export default function AdminArea({
   customLogoUrl,
   onCustomLogoUrlChange
 }: AdminAreaProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago' | 'announcements'>('dashboard');
   const [users, setUsers] = useState<Artist[]>([]);
   
   // Appearance logo configurations (scale, visibility, and custom upload URL)
@@ -935,6 +937,15 @@ export default function AdminArea({
               <div className="flex items-center space-x-3">
                 <ShieldCheck className="h-4 w-4" />
                 <span>Assinaturas Mercado Pago</span>
+              </div>
+            </button>
+            <button
+              onClick={() => { setActiveTab('announcements'); setSelectedUser(null); }}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium transition ${activeTab === 'announcements' ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/5 text-orange-500 border-l-4 border-orange-500' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+            >
+              <div className="flex items-center space-x-3">
+                <Megaphone className="h-4 w-4" />
+                <span>Mural de Avisos / Audições</span>
               </div>
             </button>
             <button
@@ -2316,6 +2327,13 @@ export default function AdminArea({
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* TAB: ANNOUNCEMENTS & AUDITIONS MANAGER */}
+          {activeTab === 'announcements' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl animate-fade-in text-white">
+              <AnnouncementsManager currentUserId={currentUser.userId} />
             </div>
           )}
 
