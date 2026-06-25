@@ -6,7 +6,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import mercadopagoWebhookHandler from "./api/mercadopago-webhook";
+import mercadopagoWebhookHandler, { processPaymentStatus, runAutomaticReconciliation } from "./api/mercadopago-webhook";
 import createCheckoutPaymentHandler from "./api/mercadopago/create-checkout-payment";
 import checkIntegrationsHandler from "./api/admin/check-integrations";
 import sharp from "sharp";
@@ -1529,6 +1529,95 @@ async function startServer() {
     }
   });
 
+  // SECURE PROTECTED ENDPOINT FOR AUTOMATIC PAYMENT RECONCILIATION (CLOUDRUN / GOOGLE CLOUD SCHEDULER / CRON)
+  app.all("/api/internal/reconcile-payments", async (req, res) => {
+    const method = req.method;
+
+    if (method !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      return res.status(405).json({
+        error: "Method Not Allowed",
+        message: "This endpoint only accepts POST requests for manual administrative reconciliation runs."
+      });
+    }
+
+    // Check if there is any secret in query parameters
+    if (req.query?.secret || req.query?.key || req.query?.token) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Query parameters containing secrets or keys are strictly forbidden."
+      });
+    }
+
+    // Constant-time comparison helper
+    function safeCompare(a: string, b: string): boolean {
+      if (typeof a !== 'string' || typeof b !== 'string') return false;
+      if (a.length !== b.length) return false;
+      let result = 0;
+      for (let i = 0; i < a.length; i++) {
+        result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+      }
+      return result === 0;
+    }
+
+    try {
+      const configuredSecret = process.env.INTERNAL_RECONCILIATION_SECRET;
+      if (!configuredSecret) {
+        console.error("[Reconciliation Endpoint Error] INTERNAL_RECONCILIATION_SECRET environment variable is not configured.");
+        return res.status(500).json({
+          error: "Configuration Error",
+          message: "The server is missing necessary security configurations to run manual payment reconciliation."
+        });
+      }
+
+      const reqSecret = req.headers["x-reconciliation-secret"];
+      if (!reqSecret || !safeCompare(String(reqSecret), configuredSecret)) {
+        console.warn("[Reconciliation Endpoint] Rejected unauthorized manual connection attempt.");
+        return res.status(401).json({
+          error: "Unauthorized",
+          message: "Invalid or missing credentials."
+        });
+      }
+
+      // Force option is NOT allowed
+      if (req.body?.force === true || req.query?.force === "true") {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Force reconciliation execution is forbidden on this endpoint."
+        });
+      }
+
+      // Trigger lock-protected automatic reconciliation
+      const result = await runAutomaticReconciliation(false);
+      
+      if (result.skipped) {
+        return res.status(200).json({
+          ok: true,
+          skipped: true,
+          reason: "reconciliation_already_running"
+        });
+      }
+
+      if (result.success) {
+        return res.status(200).json({
+          ok: true,
+          processed: result.processed,
+          message: result.message
+        });
+      } else {
+        return res.status(500).json({
+          ok: false,
+          error: result.message
+        });
+      }
+    } catch (err: any) {
+      console.error("[Reconciliation Endpoint] Fatal error during reconciliation route handler:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: "Internal Server Error", message: err.message || String(err) });
+      }
+    }
+  });
+
   // API Route for Mercado Pago Checkout Pro preference creation
   app.post("/api/mercadopago/create-checkout-payment", async (req, res) => {
     try {
@@ -2490,6 +2579,8 @@ async function startServer() {
           transactionSaved: true,
           dashboardSourcePath: `artists/${userId}`,
           automaticActivationCompleted: true,
+          automaticProcessingCompleted: true,
+          processingAction: "activation",
           errorMessage: null
         }));
 
@@ -2529,6 +2620,8 @@ async function startServer() {
           transactionSaved: true,
           dashboardSourcePath: `artists/${fallbackUid}`,
           automaticActivationCompleted: true,
+          automaticProcessingCompleted: true,
+          processingAction: "activation",
           errorMessage: null
         }));
         

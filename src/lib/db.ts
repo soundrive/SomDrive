@@ -822,36 +822,70 @@ export const dbService = {
     try {
       await this.ensureAdminAuth();
       
-      let docsList: { id: string; data: any; source: 'users' | 'artists' }[] = [];
+      const usersMap: Record<string, any> = {};
+      const artistsMap: Record<string, any> = {};
+
+      // 1. Fetch 'users' collection. If this fails, the error propagates to the outer catch
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.forEach(docSnap => {
+        usersMap[docSnap.id] = docSnap.data();
+      });
+
+      // 2. Fetch 'artists' collection for enrichment purposes
       try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        usersSnap.forEach(docSnap => {
-          docsList.push({ id: docSnap.id, data: docSnap.data(), source: 'users' });
+        const artistsSnap = await getDocs(collection(db, 'artists'));
+        artistsSnap.forEach(docSnap => {
+          artistsMap[docSnap.id] = docSnap.data();
         });
       } catch (err) {
-        console.warn("Could not list 'users' collection due to permissions or configuration, trying public 'artists' collection:", err);
-        try {
-          const artistsSnap = await getDocs(collection(db, 'artists'));
-          artistsSnap.forEach(docSnap => {
-            docsList.push({ id: docSnap.id, data: docSnap.data(), source: 'artists' });
-          });
-        } catch (err2) {
-          console.error("Could not list public 'artists' collection either:", err2);
-          throw err2; // Let the outer catch handle it by falling back to localStorage
-        }
+        console.warn("Could not list 'artists' collection due to permissions or configuration:", err);
       }
 
       const dbUsers: Artist[] = [];
-      const localArtists = this.getAllArtists();
+      const primaryUids = Object.keys(usersMap);
 
-      docsList.forEach(item => {
-        const d = item.data;
-        const uid = item.id;
-        
-        let formattedUser = this.mapFirestoreDocToArtist(uid, d);
+      primaryUids.forEach(uid => {
+        const userData = usersMap[uid];
+        const artistDoc = artistsMap[uid] || {};
+
+        const formattedUser = this.mapFirestoreDocToArtist(uid, userData);
+
+        // Enrich empty/missing profile fields from the artists collection
+        if (artistsMap[uid]) {
+          const baseHasName = userData.name || userData.artistName;
+          if (!baseHasName) {
+            if (artistDoc.name) {
+              formattedUser.name = artistDoc.name;
+            }
+            if (artistDoc.artistName) {
+              formattedUser.artistName = artistDoc.artistName;
+            }
+          }
+
+          // Backfill empty avatar/photo fields
+          if (!formattedUser.avatarUrl && artistDoc.avatarUrl) {
+            formattedUser.avatarUrl = artistDoc.avatarUrl;
+          }
+          if (!formattedUser.photoURL && artistDoc.photoURL) {
+            formattedUser.photoURL = artistDoc.photoURL;
+          }
+          if (!formattedUser.profileImageUrl && artistDoc.profileImageUrl) {
+            formattedUser.profileImageUrl = artistDoc.profileImageUrl;
+          }
+
+          // Standardize across any found avatar values
+          const bestAvatar = formattedUser.avatarUrl || formattedUser.profileImageUrl || formattedUser.photoURL;
+          if (bestAvatar) {
+            if (!formattedUser.avatarUrl) formattedUser.avatarUrl = bestAvatar;
+            if (!formattedUser.profileImageUrl) formattedUser.profileImageUrl = bestAvatar;
+            if (!formattedUser.photoURL) formattedUser.photoURL = bestAvatar;
+          }
+        }
 
         dbUsers.push(formattedUser);
       });
+
+      const localArtists = this.getAllArtists();
 
       // Merge local storage users if not in Firestore list
       const firestoreUids = new Set(dbUsers.map(u => u.userId));

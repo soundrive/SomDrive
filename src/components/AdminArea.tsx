@@ -638,6 +638,7 @@ export default function AdminArea({
     loadPaymentSettings();
     loadShareCardSettings();
     loadIntegrationStatus();
+    loadSubscriptions();
   }, []);
 
   useEffect(() => {
@@ -827,6 +828,20 @@ export default function AdminArea({
   const blockedCount = users.filter(u => u.isBlocked).length;
   const totalSongs = dbService.getTotalSongsCount();
 
+  const pendingActivationPayments = mpSubscriptions.filter(sub => 
+    (sub.status === 'approved' || sub.status === 'active' || sub.status === 'authorized' || sub.status === 'orphan_payment') && 
+    sub.planActivated !== true
+  );
+
+  const pendingReversalRefunds = mpSubscriptions.filter(sub => {
+    if (sub.status !== 'refunded' && sub.status !== 'cancelled' && sub.status !== 'charged_back' && sub.status !== 'chargedback') return false;
+    const associatedUser = users.find(u => u.userId === sub.userId || u.userId === sub.uid);
+    if (associatedUser) {
+      return associatedUser.plan && associatedUser.plan !== 'free';
+    }
+    return false;
+  });
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       
@@ -977,6 +992,140 @@ export default function AdminArea({
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               
+              {/* SEÇÃO DE ALERTAS ADMINISTRATIVOS DE PAGAMENTO */}
+              {(pendingActivationPayments.length > 0 || pendingReversalRefunds.length > 0) && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center space-x-2 text-rose-500">
+                    <AlertTriangle className="h-5 w-5 font-bold animate-pulse text-rose-500 shrink-0" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-rose-500">Alertas de Sincronização Urgentes</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* 1. Pagamentos Aprovados Aguardando Ativação */}
+                    {pendingActivationPayments.map((sub) => {
+                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
+                      const lastAttempt = sub.updatedAt 
+                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
+                        : dateStr;
+                      const attemptCount = sub.retryCount || sub.attempts || 1;
+                      return (
+                        <div key={`alert-act-${sub.id}`} className="bg-rose-950/20 border-l-4 border-rose-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-500/10 pb-2">
+                            <div>
+                              <span className="text-xs font-extrabold text-rose-400 uppercase tracking-wide">
+                                ⚠️ Pagamento aprovado aguardando ativação
+                              </span>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                O pagamento foi aprovado pelo Mercado Pago, mas o plano do usuário correspondente ainda não foi atualizado no Firestore.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleVerifySubscription(sub.id)}
+                              className="px-3 py-1 bg-rose-500 hover:bg-rose-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
+                            >
+                              Reprocessar
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
+                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Usuário</span>
+                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
+                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Plano adquirido</span>
+                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Horário da Transação</span>
+                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div className="md:col-span-2 text-slate-350">
+                              <span className="text-slate-500 font-bold">Erro de Ativação:</span> <span className="text-rose-400">{sub.errorMessage || 'Sem usuário vinculado ou erro de escrita'}</span>
+                            </div>
+                            <div className="text-slate-350">
+                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
+                              <span className="text-slate-300 font-mono text-[10px]">
+                                {attemptCount}x — {lastAttempt}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* 2. Reembolsos Confirmados Aguardando Reversão */}
+                    {pendingReversalRefunds.map((sub) => {
+                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
+                      const lastAttempt = sub.updatedAt 
+                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
+                        : dateStr;
+                      const attemptCount = sub.retryCount || sub.attempts || 1;
+                      return (
+                        <div key={`alert-rev-${sub.id}`} className="bg-amber-950/20 border-l-4 border-amber-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/10 pb-2">
+                            <div>
+                              <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wide">
+                                ⚠️ Reembolso confirmado aguardando reversão
+                              </span>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                A compra foi estornada/reembolsada, mas o usuário correspondente ainda mantém acesso ao plano pago no Firestore.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleVerifySubscription(sub.id)}
+                              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
+                            >
+                              Reverter agora
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
+                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Usuário</span>
+                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
+                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Plano a ser revogado</span>
+                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Horário do Reembolso</span>
+                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div className="md:col-span-2 text-slate-350">
+                              <span className="text-slate-500 font-bold">Erro de Reversão:</span> <span className="text-amber-400">Usuário ainda ativo no plano {sub.plan}</span>
+                            </div>
+                            <div className="text-slate-350">
+                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
+                              <span className="text-slate-300 font-mono text-[10px]">
+                                {attemptCount}x — {lastAttempt}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Statistics Bento Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 
