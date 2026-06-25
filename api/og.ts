@@ -46,6 +46,60 @@ const getBase64Image = async (url: string): Promise<string> => {
   return "";
 };
 
+function getCategoryIconSvg(index: number, color: string): string {
+  const idx = index >= 0 ? index % 8 : 0;
+  switch (idx) {
+    case 0:
+      // Sertanejo: Music Note
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <path d="M9 18V5l12-2v13" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="6" cy="18" r="3" stroke="${color}" stroke-width="2.5" fill="none"/>
+        <circle cx="18" cy="16" r="3" stroke="${color}" stroke-width="2.5" fill="none"/>
+      </g>`;
+    case 1:
+      // Românticas: Star
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </g>`;
+    case 2:
+      // Inéditas: Heart
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </g>`;
+    case 3:
+      // Participações: Mic
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </g>`;
+    case 4:
+      // Modão: Guitar
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <path d="m16 9.5 3-3M17.5 11l3-3M12.5 13H15M8.5 16.5C7.5 16.5 6 15 6 13.5c0-1.5 2-3 4-3s4.5.5 4.5 2.5-2 3.5-6 3.5Z" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M14.5 10.5 21 4" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </g>`;
+    case 5:
+      // Trabalhos: Playlist Lines
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <path d="M3 10h11M3 6h18M3 14h11" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M17 14v6" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="15" cy="20" r="2" stroke="${color}" stroke-width="2.5" fill="none"/>
+      </g>`;
+    case 6:
+      // Ao Vivo: Flame
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </g>`;
+    default:
+      // Outros: Ellipsis (three dots)
+      return `<g transform="scale(2.2) translate(-12, -12)">
+        <circle cx="12" cy="12" r="1.5" stroke="${color}" stroke-width="2.5" fill="${color}"/>
+        <circle cx="19" cy="12" r="1.5" stroke="${color}" stroke-width="2.5" fill="${color}"/>
+        <circle cx="5" cy="12" r="1.5" stroke="${color}" stroke-width="2.5" fill="${color}"/>
+      </g>`;
+  }
+}
+
 const queryArtistBySlug = async (slug: string) => {
   try {
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery`;
@@ -325,6 +379,9 @@ export default async function handler(req: any, res: any) {
   const artistSlug = urlObj.searchParams.get('artistSlug') || '';
   const repertoireSlug = urlObj.searchParams.get('repertoireSlug') || '';
 
+  const parsedRepIndex = Number.parseInt(urlObj.searchParams.get('repIndex') || '0', 10);
+  const repIndex = Number.isNaN(parsedRepIndex) || parsedRepIndex < 0 ? 0 : parsedRepIndex;
+
   if (!artistSlug) {
     res.writeHead(400, { 'Content-Type': 'text/plain' });
     return res.end('Missing artistSlug parameter.');
@@ -370,6 +427,9 @@ export default async function handler(req: any, res: any) {
       subtitle = "Catálogo de Músicas";
     }
 
+    const folderColors = ["#1ed760", "#f59e0b", "#3b82f6", "#a855f7", "#06b6d4", "#f97316", "#cbd5e1"];
+    const folderColor = folderColors[repIndex % folderColors.length] || "#1ed760";
+
     let pillText = "CATÁLOGO OFICIAL";
     let mainTitle = "Ouça minhas composições";
     let composerText = cleanName;
@@ -377,13 +437,13 @@ export default async function handler(req: any, res: any) {
     const isRepertoire = !!repertoire;
 
     if (repertoire) {
-      pillText = "PASTA DE MÚSICAS";
+      pillText = "REPERTÓRIO MUSICAL";
       mainTitle = escapeXml((repertoire.name || "Pasta Compartilhada").trim().toUpperCase());
       if (mainTitle.length > 24) {
         mainTitle = mainTitle.substring(0, 23) + "...";
       }
       composerText = `por ${cleanName}`;
-      descText = `${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'MÚSICA AUTORAL' : 'MÚSICAS AUTORAIS'} \u2022 ${cleanGenre}`;
+      descText = `${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'MÚSICA' : 'MÚSICAS'}`;
     }
 
     const initialLetter = escapeXml((repertoire ? (repertoire.name || "P") : (artist.name || "S")).trim().substring(0, 1).toUpperCase());
@@ -433,6 +493,11 @@ export default async function handler(req: any, res: any) {
       <stop offset="100%" stop-color="#00e676" />
     </linearGradient>
 
+    <linearGradient id="button-grad-rep" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="${folderColor}" />
+      <stop offset="100%" stop-color="${folderColor}" stop-opacity="0.8" />
+    </linearGradient>
+
     <clipPath id="card-rounded">
       <rect x="510" y="115" width="340" height="400" rx="16" ry="16" />
     </clipPath>
@@ -471,10 +536,43 @@ export default async function handler(req: any, res: any) {
 
   <rect width="1200" height="630" fill="url(#bg-gradient)" />
   
-  <circle cx="200" cy="150" r="450" fill="#1ed760" opacity="0.06" filter="blur(70px)" />
-  <circle cx="1000" cy="315" r="500" fill="#00e676" opacity="0.08" filter="blur(90px)" />
-  <circle cx="600" cy="500" r="300" fill="#79D32E" opacity="0.03" filter="blur(60px)" />
+  <circle cx="200" cy="150" r="450" fill="${isRepertoire ? folderColor : '#1ed760'}" opacity="0.06" filter="blur(70px)" />
+  <circle cx="1000" cy="315" r="500" fill="${isRepertoire ? folderColor : '#00e676'}" opacity="0.08" filter="blur(90px)" />
+  <circle cx="600" cy="500" r="300" fill="${isRepertoire ? folderColor : '#79D32E'}" opacity="0.03" filter="blur(60px)" />
 
+  ${isRepertoire ? `
+  <!-- REPERTOIRE VIEW: Folder Drawing with dynamic color and icon -->
+  <g filter="url(#shadow)">
+    <!-- Back flap / Folder Tab -->
+    <path d="M 570 145 L 680 145 C 690 145, 695 115, 705 115 L 810 115 C 820 115, 825 145, 835 145 L 970 145 C 985 145, 990 155, 990 170 L 990 440 C 990 455, 985 465, 970 465 L 570 465 C 555 465, 550 455, 550 440 L 550 170 C 550 155, 555 145, 570 145 Z" fill="${folderColor}" opacity="0.15" stroke="${folderColor}" stroke-width="2.5" />
+    
+    <!-- Back body -->
+    <rect x="550" y="150" width="440" height="315" rx="16" fill="${folderColor}" opacity="0.25" stroke="${folderColor}" stroke-width="1.5" />
+    
+    <!-- Inside papers sticking out -->
+    <g opacity="0.8">
+      <!-- Paper 1 -->
+      <rect x="585" y="125" width="370" height="310" rx="8" fill="#FFFFFF" opacity="0.12" transform="rotate(-1.5, 770, 280)" />
+      <!-- Paper 2 -->
+      <rect x="590" y="120" width="360" height="310" rx="8" fill="#FFFFFF" opacity="0.18" transform="rotate(1.5, 770, 280)" />
+    </g>
+    
+    <!-- Front flap of the folder -->
+    <path d="M 550 195 L 990 195 L 990 455 C 990 465, 980 475, 970 475 L 570 475 C 560 475, 550 465, 550 455 Z" fill="${folderColor}" opacity="0.88" />
+    
+    <!-- Inner shadow of front flap -->
+    <path d="M 550 195 L 990 195 L 990 215 L 550 215 Z" fill="#000000" opacity="0.15" />
+    
+    <!-- Highlights on folder front flap -->
+    <rect x="550" y="195" width="440" height="260" rx="16" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.12" />
+    
+    <!-- Main dynamic category icon in the center of the folder's front flap -->
+    <g transform="translate(770, 335)">
+      ${getCategoryIconSvg(repIndex, "#FFFFFF")}
+    </g>
+  </g>
+  ` : `
+  <!-- PROFILE VIEW: Classic sleeve card + vinyl record -->
   <g filter="url(#shadow)">
     <circle cx="930" cy="315" r="192" fill="#07111F" stroke="#22344A" stroke-width="2.5" />
     
@@ -534,6 +632,7 @@ export default async function handler(req: any, res: any) {
     <text x="680" y="455" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="800" font-size="9" fill="#9AA6B2" letter-spacing="3px" opacity="0.5">EXCLUSIVE DIGITAL AUDIO</text>
     <text x="680" y="468" text-anchor="middle" font-family="-apple-system, sans-serif" font-weight="600" font-size="8" fill="#1ed760" letter-spacing="1.5px" opacity="0.6">SOMDRIVE COLLECTOR SERIES</text>
   </g>
+  `}
 
   <g transform="translate(100, 85)">
     <rect x="0" y="5" width="4" height="22" rx="2" fill="url(#gold-gradient)" />
@@ -543,28 +642,44 @@ export default async function handler(req: any, res: any) {
   </g>
 
   <g transform="translate(100, 150)">
+    ${isRepertoire ? `
+    <!-- REPERTOIRE PILL: Selo neutro -->
     <g transform="translate(0, 0)">
-      <rect width="${isRepertoire ? 210 : 180}" height="30" rx="15" fill="#1ed760" fill-opacity="0.12" stroke="#1ed760" stroke-width="1" />
+      <rect width="210" height="30" rx="15" fill="${folderColor}" fill-opacity="0.12" stroke="${folderColor}" stroke-width="1.2" />
+      <circle cx="18" cy="15" r="4.5" fill="${folderColor}" />
+      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="${folderColor}" letter-spacing="1">REPERTÓRIO MUSICAL</text>
+    </g>
+    ` : `
+    <!-- PROFILE PILLS: Dois selos -->
+    <g transform="translate(0, 0)">
+      <rect width="180" height="30" rx="15" fill="#1ed760" fill-opacity="0.12" stroke="#1ed760" stroke-width="1" />
       <circle cx="18" cy="15" r="4.5" fill="#1ed760" />
-      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#1ed760" letter-spacing="1">${pillText}</text>
+      <text x="30" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#1ed760" letter-spacing="1">CATÁLOGO OFICIAL</text>
     </g>
 
-    <g transform="translate(${isRepertoire ? 225 : 195}, 0)">
+    <g transform="translate(195, 0)">
       <rect width="125" height="30" rx="15" fill="#79D32E" fill-opacity="0.12" stroke="#79D32E" stroke-width="1.2" />
       <path d="M 12 14 L 15 17 L 21 11" stroke="#79D32E" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(4, 0)" />
-      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#79D32E" letter-spacing="1">${isRepertoire ? 'PLAYLIST' : 'VERIFICADO'}</text>
+      <text x="32" y="19" font-family="-apple-system, sans-serif" font-size="10" font-weight="800" fill="#79D32E" letter-spacing="1">VERIFICADO</text>
     </g>
+    `}
 
     <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="${isRepertoire ? 38 : 44}" fill="#ffffff" letter-spacing="-1px">${mainTitle}</text>
 
     <text x="0" y="165" class="title-text" font-size="${isRepertoire ? 46 : 52}" font-weight="850" filter="url(#shadow)" letter-spacing="-1">${composerText}</text>
 
-    <text x="0" y="215" class="sub-text" font-size="20" fill="${isRepertoire ? '#1ed760' : '#9AA6B2'}">${descText}</text>
+    <text x="0" y="215" class="sub-text" font-size="20" fill="${isRepertoire ? folderColor : '#9AA6B2'}">${descText}</text>
 
     <g transform="translate(0, 270)" filter="url(#shadow)">
+      ${isRepertoire ? `
+      <rect width="250" height="52" rx="26" fill="url(#button-grad-rep)" />
+      <polygon points="36,19 36,33 48,26" fill="#031108" />
+      <text x="60" y="31" font-family="-apple-system, sans-serif" font-weight="800" fill="#031108" font-size="13" letter-spacing="1">OUÇA AGORA</text>
+      ` : `
       <rect width="250" height="52" rx="26" fill="url(#button-grad)" />
       <polygon points="36,19 36,33 48,26" fill="#031108" />
       <text x="60" y="31" font-family="-apple-system, sans-serif" font-weight="800" fill="#031108" font-size="13" letter-spacing="1">ACESSE E ESCUTE</text>
+      `}
     </g>
   </g>
 
