@@ -318,6 +318,21 @@ const queryRepertoireBySlug = async (ownerUid: string, slug: string) => {
                   op: "EQUAL",
                   value: { stringValue: slug }
                 }
+              },
+              {
+                fieldFilter: {
+                  field: { fieldPath: "visibility" },
+                  op: "IN",
+                  value: {
+                    arrayValue: {
+                      values: [
+                        { stringValue: "public" },
+                        { stringValue: "active" },
+                        { stringValue: "unlisted" }
+                      ]
+                    }
+                  }
+                }
               }
             ]
           }

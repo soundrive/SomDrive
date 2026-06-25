@@ -106,40 +106,23 @@ export default function AuthScreen({
 
     setIsLoading(true);
     try {
-      // Direct Firestore check to confirm user is registered
-      const artistsRef = collection(db, 'artists');
-      const q = query(artistsRef, where('email', '==', emailValue.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setErrorMsg('Este e-mail não está cadastrado em nosso sistema. Verifique o endereço digitado ou crie um novo cadastro.');
-        setIsLoading(false);
-        return;
-      }
-
+      auth.languageCode = 'pt-BR';
       await sendPasswordResetEmail(auth, emailValue.toLowerCase());
-      setSuccessMsg('Enviamos um link de recuperação para seu e-mail. Verifique também a caixa de spam.');
+      setSuccessMsg('Se existir uma conta cadastrada com este e-mail, enviaremos um link para redefinir sua senha. Verifique também a caixa de spam.');
     } catch (error: any) {
       console.error("Erro ao enviar recuperação de senha:", error);
-      let msg = 'Não foi possível enviar o e-mail de recuperação. Tente novamente.';
       if (error.code === 'auth/user-not-found') {
-        msg = 'Não encontramos uma conta com este e-mail.';
-      } else if (error.code === 'auth/invalid-email') {
-        msg = 'Digite um e-mail válido.';
-      } else if (error.code === 'auth/too-many-requests') {
-        msg = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
-      } else if (error.message && error.message.includes('permission')) {
-        // Fallback if Firestore lookup gets blocked or disabled
-        try {
-          await sendPasswordResetEmail(auth, emailValue.toLowerCase());
-          setSuccessMsg('Enviamos um link de recuperação para o seu e-mail.');
-          setIsLoading(false);
-          return;
-        } catch (innerErr: any) {
-          msg = innerErr.message || msg;
+        // Neutrally handle user-not-found to prevent user enumeration
+        setSuccessMsg('Se existir uma conta cadastrada com este e-mail, enviaremos um link para redefinir sua senha. Verifique também a caixa de spam.');
+      } else {
+        let msg = 'Não foi possível enviar o e-mail de recuperação. Tente novamente.';
+        if (error.code === 'auth/invalid-email') {
+          msg = 'Digite um e-mail válido.';
+        } else if (error.code === 'auth/too-many-requests') {
+          msg = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
         }
+        setErrorMsg(msg);
       }
-      setErrorMsg(msg);
     } finally {
       setIsLoading(false);
     }
