@@ -79,7 +79,7 @@ const queryArtistBySlug = async (slug: string) => {
           genre: f.genre?.stringValue || f.mainGenre?.stringValue || "",
           city: f.city?.stringValue || "",
           customCardImageUrl: f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "",
-          profileImageUrl: f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || "",
+          profileImageUrl: f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.profileImageUrl?.stringValue || f.photoUrl?.stringValue || "",
           slug: f.slug?.stringValue || slug
         };
       }
@@ -123,7 +123,7 @@ const queryUserBySlug = async (slug: string) => {
           genre: f.genre?.stringValue || f.mainGenre?.stringValue || "",
           city: f.city?.stringValue || "",
           customCardImageUrl: f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "",
-          profileImageUrl: f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.photoUrl?.stringValue || "",
+          profileImageUrl: f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.profileImageUrl?.stringValue || f.photoUrl?.stringValue || "",
           slug: f.slug?.stringValue || slug
         };
       }
@@ -169,7 +169,7 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
       genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
       city = f.city?.stringValue || city;
       customCardImageUrl = f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "";
-      profileImageUrl = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.photoUrl?.stringValue || "";
+      profileImageUrl = f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.profileImageUrl?.stringValue || f.photoUrl?.stringValue || "";
       resolvedUserId = doc.name.split('/').pop() || cleanId;
       dbSlug = f.slug?.stringValue || slugifyStr(name);
       return { userId: resolvedUserId, name, genre, city, customCardImageUrl, profileImageUrl, slug: dbSlug };
@@ -187,7 +187,7 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
       genre = f.genre?.stringValue || f.mainGenre?.stringValue || genre;
       city = f.city?.stringValue || city;
       customCardImageUrl = f.customCardImageUrl?.stringValue || f.coverUrl?.stringValue || "";
-      profileImageUrl = f.profileImageUrl?.stringValue || f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.photoUrl?.stringValue || "";
+      profileImageUrl = f.avatarUrl?.stringValue || f.photoURL?.stringValue || f.profileImageUrl?.stringValue || f.photoUrl?.stringValue || "";
       resolvedUserId = doc.name.split('/').pop() || cleanId;
       dbSlug = f.slug?.stringValue || slugifyStr(name);
 
@@ -202,7 +202,7 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
           genre = af.genre?.stringValue || af.mainGenre?.stringValue || genre;
           city = af.city?.stringValue || city;
           customCardImageUrl = af.customCardImageUrl?.stringValue || af.coverUrl?.stringValue || customCardImageUrl;
-          profileImageUrl = af.profileImageUrl?.stringValue || af.avatarUrl?.stringValue || af.photoURL?.stringValue || af.photoUrl?.stringValue || profileImageUrl;
+          profileImageUrl = af.avatarUrl?.stringValue || af.photoURL?.stringValue || af.profileImageUrl?.stringValue || af.photoUrl?.stringValue || profileImageUrl;
           dbSlug = af.slug?.stringValue || dbSlug;
         }
       } catch {}
@@ -231,7 +231,7 @@ const fetchArtistRest = async (idOrSlug: string): Promise<{ userId: string; name
         userResult.genre = af.genre?.stringValue || af.mainGenre?.stringValue || userResult.genre;
         userResult.city = af.city?.stringValue || city;
         userResult.customCardImageUrl = af.customCardImageUrl?.stringValue || af.coverUrl?.stringValue || userResult.customCardImageUrl;
-        userResult.profileImageUrl = af.profileImageUrl?.stringValue || af.avatarUrl?.stringValue || af.photoURL?.stringValue || af.photoUrl?.stringValue || userResult.profileImageUrl;
+        userResult.profileImageUrl = af.avatarUrl?.stringValue || af.photoURL?.stringValue || af.profileImageUrl?.stringValue || af.photoUrl?.stringValue || userResult.profileImageUrl;
         userResult.slug = af.slug?.stringValue || userResult.slug;
       }
     } catch {}
