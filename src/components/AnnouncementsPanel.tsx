@@ -8,6 +8,8 @@ import {
 import { Announcement } from '../types';
 import { dbService } from '../lib/db';
 import { AnnouncementCard } from './AnnouncementCard';
+import { auth } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export function AnnouncementsPanel() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -15,31 +17,54 @@ export function AnnouncementsPanel() {
   const [showAllModal, setShowAllModal] = useState<boolean>(false);
 
   useEffect(() => {
-    async function loadActiveAnnouncements() {
-      try {
-        const list = await dbService.getAnnouncements(true);
-        
-        // Filter by date: startsAt in the past AND endsAt either null or in the future
-        const now = new Date();
-        const validList = list.filter(ann => {
-          const starts = new Date(ann.startsAt);
-          const ends = ann.endsAt ? new Date(ann.endsAt) : null;
-          
-          const started = starts <= now;
-          const notEnded = !ends || ends >= now;
-          
-          return started && notEnded;
-        });
+    let isMounted = true;
 
-        setAnnouncements(validList);
-      } catch (e) {
-        console.error("Error fetching announcements in panel:", e);
-      } finally {
-        setLoading(false);
+    // Use onAuthStateChanged to wait until auth state is initialized and we have a user
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        if (isMounted) {
+          setAnnouncements([]);
+          setLoading(false);
+        }
+        return;
       }
-    }
 
-    loadActiveAnnouncements();
+      // If we have an authenticated user, load the announcements
+      async function loadActiveAnnouncements() {
+        try {
+          const list = await dbService.getAnnouncements(true);
+          
+          if (!isMounted) return;
+
+          // Filter by date: startsAt in the past AND endsAt either null or in the future
+          const now = new Date();
+          const validList = list.filter(ann => {
+            const starts = new Date(ann.startsAt);
+            const ends = ann.endsAt ? new Date(ann.endsAt) : null;
+            
+            const started = starts <= now;
+            const notEnded = !ends || ends >= now;
+            
+            return started && notEnded;
+          });
+
+          setAnnouncements(validList);
+        } catch (e) {
+          console.error("Error fetching announcements in panel:", e);
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
+      }
+
+      loadActiveAnnouncements();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   if (loading) {

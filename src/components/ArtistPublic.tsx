@@ -41,6 +41,21 @@ import { BrandLogo } from './BrandLogo';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+const normalizeVisibility = (
+  value: unknown
+): Repertoire['visibility'] => {
+  if (
+    value === 'public' ||
+    value === 'unlisted' ||
+    value === 'private' ||
+    value === 'active'
+  ) {
+    return value;
+  }
+
+  return 'private';
+};
+
 const FOLDER_COLORS = [
   {
     name: 'verde_somdrive',
@@ -480,18 +495,19 @@ export default function ArtistPublic({
           snapRepsPub.forEach(docSnap => {
             const d = docSnap.data();
             repsList.push({
+              ...d,
               id: docSnap.id,
-              ownerUid: d.ownerUid,
-              name: d.name,
+              ownerUid: d.ownerUid || '',
+              name: d.name || '',
               slug: d.slug || '',
               description: d.description || '',
               type: d.type || 'repertoire',
               trackIds: d.trackIds || [],
               orderedTrackIds: d.orderedTrackIds || d.trackIds || [],
-              visibility: 'public',
+              visibility: normalizeVisibility(d.visibility),
               createdAt: d.createdAt || new Date().toISOString(),
               updatedAt: d.updatedAt || new Date().toISOString()
-            });
+            } as Repertoire);
           });
         }
 
@@ -500,18 +516,19 @@ export default function ArtistPublic({
             const d = docSnap.data();
             if (!repsList.some(r => r.id === docSnap.id)) {
               repsList.push({
+                ...d,
                 id: docSnap.id,
-                ownerUid: d.ownerUid,
-                name: d.name,
+                ownerUid: d.ownerUid || '',
+                name: d.name || '',
                 slug: d.slug || '',
                 description: d.description || '',
                 type: d.type || 'repertoire',
                 trackIds: d.trackIds || [],
                 orderedTrackIds: d.orderedTrackIds || d.trackIds || [],
-                visibility: 'public',
+                visibility: normalizeVisibility(d.visibility),
                 createdAt: d.createdAt || new Date().toISOString(),
                 updatedAt: d.updatedAt || new Date().toISOString()
-              });
+              } as Repertoire);
             }
           });
         }
@@ -903,26 +920,40 @@ export default function ArtistPublic({
 
             <div className="space-y-4 text-left flex-1 min-w-0 relative z-10">
               <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${folderColor.bg} ${folderColor.text} border border-white/5 shadow-inner`}>
-                  <Folder className="w-7 h-7 stroke-[1.8]" />
+                <div className="p-2.5 rounded-xl bg-slate-900/40 border border-white/5 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 48 40" className="w-8 h-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    {/* Back flap */}
+                    <path d="M4 10C4 7.79086 5.79086 6 8 6H16.5L20.5 11H40C42.2091 11 44 12.7909 44 15V32C44 34.2091 42.2091 36 40 36H8C5.79086 36 4 34.2091 4 32V10Z" fill={`${folderColor.primary}15`} stroke={folderColor.primary} strokeWidth="2" />
+                    {/* Front pocket layer */}
+                    <path d="M4 16C4 13.7909 5.79086 12 8 12H40C42.2091 12 44 13.7909 44 16V32C44 34.2091 42.2091 36 40 36H8C5.79086 36 4 34.2091 4 32V16Z" fill={`${folderColor.primary}25`} stroke={folderColor.primary} strokeWidth="2" />
+                  </svg>
                 </div>
                 <span className={`inline-block text-[9px] md:text-[10px] font-mono font-black tracking-widest px-3 py-1 rounded-full uppercase ${folderColor.bg} ${folderColor.text} border border-white/5`}>
                   REPERTÓRIO PÚBLICO
                 </span>
               </div>
               
-              <h1 className="text-white text-2xl sm:text-3xl md:text-3xl font-black tracking-tight break-words pr-2 leading-tight uppercase font-heading">
-                {currentRepertoire.name}
-              </h1>
-              
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-slate-300 font-mono text-xs sm:text-sm font-bold">
-                <span>Compositor: {artist.name}</span>
-                <span className="text-zinc-600 select-none">•</span>
-                <span className={folderColor.text}>{allTracks.length} {allTracks.length === 1 ? 'faixa' : 'faixas'}</span>
+              <div className="space-y-1">
+                <h1 className="text-white text-2xl sm:text-3xl md:text-3xl font-black tracking-tight break-words pr-2 leading-tight uppercase font-heading">
+                  {currentRepertoire.name}
+                </h1>
+                
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-slate-300 font-mono text-xs sm:text-sm font-bold">
+                  <span>Compositor: {artist.name}</span>
+                  <span className="text-zinc-600 select-none">•</span>
+                  <span className={folderColor.text}>{allTracks.length} {allTracks.length === 1 ? 'faixa' : 'faixas'}</span>
+                </div>
               </div>
 
+              {/* Descrição cadastrada no repertório */}
+              {currentRepertoire.description && currentRepertoire.description.trim().length > 0 && (
+                <p className="text-slate-300 text-xs sm:text-sm bg-slate-900/30 border border-white/5 rounded-lg p-2.5 leading-relaxed max-w-2xl">
+                  <span className="font-semibold text-zinc-400">Descrição:</span> {currentRepertoire.description}
+                </p>
+              )}
+
               {/* Action Buttons: Contato | Instagram | Compartilhar */}
-              <div className="flex flex-wrap items-center gap-2 pt-2 select-none">
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 select-none">
                 {!!(artist.whatsapp || artist.phone) && (
                   <button
                     onClick={() => {
@@ -931,9 +962,9 @@ export default function ArtistPublic({
                       const greeting = encodeURIComponent(`Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`);
                       window.open(`https://wa.me/${cleanNum}?text=${greeting}`, '_blank');
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#1ed760]/10 text-[#1ed760] hover:bg-[#1ed760]/20 transition-all border border-[#1ed760]/20 cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#1ed760]/10 text-[#1ed760] hover:bg-[#1ed760]/20 transition-all border border-[#1ed760]/15 cursor-pointer"
                   >
-                    <MessageSquare className="w-3.5 h-3.5" />
+                    <MessageSquare className="w-3 h-3" />
                     <span>Contato</span>
                   </button>
                 )}
@@ -943,9 +974,9 @@ export default function ArtistPublic({
                       const igUrl = `https://instagram.com/${artist.instagram.replace(/@/g, '').trim()}`;
                       window.open(igUrl, '_blank');
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all border border-zinc-800 cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all border border-zinc-800/80 cursor-pointer"
                   >
-                    <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                    <Instagram className="w-3 h-3 text-pink-500" />
                     <span>Instagram</span>
                   </button>
                 )}
@@ -973,9 +1004,9 @@ export default function ArtistPublic({
                       setTimeout(() => setCopiedLinkAlert(false), 2800);
                     }
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all border border-zinc-800 cursor-pointer`}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all border border-zinc-800/80 cursor-pointer"
                 >
-                  <Share2 className="w-3.5 h-3.5" style={{ color: folderColor.primary }} />
+                  <Share2 className="w-3 h-3" style={{ color: folderColor.primary }} />
                   <span>Compartilhar</span>
                 </button>
               </div>
@@ -1075,13 +1106,18 @@ export default function ArtistPublic({
                           )}
                         </button>
 
-                        <div className="min-w-0 text-left">
+                        <div className="min-w-0 text-left flex-1">
                           <h4 className={`text-base font-extrabold uppercase truncate tracking-wide ${isCurrentlyPlaying ? 'text-[#84cc16]' : 'text-zinc-100'}`}>
                             {track.title}
                           </h4>
                           {track.composer && (
                             <p className="text-xs text-zinc-500 font-mono uppercase mt-0.5 truncate">
                               Autor / Compositor: {track.composer}
+                            </p>
+                          )}
+                          {track.description && typeof track.description === 'string' && track.description.trim() && (
+                            <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed line-clamp-2 font-sans pr-2 normal-case">
+                              {track.description}
                             </p>
                           )}
                         </div>
@@ -1422,19 +1458,20 @@ export default function ArtistPublic({
                               <span className={isRepActive ? 'text-white/90' : 'text-zinc-500'}>PASTA</span>
                             </div>
                             
-                            <button 
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleShareRepertoire(rep, e);
                               }}
-                              className={`w-5.5 h-5.5 rounded-md transition-all flex items-center justify-center cursor-pointer active:scale-90 ${
-                                isRepActive 
-                                  ? "text-[#1ed760] bg-slate-900/60 border border-[#1ed760]/20 hover:bg-slate-900"
-                                  : "text-slate-400 hover:text-white bg-black/40 border border-white/5 hover:bg-black/60"
+                              className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center cursor-pointer active:scale-95 ${
+                                isRepActive
+                                  ? 'text-[#1ed760] bg-slate-900/60 border border-[#1ed760]/20 hover:bg-slate-900'
+                                  : 'text-slate-400 hover:text-white bg-black/40 border border-white/5 hover:bg-black/60'
                               }`}
-                              title="Compartilhar"
+                              title="Copiar link da pasta"
+                              aria-label="Copiar link da pasta"
                             >
-                              <Share2 className="w-2.5 h-2.5" />
+                              <Share2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
@@ -1688,7 +1725,7 @@ export default function ArtistPublic({
                             <span className={`w-[1.5px] bg-[#10b981] max-h-2 rounded-full ${isActiveAndPlaying ? 'h-2 animate-bar-1' : 'h-1.5'}`}></span>
                           </div>
 
-                          <div className="min-w-0 text-left">
+                          <div className="min-w-0 text-left flex-1">
                             <h4 className={`text-[16px] sm:text-[16px] font-heading font-black truncate uppercase tracking-wide ${isCurrentlyPlaying ? 'text-[#10b981]' : 'text-zinc-100'}`}>
                               {track.title}
                             </h4>
@@ -1702,6 +1739,11 @@ export default function ArtistPublic({
                                 {track.genre || 'Sertanejo'}
                               </span>
                             </div>
+                            {track.description && typeof track.description === 'string' && track.description.trim() && (
+                              <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed line-clamp-2 font-sans pr-2 normal-case">
+                                {track.description}
+                              </p>
+                            )}
                           </div>
                         </div>
 

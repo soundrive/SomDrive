@@ -187,8 +187,8 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const targetWidth = 320;
-            const targetHeight = 180; // 16:9 ratio
+            const targetWidth = 150;
+            const targetHeight = 150; // 1:1 ratio
             canvas.width = targetWidth;
             canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
@@ -197,7 +197,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
               return;
             }
 
-            // Cover crop calculations to keep quality and prevent deformation
+            // Cover crop calculations to keep quality and prevent deformation (1:1 aspect ratio)
             const imgAspect = img.width / img.height;
             const targetAspect = targetWidth / targetHeight;
             let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
@@ -556,7 +556,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
               <div className="flex items-center justify-between">
                 <div>
                   <span className="block text-xs font-bold text-white uppercase font-mono tracking-wider">Imagem Pequena (Opcional)</span>
-                  <span className="block text-[9px] text-slate-400 font-sans mt-0.5">Tamanho: 320x180 px (16:9) | Formato WebP/JPG | Max 250 KB</span>
+                  <span className="block text-[9px] text-slate-400 font-sans mt-0.5">Imagem quadrada recomendada (1:1) | JPG, PNG ou WebP | Otimização automática</span>
                 </div>
                 {imagePreviewUrl && (
                   <button
@@ -588,7 +588,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
                     <img
                       src={imagePreviewUrl}
                       alt="Otimizada"
-                      className="w-16 h-10 object-cover rounded border border-slate-800"
+                      className="w-10 h-10 object-cover rounded border border-slate-800"
                     />
                     <span className="text-[9px] font-mono text-emerald-500 font-bold bg-emerald-950/40 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase">
                       Pronta / Otimizada

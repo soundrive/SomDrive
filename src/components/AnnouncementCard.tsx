@@ -145,11 +145,11 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
             src={imageUrl} 
             alt={title}
             referrerPolicy="no-referrer"
-            className="w-[100px] h-[60px] md:w-[140px] md:h-[80px] rounded-[10px] object-cover border border-slate-800 shadow-md shrink-0"
+            className="w-[50px] h-[50px] min-w-[50px] min-h-[50px] rounded-lg object-cover object-center border border-slate-800 shadow-md shrink-0"
           />
         ) : (
-          <div className={`w-[100px] h-[60px] md:w-[140px] md:h-[80px] rounded-[10px] border flex items-center justify-center shrink-0 shadow-md ${config.badgeClass}`}>
-            <TypeIcon className="w-5 h-5 md:w-6 md:h-6" />
+          <div className={`w-[50px] h-[50px] min-w-[50px] min-h-[50px] rounded-lg border border-slate-800/60 flex items-center justify-center shrink-0 shadow-md ${config.badgeClass}`}>
+            <TypeIcon className="w-4 h-4" />
           </div>
         )}
  
@@ -175,12 +175,12 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
             {title}
           </h3>
           
-          <p className="text-xs text-slate-350 leading-normal font-sans">
+          <p className="text-xs text-slate-350 leading-relaxed font-sans line-clamp-3 break-words">
             {summary}
           </p>
  
           {content && (
-            <p className="text-[10px] md:text-[11px] text-slate-400 italic font-mono pt-1">
+            <p className="text-[10px] md:text-[11px] text-slate-400 italic font-mono pt-0.5 line-clamp-2 break-words">
               {content}
             </p>
           )}
