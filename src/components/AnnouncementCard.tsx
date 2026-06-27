@@ -81,11 +81,20 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
         id={`announcement-compact-${announcement.id}`}
         className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 text-left ${cardBorderClass}`}
       >
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {/* Badge & Type Icon */}
-          <div className={`p-2 rounded-xl border shrink-0 ${config.badgeClass}`}>
-            <TypeIcon className="w-3.5 h-3.5" />
-          </div>
+        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+          {/* Badge & Type Icon or Image */}
+          {imageUrl ? (
+            <img 
+              src={imageUrl} 
+              alt={title}
+              referrerPolicy="no-referrer"
+              className="w-[70px] h-[70px] min-w-[70px] min-h-[70px] rounded-xl object-cover object-center border border-slate-800 shadow-md shrink-0"
+            />
+          ) : (
+            <div className={`w-[70px] h-[70px] min-w-[70px] min-h-[70px] rounded-xl border border-slate-800/60 flex items-center justify-center shrink-0 shadow-md ${config.badgeClass}`}>
+              <TypeIcon className="w-4 h-4" />
+            </div>
+          )}
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -98,10 +107,10 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
                 </span>
               )}
             </div>
-            <h4 className="text-xs font-bold text-white uppercase tracking-tight line-clamp-1 mt-1">
+            <h4 className="text-xs font-bold text-white uppercase tracking-tight line-clamp-2 mt-1.5">
               {title}
             </h4>
-            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+            <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-relaxed">
               {summary}
             </p>
           </div>
@@ -137,7 +146,7 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
       id={`announcement-full-${announcement.id}`}
       className={`p-4 rounded-2xl border transition-all duration-300 ${cardBorderClass}`}
     >
-      <div className="flex gap-4 items-start text-left">
+      <div className="flex flex-row gap-5 items-center text-left">
         
         {/* Optional Image / Icon container */}
         {imageUrl ? (
@@ -145,17 +154,17 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
             src={imageUrl} 
             alt={title}
             referrerPolicy="no-referrer"
-            className="w-[50px] h-[50px] min-w-[50px] min-h-[50px] rounded-lg object-cover object-center border border-slate-800 shadow-md shrink-0"
+            className="w-[110px] h-[110px] min-w-[110px] min-h-[110px] md:w-[150px] md:h-[150px] md:min-w-[150px] md:min-h-[150px] lg:w-[180px] lg:h-[180px] lg:min-w-[180px] lg:min-h-[180px] rounded-2xl object-cover object-center border border-slate-800 shadow-md shrink-0"
           />
         ) : (
-          <div className={`w-[50px] h-[50px] min-w-[50px] min-h-[50px] rounded-lg border border-slate-800/60 flex items-center justify-center shrink-0 shadow-md ${config.badgeClass}`}>
-            <TypeIcon className="w-4 h-4" />
+          <div className={`w-[110px] h-[110px] min-w-[110px] min-h-[110px] md:w-[150px] md:h-[150px] md:min-w-[150px] md:min-h-[150px] lg:w-[180px] lg:h-[180px] lg:min-w-[180px] lg:min-h-[180px] rounded-2xl border border-slate-800/60 flex items-center justify-center shrink-0 shadow-md ${config.badgeClass}`}>
+            <TypeIcon className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
         )}
  
         {/* Text Details */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex flex-wrap items-center justify-start gap-2">
             <span className={`text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${config.badgeClass}`}>
               {config.label}
             </span>
@@ -180,7 +189,7 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
           </p>
  
           {content && (
-            <p className="text-[10px] md:text-[11px] text-slate-400 italic font-mono pt-0.5 line-clamp-2 break-words">
+            <p className="text-[10px] md:text-[11px] text-slate-400 italic font-mono pt-0.5 line-clamp-1 break-words">
               {content}
             </p>
           )}
@@ -188,18 +197,18 @@ export function AnnouncementCard({ announcement, compact = false }: Announcement
  
         {/* Action Button */}
         {buttonUrl && (
-          <div className="shrink-0 flex items-center self-center pl-2">
+          <div className="shrink-0 flex items-center self-center justify-end pl-2">
             <a
               href={buttonUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 shadow-lg shadow-black/20 cursor-pointer ${
+              className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold font-mono transition flex items-center justify-center gap-1.5 shadow-lg shadow-black/20 cursor-pointer ${
                 isHighPriority 
                   ? 'bg-gradient-to-r from-[#d4af37] to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black' 
                   : 'bg-[#1ed760] hover:bg-[#1db954] text-slate-950'
               }`}
             >
-              <span className="hidden md:inline">{buttonText || 'Ver Detalhes'}</span>
+              <span>{buttonText || 'Ver Detalhes'}</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>

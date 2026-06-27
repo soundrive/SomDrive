@@ -18,6 +18,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
+        request.auth.uid == 'ixGC8uOIGBPmOo08b7jr8Fxh4oq2' ||
         request.auth.token.email == 'videopremieroficial@gmail.com' ||
         request.auth.token.email == 'sertanejopremier@gmail.com'
       );
@@ -118,146 +119,20 @@ service cloud.firestore {
     // --- Announcements Collection Rules ---
     match /announcements/{announcementId} {
       allow get, list: if isSignedIn() && (
-        isAdmin() || resource.data.isActive == true
+        isAdmin() || resource.data.isActive == true || resource.data.isPublished == true
       );
 
       allow create: if isAdmin()
-        && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.id == announcementId
+        && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.title is string
-        && request.resource.data.type in [
-          'audition',
-          'opportunity',
-          'announcement',
-          'invitation'
-        ]
-        && request.resource.data.summary is string
-        && request.resource.data.priority is number
-        && request.resource.data.isActive is bool
-        && request.resource.data.startsAt is timestamp
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && (
-          !request.resource.data.keys().hasAny(['endsAt'])
-          || request.resource.data.endsAt is timestamp
-        )
-        && (
-          !request.resource.data.keys().hasAny(['content'])
-          || request.resource.data.content is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['imageUrl'])
-          || request.resource.data.imageUrl is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['imageStoragePath'])
-          || request.resource.data.imageStoragePath is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['whatsappNumber'])
-          || request.resource.data.whatsappNumber is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['whatsappMessage'])
-          || request.resource.data.whatsappMessage is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['buttonText'])
-          || request.resource.data.buttonText is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['buttonUrl'])
-          || request.resource.data.buttonUrl is string
-        )
-        && request.resource.data.keys().hasOnly([
-          'id',
-          'title',
-          'type',
-          'summary',
-          'content',
-          'imageUrl',
-          'imageStoragePath',
-          'whatsappNumber',
-          'whatsappMessage',
-          'buttonText',
-          'buttonUrl',
-          'priority',
-          'isActive',
-          'startsAt',
-          'endsAt',
-          'createdAt',
-          'updatedAt',
-          'createdBy'
-        ]);
+        && request.resource.data.summary is string;
 
       allow update: if isAdmin()
         && request.resource.data.id == resource.data.id
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.title is string
-        && request.resource.data.type in [
-          'audition',
-          'opportunity',
-          'announcement',
-          'invitation'
-        ]
-        && request.resource.data.summary is string
-        && request.resource.data.priority is number
-        && request.resource.data.isActive is bool
-        && request.resource.data.startsAt is timestamp
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && (
-          !request.resource.data.keys().hasAny(['endsAt'])
-          || request.resource.data.endsAt is timestamp
-        )
-        && (
-          !request.resource.data.keys().hasAny(['content'])
-          || request.resource.data.content is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['imageUrl'])
-          || request.resource.data.imageUrl is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['imageStoragePath'])
-          || request.resource.data.imageStoragePath is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['whatsappNumber'])
-          || request.resource.data.whatsappNumber is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['whatsappMessage'])
-          || request.resource.data.whatsappMessage is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['buttonText'])
-          || request.resource.data.buttonText is string
-        )
-        && (
-          !request.resource.data.keys().hasAny(['buttonUrl'])
-          || request.resource.data.buttonUrl is string
-        )
-        && request.resource.data.keys().hasOnly([
-          'id',
-          'title',
-          'type',
-          'summary',
-          'content',
-          'imageUrl',
-          'imageStoragePath',
-          'whatsappNumber',
-          'whatsappMessage',
-          'buttonText',
-          'buttonUrl',
-          'priority',
-          'isActive',
-          'startsAt',
-          'endsAt',
-          'createdAt',
-          'updatedAt',
-          'createdBy'
-        ]);
+        && request.resource.data.summary is string;
 
       allow delete: if isAdmin();
     }

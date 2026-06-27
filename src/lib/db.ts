@@ -193,7 +193,8 @@ import {
   query,
   where,
   updateDoc,
-  increment
+  increment,
+  deleteField
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType } from './firebase';
@@ -2567,52 +2568,146 @@ export const dbService = {
     }
   },
 
-  async saveAnnouncement(announcement: Announcement): Promise<void> {
+  async saveAnnouncement(announcement: Announcement, isEditExplicit?: boolean): Promise<void> {
     try {
       const docRef = doc(db, 'announcements', announcement.id);
       
+      const cleanTitle = (announcement.title || '').trim();
+      const cleanSummary = (announcement.summary || '').trim();
+      const cleanType = announcement.type;
+      const cleanPriority = Number(announcement.priority);
+      const isPublished = Boolean(announcement.isActive);
+      const startsAtDate = new Date(announcement.startsAt);
+
+      if (!cleanTitle || !cleanSummary || !announcement.startsAt || isNaN(startsAtDate.getTime())) {
+        throw new Error("Campos obrigatórios inválidos ou ausentes (Título, Resumo e Data de Início).");
+      }
+
+      const isEdit = isEditExplicit !== undefined ? isEditExplicit : !!announcement.createdAt;
+      
+      let finalCreatedAt: any = Timestamp.fromDate(new Date());
+      if (isEdit && announcement.createdAt) {
+        const parsedCreated = new Date(announcement.createdAt);
+        if (!isNaN(parsedCreated.getTime())) {
+          finalCreatedAt = Timestamp.fromDate(parsedCreated);
+        }
+      }
+
       const firestoreData: any = {
         id: announcement.id,
-        title: announcement.title,
-        type: announcement.type,
-        summary: announcement.summary,
-        priority: Number(announcement.priority),
-        isActive: Boolean(announcement.isActive),
-        startsAt: Timestamp.fromDate(new Date(announcement.startsAt)),
-        createdAt: Timestamp.fromDate(new Date(announcement.createdAt)),
-        updatedAt: Timestamp.fromDate(new Date()),
-        createdBy: announcement.createdBy
+        title: cleanTitle,
+        type: cleanType,
+        summary: cleanSummary,
+        priority: cleanPriority,
+        
+        // Backward compatibility flags
+        isActive: isPublished,
+        // Requested flag
+        isPublished: isPublished,
+        
+        // StartsAt (Standard/Backward Compatibility) & startAt (New)
+        startsAt: Timestamp.fromDate(startsAtDate),
+        startAt: Timestamp.fromDate(startsAtDate),
+        
+        // Creator
+        createdBy: (announcement.createdBy || auth.currentUser?.uid || '').trim(),
+        
+        // Timestamps using robust client-side Timestamps to guarantee type correctness in security rules
+        createdAt: finalCreatedAt,
+        updatedAt: Timestamp.fromDate(new Date())
       };
 
-      if (announcement.content !== undefined && announcement.content !== null) {
-        firestoreData.content = announcement.content;
-      }
-      if (announcement.imageUrl !== undefined && announcement.imageUrl !== null) {
-        firestoreData.imageUrl = announcement.imageUrl;
-      }
-      if (announcement.imageStoragePath !== undefined && announcement.imageStoragePath !== null) {
-        firestoreData.imageStoragePath = announcement.imageStoragePath;
-      }
-      if (announcement.whatsappNumber !== undefined && announcement.whatsappNumber !== null) {
-        firestoreData.whatsappNumber = announcement.whatsappNumber;
-      }
-      if (announcement.whatsappMessage !== undefined && announcement.whatsappMessage !== null) {
-        firestoreData.whatsappMessage = announcement.whatsappMessage;
-      }
-      if (announcement.buttonText !== undefined && announcement.buttonText !== null) {
-        firestoreData.buttonText = announcement.buttonText;
-      }
-      if (announcement.buttonUrl !== undefined && announcement.buttonUrl !== null) {
-        firestoreData.buttonUrl = announcement.buttonUrl;
-      }
-      if (announcement.endsAt) {
-        firestoreData.endsAt = Timestamp.fromDate(new Date(announcement.endsAt));
+      // Optional fields: only save if defined and not empty, otherwise delete them if editing
+      
+      // content & details
+      if (announcement.content !== undefined && announcement.content !== null && announcement.content.trim() !== '') {
+        const cleanContent = announcement.content.trim();
+        firestoreData.content = cleanContent;
+        firestoreData.details = cleanContent;
+      } else if (isEdit) {
+        firestoreData.content = deleteField();
+        firestoreData.details = deleteField();
       }
 
+      // imageUrl
+      if (announcement.imageUrl !== undefined && announcement.imageUrl !== null && announcement.imageUrl.trim() !== '') {
+        firestoreData.imageUrl = announcement.imageUrl.trim();
+      } else if (isEdit) {
+        firestoreData.imageUrl = deleteField();
+      }
+
+      // imageStoragePath
+      if (announcement.imageStoragePath !== undefined && announcement.imageStoragePath !== null && announcement.imageStoragePath.trim() !== '') {
+        firestoreData.imageStoragePath = announcement.imageStoragePath.trim();
+      } else if (isEdit) {
+        firestoreData.imageStoragePath = deleteField();
+      }
+
+      // whatsappNumber
+      if (announcement.whatsappNumber !== undefined && announcement.whatsappNumber !== null && announcement.whatsappNumber.trim() !== '') {
+        firestoreData.whatsappNumber = announcement.whatsappNumber.trim();
+      } else if (isEdit) {
+        firestoreData.whatsappNumber = deleteField();
+      }
+
+      // whatsappMessage
+      if (announcement.whatsappMessage !== undefined && announcement.whatsappMessage !== null && announcement.whatsappMessage.trim() !== '') {
+        firestoreData.whatsappMessage = announcement.whatsappMessage.trim();
+      } else if (isEdit) {
+        firestoreData.whatsappMessage = deleteField();
+      }
+
+      // buttonText & actionButtonText
+      if (announcement.buttonText !== undefined && announcement.buttonText !== null && announcement.buttonText.trim() !== '') {
+        const cleanBtnText = announcement.buttonText.trim();
+        firestoreData.buttonText = cleanBtnText;
+        firestoreData.actionButtonText = cleanBtnText;
+      } else if (isEdit) {
+        firestoreData.buttonText = deleteField();
+        firestoreData.actionButtonText = deleteField();
+      }
+
+      // buttonUrl & actionButtonUrl
+      if (announcement.buttonUrl !== undefined && announcement.buttonUrl !== null && announcement.buttonUrl.trim() !== '') {
+        const cleanBtnUrl = announcement.buttonUrl.trim();
+        firestoreData.buttonUrl = cleanBtnUrl;
+        firestoreData.actionButtonUrl = cleanBtnUrl;
+      } else if (isEdit) {
+        firestoreData.buttonUrl = deleteField();
+        firestoreData.actionButtonUrl = deleteField();
+      }
+
+      // endsAt & endAt
+      if (announcement.endsAt !== undefined && announcement.endsAt !== null && announcement.endsAt !== '') {
+        const endsAtDate = new Date(announcement.endsAt);
+        if (!isNaN(endsAtDate.getTime())) {
+          firestoreData.endsAt = Timestamp.fromDate(endsAtDate);
+          firestoreData.endAt = Timestamp.fromDate(endsAtDate);
+        } else if (isEdit) {
+          firestoreData.endsAt = deleteField();
+          firestoreData.endAt = deleteField();
+        }
+      } else if (isEdit) {
+        firestoreData.endsAt = deleteField();
+        firestoreData.endAt = deleteField();
+      }
+
+      // Sanitize firestoreData to remove any keys that are undefined or null
+      Object.keys(firestoreData).forEach(key => {
+        if (firestoreData[key] === undefined || firestoreData[key] === null) {
+          delete firestoreData[key];
+        }
+      });
+
+      console.log("[ANNOUNCEMENT 5] payload preparado");
+      console.log("[ANNOUNCEMENT PAYLOAD]", firestoreData);
+      console.log("[ANNOUNCEMENT 6] antes do setDoc");
       await setDoc(docRef, firestoreData, { merge: true });
+      console.log("[ANNOUNCEMENT 7] setDoc concluído");
     } catch (e) {
+      console.error("[ANNOUNCEMENT ERROR]", e);
       console.error("Error saving announcement to Firestore:", e);
-      throw e;
+      handleFirestoreError(e, OperationType.WRITE, `announcements/${announcement.id}`);
     }
   },
 
@@ -2622,20 +2717,111 @@ export const dbService = {
       await deleteDoc(docRef);
     } catch (e) {
       console.error("Error deleting announcement from Firestore:", e);
-      throw e;
+      handleFirestoreError(e, OperationType.DELETE, `announcements/${id}`);
     }
   },
 
   async uploadAnnouncementImage(announcementId: string, file: File): Promise<{ imageUrl: string, imageStoragePath: string }> {
     try {
-      const cleanName = file.name.replace(/[^a-zA-Z0-9ms._-]/g, '').slice(-40);
-      const uniqueId = `img-${Date.now()}-${Math.floor(Math.random() * 899) + 100}`;
-      const imageStoragePath = `announcements/${announcementId}/${uniqueId}_${cleanName}`;
-      const storageRef = ref(storage, imageStoragePath);
-      
-      const snapshot = await uploadBytes(storageRef, file);
-      const imageUrl = await getDownloadURL(snapshot.ref);
-      return { imageUrl, imageStoragePath };
+      const maxSizeBytes = 2 * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        throw new Error("A imagem é muito grande. O limite máximo é de 2 MB.");
+      }
+
+      const userId = auth.currentUser?.uid || "admin";
+      let uploadUrl = "";
+      let publicImageUrl = "";
+
+      // 20-second timeout using AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.warn("[ANNOUNCEMENT IMAGE TIMEOUT] Tempo limite de 20 segundos atingido para upload.");
+        controller.abort();
+      }, 20000);
+
+      try {
+        const response = await fetch("/api/r2-presigned-image-upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            fileType: file.type || "image/jpeg",
+            fileSize: file.size,
+            userId,
+            fileName: file.name
+          }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => ({}));
+          throw new Error(errJson.error || `HTTP error ${response.status}`);
+        }
+
+        const resData = await response.json();
+        uploadUrl = resData.uploadUrl;
+        publicImageUrl = resData.publicImageUrl;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        console.error("Erro ao obter URL presignada R2:", err);
+        throw new Error("Não foi possível gerar a autorização de upload do R2.");
+      }
+
+      try {
+        console.log("Tentando upload direto (PUT) no R2 com pre-signed URL...");
+        const putResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type || "image/jpeg"
+          },
+          body: file,
+          signal: controller.signal
+        });
+
+        if (!putResponse.ok) {
+          throw new Error(`HTTP status ${putResponse.status}`);
+        }
+        clearTimeout(timeoutId);
+        console.log("Upload direto PUT no R2 concluído com sucesso.");
+        return { imageUrl: publicImageUrl, imageStoragePath: "" };
+      } catch (err: any) {
+        console.warn("Upload direto PUT falhou (CORS ou rede). Tentando rota proxy de contingência...", err);
+        
+        const fallbackController = new AbortController();
+        const fallbackTimeoutId = setTimeout(() => {
+          fallbackController.abort();
+        }, 20000);
+
+        try {
+          const proxyResponse = await fetch("/api/r2-proxy-image-upload", {
+            method: "POST",
+            headers: {
+              "x-file-name": encodeURIComponent(file.name),
+              "x-file-type": file.type || "image/jpeg",
+              "x-file-size": String(file.size),
+              "x-user-id": userId
+            },
+            body: file,
+            signal: fallbackController.signal
+          });
+
+          if (!proxyResponse.ok) {
+            const errData = await proxyResponse.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP ${proxyResponse.status}`);
+          }
+
+          const proxyData = await proxyResponse.json();
+          publicImageUrl = proxyData.publicImageUrl;
+          clearTimeout(fallbackTimeoutId);
+          console.log("Upload via proxy de contingência realizado com sucesso:", publicImageUrl);
+          return { imageUrl: publicImageUrl, imageStoragePath: "" };
+        } catch (proxyErr: any) {
+          clearTimeout(fallbackTimeoutId);
+          console.error("Erro no PUT/Proxy da imagem:", proxyErr);
+          throw new Error("Não foi possível enviar a imagem para o servidor de armazenamento.");
+        }
+      }
     } catch (error) {
       console.error("Error uploading announcement image to storage:", error);
       throw error;
@@ -2644,11 +2830,15 @@ export const dbService = {
 
   async deleteAnnouncementImage(imageStoragePath: string): Promise<void> {
     try {
+      if (!imageStoragePath || !imageStoragePath.startsWith("announcements/")) {
+        console.log("Ignorando exclusão de imagem não-Firebase.");
+        return;
+      }
       const imageRef = ref(storage, imageStoragePath);
       await deleteObject(imageRef);
     } catch (e) {
       console.error("Error deleting announcement image from storage:", e);
-      throw e;
+      // Let it fail gracefully so it never blocks announcement deletion
     }
   }
 };

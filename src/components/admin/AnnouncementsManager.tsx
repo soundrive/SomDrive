@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Announcement, AnnouncementType } from '../../types';
 import { dbService } from '../../lib/db';
+import { auth } from '../../lib/firebase';
 import { AnnouncementCard } from '../AnnouncementCard';
 
 interface AnnouncementsManagerProps {
@@ -162,7 +163,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
         isActive: !ann.isActive,
         updatedAt: new Date().toISOString()
       };
-      await dbService.saveAnnouncement(updated);
+      await dbService.saveAnnouncement(updated, true);
       showFeedback(`Aviso ${!ann.isActive ? 'ativado' : 'desativado'} com sucesso!`, 'success');
       await loadAnnouncements();
     } catch (err) {
@@ -178,6 +179,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
     const file = e.target.files?.[0];
     if (!file) return;
 
+    console.log("[ANNOUNCEMENT IMAGE 1] arquivo selecionado");
     setIsOptimizing(true);
     try {
       // Create a canvas crop & compression wrapper
@@ -187,8 +189,17 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const targetWidth = 150;
-            const targetHeight = 150; // 1:1 ratio
+            // Determine dimensions for a square cover crop (1:1 ratio)
+            const minSide = Math.min(img.width, img.height);
+            // If the image is smaller than 600px, keep original dimension so we don't scale up and blur
+            const targetSize = Math.min(600, minSide);
+            
+            if (minSide < 600) {
+              showFeedback("Aviso: A imagem selecionada tem resolução baixa (menor que 600x600). Preservando a resolução original para evitar que fique borrada.", "success");
+            }
+
+            const targetWidth = targetSize;
+            const targetHeight = targetSize;
             canvas.width = targetWidth;
             canvas.height = targetHeight;
             const ctx = canvas.getContext('2d');
@@ -221,7 +232,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
               } else {
                 reject(new Error("Falha ao compactar imagem."));
               }
-            }, 'image/jpeg', 0.82); // 82% quality is outstanding and guarantees < 250 KB
+            }, 'image/jpeg', 0.92); // 92% quality is outstanding for sharpness and retains optimal size
           };
           img.onerror = () => reject(new Error("Erro ao abrir imagem. Certifique-se de que é um formato válido."));
           img.src = event.target?.result as string;
@@ -234,6 +245,7 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
       const optimizedFile = new File([optimizedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
         type: 'image/jpeg'
       });
+      console.log("[ANNOUNCEMENT IMAGE 2] otimização concluída");
 
       // Show temporary object URL in UI preview
       const previewUrl = URL.createObjectURL(optimizedBlob);
@@ -291,10 +303,14 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[ANNOUNCEMENT 1] submit iniciado");
+    console.log("[ANNOUNCEMENT AUTH UID]", auth.currentUser?.uid);
+
     if (!title.trim() || !summary.trim() || !startsAt) {
       showFeedback('Preencha os campos obrigatórios (Título, Resumo e Data de Início).', 'error');
       return;
     }
+    console.log("[ANNOUNCEMENT 2] validação concluída");
 
     setActionLoading(true);
     let previousStoragePathToDelete: string | null = null;
@@ -305,11 +321,18 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
       let finalImageUrl = imageUrl;
       let finalImageStoragePath = imageStoragePath;
 
-      // Handle file upload processes securely
-      if (imageAction === 'replace' && imageFile) {
-        // Upload the new image file to Firebase Storage
-        const uploadRes = await dbService.uploadAnnouncementImage(finalId, imageFile);
+      const selectedImageFile = imageFile;
+      console.log("[ANNOUNCEMENT IMAGE]", selectedImageFile ? "upload necessário" : "sem imagem, upload ignorado");
+      console.log("[ANNOUNCEMENT 3] imagem verificada");
+
+      // Handle file upload processes securely without calling Storage if not needed
+      if (imageAction === 'replace' && selectedImageFile instanceof File) {
+        console.log("[ANNOUNCEMENT IMAGE 3] upload iniciado");
+        // Upload the new image file using the optimized R2 endpoints
+        const uploadRes = await dbService.uploadAnnouncementImage(finalId, selectedImageFile);
         finalImageUrl = uploadRes.imageUrl;
+        console.log("[ANNOUNCEMENT IMAGE 4] upload concluído");
+        console.log("[ANNOUNCEMENT IMAGE URL]", finalImageUrl);
         
         // Save the previous storage path to delete after successful document save
         if (imageStoragePath) {
@@ -360,8 +383,19 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
         createdBy: currentUserId
       };
 
-      // 1. Save document to Firestore first
-      await dbService.saveAnnouncement(newAnn);
+      console.log("[ANNOUNCEMENT 4] antes do saveAnnouncement");
+
+      // 1. Save document to Firestore first with a 15-second safety timeout
+      await Promise.race([
+        dbService.saveAnnouncement(newAnn, !!editId),
+        new Promise<void>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Timeout ao salvar aviso após 15 segundos")),
+            15000
+          )
+        )
+      ]);
+      console.log("[ANNOUNCEMENT SAVE] aviso salvo");
 
       // 2. ONLY AFTER successful save, clean up the previous storage image to prevent orphans or loss
       if (previousStoragePathToDelete) {
@@ -379,10 +413,11 @@ export default function AnnouncementsManager({ currentUserId }: AnnouncementsMan
       setImagePreviewUrl('');
       setImageAction('none');
       await loadAnnouncements();
-    } catch (err) {
-      console.error(err);
-      showFeedback('Erro ao salvar o aviso. Verifique as regras de preenchimento.', 'error');
+    } catch (err: any) {
+      console.error("[ANNOUNCEMENT ERROR]", err);
+      showFeedback(err.message || 'Erro ao salvar o aviso. Verifique as regras de preenchimento.', 'error');
     } finally {
+      console.log("[ANNOUNCEMENT FINALLY] loading liberado");
       setActionLoading(false);
     }
   };
