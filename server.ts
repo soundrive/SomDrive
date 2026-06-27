@@ -927,7 +927,7 @@ async function startServer() {
     }
 
     if (!ogImageToUse) {
-      ogImageToUse = "https://www.somdrive.com.br/somdrive-player-artwork-512.png";
+      ogImageToUse = "https://www.somdrive.com.br/somdrive-preview-v2-1200x630.png";
     }
 
     const indexPath = process.env.NODE_ENV === "production"
@@ -952,21 +952,23 @@ async function startServer() {
 
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Home Metadata -->
-  <title>SomDrive — Catálogo musical privado para compositores e artistas</title>
-  <meta name="description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
+  <title>SomDrive — Seu repertório na mão do cantor certo</title>
+  <meta name="description" content="Organize suas músicas em um catálogo privado, compartilhe por link e coloque seu repertório na mão do cantor certo." />
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SomDrive" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:url" content="https://www.somdrive.com.br/" />
   <meta property="og:title" content="SomDrive — Seu repertório na mão do cantor certo" />
-  <meta property="og:description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
+  <meta property="og:description" content="Catálogo musical privado para compositores e artistas. Organize músicas, compartilhe por link e ouça no carro." />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
-  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:type" content="${ogImageToUse.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="https://www.somdrive.com.br/" />
-  <meta property="og:site_name" content="SomDrive" />
+  <meta property="og:image:alt" content="SomDrive — catálogo musical privado para compositores e artistas" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SomDrive — Seu repertório na mão do cantor certo" />
-  <meta name="twitter:description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
+  <meta name="twitter:description" content="Organize suas músicas, compartilhe por link e coloque seu repertório na mão do cantor certo." />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <link rel="image_src" href="${ogImageToUse}" />
   <meta itemprop="image" content="${ogImageToUse}" />
