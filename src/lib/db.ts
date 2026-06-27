@@ -1,4 +1,4 @@
-import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project, Announcement, AnnouncementType } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project, Announcement, AnnouncementType, FirestoreDateLike } from '../types';
 
 // Strict in-memory shadowing to replace browser persistent storage for core user/folder/music data
 const MEMORY_KV_STORE: Record<string, string> = {};
@@ -161,6 +161,9 @@ export const LS_MUSICS = "pendrive_musics";
 export const LS_ANALYTICS = "pendrive_analytics";
 export const LS_CURR_USER = "pendrive_curr_user";
 
+// Track in-progress automatic downgrades to prevent duplicate concurrent writes
+const expirationSyncInProgress = new Set<string>();
+
 // Clear old demo account if found in localStorage to avoid stale cached view
 if (localStorage.getItem(LS_CURR_USER)) {
   localStorage.removeItem(LS_CURR_USER);
@@ -231,6 +234,61 @@ const parseTimestamp = (val: any): string | null => {
   } catch {}
   return null;
 };
+
+// Safe helper to normalize and retrieve subscription/access expiration date
+export function getSafeExpirationDate(artist: Artist): Date | null {
+  if (!artist) return null;
+  const accessType = artist.accessType || 'free';
+  const plan = artist.plan || 'free';
+
+  if (plan === 'free' || accessType === 'free') {
+    return null;
+  }
+
+  let targetVal: FirestoreDateLike = null;
+
+  if (accessType === 'trial') {
+    targetVal = artist.trialEndsAt || null;
+  } else if (accessType === 'manual') {
+    targetVal = artist.manualAccessEndsAt || null;
+  } else if (accessType === 'mercadopago' || accessType === 'subscriber') {
+    targetVal = artist.subscriptionEndsAt || artist.planExpiresAt || null;
+  } else {
+    // Fallback if accessType is not specified but plan is premium/pro/essencial
+    targetVal = artist.subscriptionEndsAt || artist.planExpiresAt || artist.trialEndsAt || artist.manualAccessEndsAt || null;
+  }
+
+  if (!targetVal) return null;
+
+  try {
+    if (targetVal instanceof Date) {
+      return Number.isNaN(targetVal.getTime()) ? null : targetVal;
+    }
+    if (typeof targetVal === 'object' && targetVal !== null) {
+      const obj = targetVal as { toDate?: () => Date; seconds?: number; _seconds?: number };
+      if (typeof obj.toDate === 'function') {
+        const d = obj.toDate();
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof obj._seconds === 'number') {
+        const d = new Date(obj._seconds * 1000);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof obj.seconds === 'number') {
+        const d = new Date(obj.seconds * 1000);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+    }
+    if (typeof targetVal === 'string') {
+      const d = new Date(targetVal);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+  } catch (err) {
+    console.error("[getSafeExpirationDate] Error parsing expiration date:", err);
+  }
+
+  return null;
+}
 
 // Database Actions Layer
 export const dbService = {
@@ -380,44 +438,68 @@ export const dbService = {
       updated.role = 'user';
     }
 
-    if (updated.accessType === 'trial' && updated.trialEndsAt) {
-      if (new Date(updated.trialEndsAt) < now) {
-        updated.plan = 'free';
-        updated.musicLimit = 3;
-        updated.paymentStatus = 'inactive';
-        updated.accessType = 'free';
-        updated.updatedAt = now.toISOString();
-        changed = true;
-      }
-    } else if (updated.accessType === 'manual' && updated.manualAccessEndsAt) {
-      if (new Date(updated.manualAccessEndsAt) < now) {
-        updated.plan = 'free';
-        updated.musicLimit = 3;
-        updated.paymentStatus = 'inactive';
-        updated.accessType = 'free';
-        updated.updatedAt = now.toISOString();
-        changed = true;
-      }
-    } else if (updated.plan !== 'free') {
-      const endsAt = updated.subscriptionEndsAt || updated.trialEndsAt || updated.manualAccessEndsAt;
-      if (endsAt && new Date(endsAt) < now) {
-        updated.plan = 'free';
-        updated.musicLimit = 3;
-        updated.paymentStatus = 'inactive';
-        updated.accessType = 'free';
-        updated.updatedAt = now.toISOString();
-        changed = true;
+    if (updated.plan !== 'free') {
+      const endsAt = getSafeExpirationDate(updated);
+      if (endsAt) {
+        if (endsAt < now) {
+          updated.plan = 'free';
+          updated.musicLimit = 3;
+          updated.paymentStatus = 'inactive';
+          updated.accessType = 'free';
+          updated.updatedAt = now.toISOString();
+          changed = true;
+          console.log(`[checkAndRevertExpiredAccess] Reverting user ${updated.userId} to free plan (access expired on ${endsAt.toISOString()}).`);
+        }
+      } else {
+        console.warn(`[checkAndRevertExpiredAccess] Non-free plan found without valid expiration date for user ${updated.userId}. Auto-downgrade skipped.`);
       }
     }
 
     if (changed) {
-      this.updateArtistProfileLocallyAndFirestore(updated.userId, updated);
-    }
+      if (expirationSyncInProgress.has(updated.userId)) {
+        console.log(`[checkAndRevertExpiredAccess] Downgrade sync in progress for user ${updated.userId}. Skipping duplicate call.`);
+        return updated;
+      }
+      expirationSyncInProgress.add(updated.userId);
 
-    try {
-      this.enforceTracksByPlanValidity(updated);
-    } catch (e) {
-      console.error("error in local enforcement caller:", e);
+      // 1. Update localStorage artists list
+      try {
+        const artists = this.getAllArtists();
+        artists[updated.userId] = updated;
+        localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+      } catch (e) {
+        console.error("Error saving updated artists list locally: ", e);
+      }
+
+      // 2. If current user is this artist, update current user in localStorage too
+      try {
+        const u = localStorage.getItem(LS_CURR_USER);
+        if (u) {
+          const parsed = JSON.parse(u) as Artist;
+          if (parsed.userId === updated.userId) {
+            localStorage.setItem(LS_CURR_USER, JSON.stringify(updated));
+          }
+        }
+      } catch (e) {
+        console.error("Error updating current user locally: ", e);
+      }
+
+      // 3. Persist to Firestore asynchronously, freeing the in-progress lock in finally
+      void this.updateArtistProfileLocallyAndFirestore(updated.userId, updated)
+        .then(() => {
+          // 4. Enforce track limits by plan validity ONLY after successful persistence
+          try {
+            this.enforceTracksByPlanValidity(updated);
+          } catch (e) {
+            console.error("Error in local enforcement caller:", e);
+          }
+        })
+        .catch(err => {
+          console.error(`[checkAndRevertExpiredAccess] Firestore update failed for user ${updated.userId}:`, err);
+        })
+        .finally(() => {
+          expirationSyncInProgress.delete(updated.userId);
+        });
     }
 
     return updated;
@@ -604,7 +686,9 @@ export const dbService = {
     }
 
     // Sync to Firestore in background (revisits both artists and users)
-    this.updateArtistProfileLocallyAndFirestore(id, saved);
+    void this.updateArtistProfileLocallyAndFirestore(id, saved).catch(e => {
+      console.error("[updateArtistProfile] Failed background sync to Firestore:", e);
+    });
 
     return saved;
   },
@@ -708,7 +792,7 @@ export const dbService = {
   },
 
   // Save changes to localStorage AND dual-write to Firestore (artists/{id} AND users/{id})
-  updateArtistProfileLocallyAndFirestore(id: string, saved: Artist) {
+  updateArtistProfileLocallyAndFirestore(id: string, saved: Artist): Promise<void> {
     try {
       const musicCount = (this.getArtistMusics(id) || []).length;
       const normalizedUser = this.getNormalizedUserData(saved, musicCount);
@@ -739,16 +823,21 @@ export const dbService = {
       });
 
       // Async write to 'artists' collection
-      setDoc(doc(db, "artists", id), artistsPayload, { merge: true }).catch(e => {
+      const p1 = setDoc(doc(db, "artists", id), artistsPayload, { merge: true }).catch(e => {
         console.error("Failed to sync updated profile to artists: ", e);
+        throw e;
       });
 
       // Async write to 'users' collection with raw dates converted to Firestore timestamps
-      setDoc(doc(db, "users", id), usersPayload, { merge: true }).catch(e => {
+      const p2 = setDoc(doc(db, "users", id), usersPayload, { merge: true }).catch(e => {
         console.error("Failed to sync updated profile to users: ", e);
+        throw e;
       });
+
+      return Promise.all([p1, p2]).then(() => {});
     } catch (e) {
       console.error("Firestore sync exception: ", e);
+      return Promise.reject(e);
     }
   },
 
@@ -991,37 +1080,9 @@ export const dbService = {
         console.error("Error background pre-fetching tracks/repertoires for admin:", syncErr);
       }
 
-      const now = new Date();
       // Apply expiry check and return
       const finalList = mergedList.map(u => {
-        let isExpired = false;
-        const p = { ...u };
-
-        if (p.accessType === 'trial' && p.trialEndsAt) {
-          if (new Date(p.trialEndsAt) < now) {
-            p.plan = 'free';
-            p.musicLimit = 3;
-            p.paymentStatus = 'inactive';
-            p.accessType = 'free';
-            p.updatedAt = now.toISOString();
-            isExpired = true;
-          }
-        } else if (p.accessType === 'manual' && p.manualAccessEndsAt) {
-          if (new Date(p.manualAccessEndsAt) < now) {
-            p.plan = 'free';
-            p.musicLimit = 3;
-            p.paymentStatus = 'inactive';
-            p.accessType = 'free';
-            p.updatedAt = now.toISOString();
-            isExpired = true;
-          }
-        }
-
-        if (isExpired) {
-          this.updateArtistProfileLocallyAndFirestore(p.userId, p);
-        }
-
-        return p;
+        return this.checkAndRevertExpiredAccess(u);
       });
 
       return finalList;
@@ -1062,7 +1123,10 @@ export const dbService = {
     }
 
     // Single write to local and Firestore dual target
-    this.updateArtistProfileLocallyAndFirestore(userId, saved);
+    await this.updateArtistProfileLocallyAndFirestore(userId, saved).catch(e => {
+      console.error(`[updateUserDataFromAdmin] Failed syncing user ${userId} to Firestore:`, e);
+      throw e;
+    });
   },
 
   getTotalSongsCount(): number {

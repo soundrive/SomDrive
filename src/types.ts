@@ -2,6 +2,16 @@
  * Types modeling the "Meu Pen Drive Digital" application state
  */
 
+export type FirestoreDateLike =
+  | string
+  | Date
+  | {
+      toDate?: () => Date;
+      seconds?: number;
+      _seconds?: number;
+    }
+  | null;
+
 export interface Artist {
   userId: string; // matches uid
   name: string; // matches artistName
@@ -35,13 +45,14 @@ export interface Artist {
   // Extended Admin properties
   role?: 'user' | 'admin';
   paymentStatus?: 'inactive' | 'active' | 'pending' | 'cancelled' | 'manual';
-  accessType?: 'free' | 'mercadopago' | 'manual' | 'trial';
+  accessType?: 'free' | 'mercadopago' | 'manual' | 'trial' | 'subscriber';
   musicLimit?: number;
   songsCount?: number;
-  trialEndsAt?: string | null;
-  manualAccessEndsAt?: string | null;
-  subscriptionStartedAt?: string | null;
-  subscriptionEndsAt?: string | null;
+  trialEndsAt?: FirestoreDateLike;
+  manualAccessEndsAt?: FirestoreDateLike;
+  subscriptionStartedAt?: FirestoreDateLike;
+  subscriptionEndsAt?: FirestoreDateLike;
+  planExpiresAt?: FirestoreDateLike;
   mercadoPagoPaymentId?: string | null;
   mercadoPagoSubscriptionId?: string | null;
   isBlocked?: boolean;
