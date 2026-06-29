@@ -200,7 +200,7 @@ const getCategoryIcon = (index: number, color: string) => {
 };
 
 import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
-import { dbService } from '../lib/db';
+import { dbService, getSafeExpirationDate } from '../lib/db';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, Timestamp } from 'firebase/firestore';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
@@ -233,6 +233,7 @@ export default function Dashboard({
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
   const [showLimitPrompt, setShowLimitPrompt] = useState(false);
+  const [showPlanPopover, setShowPlanPopover] = useState(false);
   
   // Editing state block
   const [showEditForm, setShowEditForm] = useState(false);
@@ -741,6 +742,59 @@ export default function Dashboard({
     return profile.musicLimit || 3;
   };
   const limitCount = getPlanTracksLimit(profile.plan);
+
+  const getExpiryLabelAndDate = () => {
+    const date = getSafeExpirationDate(profile);
+    if (!date) return null;
+
+    const formattedDate = date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    const formattedLongDate = date.toLocaleDateString('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const accessType = profile.accessType || 'free';
+    
+    let label = "Válido até";
+    if (accessType === 'trial') {
+      label = "Período de teste válido até";
+    } else if (accessType === 'manual') {
+      label = "Acesso liberado até";
+    }
+
+    return {
+      date,
+      formattedDate,
+      formattedLongDate,
+      label,
+      fullText: `${label}: ${formattedDate}`
+    };
+  };
+
+  const getPlanStatus = (date: Date) => {
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    
+    if (diffMs < 0) {
+      return "Processando vencimento";
+    }
+    
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays <= 7) {
+      return "Vence em breve";
+    }
+    
+    return "Ativo";
+  };
+
+  const expiryInfo = getExpiryLabelAndDate();
+  const planDisplayStatus = expiryInfo ? getPlanStatus(expiryInfo.date) : null;
 
   const handleCopyLink = async () => {
     const slugifyStr = (text: string) => {
@@ -1764,16 +1818,75 @@ export default function Dashboard({
             </button>
           )}
 
-          <button 
-            onClick={() => setShowPlans(true)}
-            className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition cursor-pointer select-none group"
-            title="Ver planos e limites"
-          >
-            <span className={`w-2 h-2 rounded-full ${profile.plan === 'premium' ? 'bg-yellow-500 animate-pulse' : profile.plan === 'pro' ? 'bg-orange-500 animate-pulse' : profile.plan === 'essencial' ? 'bg-blue-500' : 'bg-slate-500'}`}></span>
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-300 group-hover:text-white">
-              Plano: {profile.plan === 'premium' ? 'Premium 🌟' : profile.plan === 'pro' ? 'Pro ⭐' : profile.plan === 'essencial' ? 'Essencial' : 'Free'}
-            </span>
-          </button>
+          {/* Plan status button/badge with popover */}
+          {(() => {
+            if (expiryInfo && planDisplayStatus) {
+              return (
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowPlanPopover(!showPlanPopover)}
+                    className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition cursor-pointer select-none group"
+                    title="Ver detalhes do plano"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${profile.plan === 'premium' ? 'bg-yellow-500 animate-pulse' : profile.plan === 'pro' ? 'bg-orange-500 animate-pulse' : profile.plan === 'essencial' ? 'bg-blue-500' : 'bg-slate-500'}`}></span>
+                    <span className="text-[10px] font-mono font-bold uppercase text-slate-300 group-hover:text-white">
+                      Plano: {profile.plan === 'premium' ? 'Premium 🌟' : profile.plan === 'pro' ? 'Pro ⭐' : profile.plan === 'essencial' ? 'Essencial' : 'Free'}
+                    </span>
+                  </button>
+
+                  {showPlanPopover && (
+                    <>
+                      {/* Transparent backdrop to close when clicking outside */}
+                      <div className="fixed inset-0 z-40" onClick={() => setShowPlanPopover(false)} />
+                      <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-72 sm:w-72 bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-2xl shadow-black/90 z-50 text-left animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="flex items-center justify-between border-b border-slate-900 pb-2.5 mb-3">
+                          <span className="text-xs font-heading font-black uppercase text-slate-200 tracking-wide">Detalhes do Plano</span>
+                          <span className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-full ${
+                            planDisplayStatus === 'Ativo' 
+                              ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/40' 
+                              : planDisplayStatus === 'Vence em breve'
+                              ? 'bg-amber-950/40 text-amber-400 border border-amber-900/40'
+                              : 'bg-rose-950/40 text-rose-400 border border-rose-900/40'
+                          }`}>
+                            {planDisplayStatus}
+                          </span>
+                        </div>
+                        <div className="space-y-2 text-xs font-mono text-slate-300">
+                          <div className="flex justify-between py-1 border-b border-slate-900/50">
+                            <span className="text-slate-400">Plano atual:</span>
+                            <span className="font-bold text-white uppercase">{profile.plan}</span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-900/50">
+                            <span className="text-slate-400">Limite:</span>
+                            <span className="font-bold text-white">{limitCount} músicas</span>
+                          </div>
+                          <div className="flex flex-col py-1">
+                            <span className="text-slate-400 mb-1">{expiryInfo.label}:</span>
+                            <span className="font-bold text-amber-400 text-sm">{expiryInfo.formattedDate}</span>
+                            <span className="text-[10px] text-slate-500 mt-0.5">{expiryInfo.formattedLongDate}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            } else {
+              // Free plan or fallback when no expiry date is set
+              return (
+                <button 
+                  onClick={() => setShowPlans(true)}
+                  className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition cursor-pointer select-none group"
+                  title="Ver planos e limites"
+                >
+                  <span className={`w-2 h-2 rounded-full ${profile.plan === 'premium' ? 'bg-yellow-500 animate-pulse' : profile.plan === 'pro' ? 'bg-orange-500 animate-pulse' : profile.plan === 'essencial' ? 'bg-blue-500' : 'bg-slate-500'}`}></span>
+                  <span className="text-[10px] font-mono font-bold uppercase text-slate-300 group-hover:text-white">
+                    Plano: {profile.plan === 'premium' ? 'Premium 🌟' : profile.plan === 'pro' ? 'Pro ⭐' : profile.plan === 'essencial' ? 'Essencial' : 'Free'}
+                  </span>
+                </button>
+              );
+            }
+          })()}
 
           <button 
             id="dash-logout-btn"
@@ -2020,6 +2133,28 @@ export default function Dashboard({
               {profile.plan === 'pro' && 'Seu plano Pro está ativo! Agora você pode cadastrar e compartilhar até 15 músicas em MP3 de alta conversão.'}
               {profile.plan === 'premium' && 'Seu plano Premium está ativo! Aproveite o limite expandido de até 50 músicas cadastradas em seu portfólio.'}
             </p>
+            {(() => {
+              if (expiryInfo && planDisplayStatus) {
+                let dotClass = "bg-emerald-500 animate-pulse";
+                let textClass = "text-emerald-400/80";
+                
+                if (planDisplayStatus === 'Vence em breve') {
+                  dotClass = "bg-amber-500 animate-pulse";
+                  textClass = "text-amber-400/80";
+                } else if (planDisplayStatus === 'Processando vencimento') {
+                  dotClass = "bg-rose-500";
+                  textClass = "text-rose-400/80";
+                }
+
+                return (
+                  <p className={`text-[11px] font-mono ${textClass} mt-2 flex items-center gap-1.5`}>
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`}></span>
+                    {expiryInfo.fullText}
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
           <div className="px-4.5 py-2 bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 text-[10px] font-mono rounded-full font-black uppercase tracking-wider shrink-0 font-bold hover:scale-102 transition shadow-md">
             Gerenciar Assinatura
