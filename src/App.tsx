@@ -303,8 +303,7 @@ export default function App() {
     } else {
       setCurrentTrack(track);
       setIsPlaying(true);
-      // Log play analytics dynamically inside Firestore/Mock
-      dbService.incrementPlayCount(track.artistId, track.trackId);
+      // Play tracking is now handled reliably inside the Player component
     }
   };
 
@@ -324,7 +323,6 @@ export default function App() {
     const nextIndex = (currentIndex + 1) % trackList.length;
     setCurrentTrack(trackList[nextIndex]);
     setIsPlaying(true);
-    dbService.incrementPlayCount(trackList[nextIndex].artistId, trackList[nextIndex].trackId);
   };
 
   const handlePrev = () => {
@@ -336,7 +334,6 @@ export default function App() {
     }
     setCurrentTrack(trackList[prevIndex]);
     setIsPlaying(true);
-    dbService.incrementPlayCount(trackList[prevIndex].artistId, trackList[prevIndex].trackId);
   };
 
   return (
@@ -465,6 +462,7 @@ export default function App() {
         setCarMode={setCarMode}
         onNavigate={handleNavigate}
         onSelectTrack={(track) => handleSelectTrack(track, trackList)}
+        isAdminView={currentView === 'dashboard' || currentView === 'admin'}
       />
 
     </div>

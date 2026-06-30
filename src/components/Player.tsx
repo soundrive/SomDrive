@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { dbService } from '../lib/db';
 import { 
   Play, 
   Pause, 
@@ -227,6 +228,7 @@ interface PlayerProps {
   setCarMode: (active: boolean) => void;
   onNavigate?: (view: 'landing' | 'auth' | 'dashboard' | 'public' | 'admin', payload?: any) => void;
   onSelectTrack?: (track: Music) => void;
+  isAdminView?: boolean;
 }
 
 export default function Player({
@@ -239,7 +241,8 @@ export default function Player({
   isCarMode,
   setCarMode,
   onNavigate,
-  onSelectTrack
+  onSelectTrack,
+  isAdminView = false
 }: PlayerProps) {
   const isSharedFolderView = typeof window !== 'undefined' && window.location.pathname.includes('/repertorio/');
   const [currentTime, setCurrentTime] = useState(0);
@@ -253,6 +256,95 @@ export default function Player({
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isMobileExpanded, setIsMobileExpanded] = useState(true);
+
+  // Reliable 5-second play-time tracking with 30-second browser deduplication
+  const playTimeRef = useRef<number>(0);
+  const hasCountedPlayRef = useRef<boolean>(false);
+  const lastTickTimeRef = useRef<number | null>(null);
+  const currentTrackIdRef = useRef<string | null>(null);
+  const ongoingPlayTracksRef = useRef<Set<string>>(new Set());
+
+  if (currentTrack?.trackId !== currentTrackIdRef.current) {
+    currentTrackIdRef.current = currentTrack?.trackId || null;
+    playTimeRef.current = 0;
+    hasCountedPlayRef.current = false;
+    lastTickTimeRef.current = null;
+  }
+
+  useEffect(() => {
+    if (!currentTrack || !isPlaying) {
+      playTimeRef.current = 0;
+      lastTickTimeRef.current = null;
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      // Check if browser confirms playback is active (audio is not paused, not seeking, and readyState is HAVE_CURRENT_DATA or higher)
+      const isActuallyPlaying = !audio.paused && !audio.seeking && audio.readyState >= 2;
+
+      if (isActuallyPlaying) {
+        const now = Date.now();
+        if (lastTickTimeRef.current !== null) {
+          const delta = (now - lastTickTimeRef.current) / 1000;
+          // Ensure the delta is reasonable (not a giant pause/gap)
+          if (delta > 0 && delta < 1.5) {
+            playTimeRef.current += delta;
+          }
+        }
+        lastTickTimeRef.current = now;
+
+        if (playTimeRef.current >= 5.0 && !hasCountedPlayRef.current) {
+          const trackId = currentTrack.trackId;
+          const artistId = currentTrack.artistId;
+
+          // Prevent duplicate concurrent tracking for the same song
+          if (ongoingPlayTracksRef.current.has(trackId)) return;
+
+          // Check 30 seconds protection
+          const lastPlayKey = `soundrive_last_play_${trackId}`;
+          const lastPlayTime = localStorage.getItem(lastPlayKey);
+          const currentTimeStamp = Date.now();
+          
+          if (!lastPlayTime || (currentTimeStamp - parseInt(lastPlayTime, 10)) >= 30000) {
+            hasCountedPlayRef.current = true; // Mark counted to prevent triggering again while Firestore request is running
+            
+            if (!isAdminView) {
+              ongoingPlayTracksRef.current.add(trackId);
+              
+              dbService.incrementPlayCount(artistId, trackId)
+                .then(() => {
+                  // Save timestamp to localStorage ONLY after successful Firestore persistence
+                  localStorage.setItem(lastPlayKey, Date.now().toString());
+                })
+                .catch((err) => {
+                  console.error("Firestore error tracking play count:", err);
+                  // Allow retry on failure
+                  hasCountedPlayRef.current = false;
+                  playTimeRef.current = 4.0; // Reset playTime slightly to allow retry if they continue listening
+                })
+                .finally(() => {
+                  ongoingPlayTracksRef.current.delete(trackId);
+                });
+            } else {
+              hasCountedPlayRef.current = true;
+            }
+          } else {
+            // Already played within last 30 seconds, mark as counted so we don't try again during this play session
+            hasCountedPlayRef.current = true;
+          }
+        }
+      } else {
+        // Reset playTime if paused or seeking (non-continuous)
+        playTimeRef.current = 0;
+        lastTickTimeRef.current = null;
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [currentTrack, isPlaying, isAdminView]);
   
   // Data saver (3G/4G/5G) mode to restrict graphic re-renders and audio preloading
   const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {

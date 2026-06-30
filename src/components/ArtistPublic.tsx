@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Pause, 
@@ -217,6 +217,8 @@ const getCategoryIcon = (index: number, color: string) => {
   }
 };
 
+const ongoingVisits = new Set<string>();
+
 interface ArtistPublicProps {
   artistId: string;
   initialRepertoireId?: string | null;
@@ -251,6 +253,7 @@ export default function ArtistPublic({
   const [repertoires, setRepertoires] = useState<Repertoire[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
+  const ongoingWhatsAppClicksRef = useRef<Set<string>>(new Set());
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
@@ -642,8 +645,35 @@ export default function ArtistPublic({
         setIsLoading(false);
         setIsInitialLoadDone(true);
 
-        // Increment views in background
-        dbService.incrementAnalyticsView(resolvedUserId, true, false);
+        // Increment views in background with exclusion and unique 24h checks
+        const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+        const isRobot = /bot|crawler|spider|facebookexternalhit|whatsapp|twitterbot|linkedinbot|embedly|quora link preview|gofetch|rogue/i.test(userAgent);
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        const isAIStudioPreview = hostname.includes('ais-dev-') || hostname.includes('ais-pre-') || hostname.includes('localhost') || hostname.includes('127.0.0.1');
+        const isPrerender = typeof document !== 'undefined' && (document.visibilityState as string) === 'prerender';
+
+        if (!isRobot && !isAIStudioPreview && !isPrerender) {
+          const lastVisitKey = `soundrive_last_visit_${resolvedUserId}`;
+          const lastVisit = localStorage.getItem(lastVisitKey);
+          const now = Date.now();
+          const oneDayMs = 24 * 60 * 60 * 1000;
+
+          if (!lastVisit || (now - parseInt(lastVisit, 10)) >= oneDayMs) {
+            if (!ongoingVisits.has(resolvedUserId)) {
+              ongoingVisits.add(resolvedUserId);
+              dbService.incrementAnalyticsView(resolvedUserId, true, false)
+                .then(() => {
+                  localStorage.setItem(lastVisitKey, Date.now().toString());
+                })
+                .catch((err) => {
+                  console.error("Failed to persist unique visit in Firestore:", err);
+                })
+                .finally(() => {
+                  ongoingVisits.delete(resolvedUserId);
+                });
+            }
+          }
+        }
 
       } catch (err: any) {
         console.error("Firestore loading error inside ArtistPublic:", {
@@ -788,8 +818,63 @@ export default function ArtistPublic({
     setTimeout(() => setCopiedLinkAlert(false), 2600);
   };
 
+  const handleWhatsAppRedirectAndTrack = (buttonId: string, whatsappUrl: string) => {
+    if (!artist) return;
+    
+    // Prevent concurrent tracking for the same event
+    if (ongoingWhatsAppClicksRef.current.has(buttonId)) {
+      window.open(whatsappUrl, '_blank');
+      return;
+    }
+
+    // Check 5-second duplicate click lock
+    const key = `soundrive_last_wa_${artist.userId}_${buttonId}`;
+    const lastClick = localStorage.getItem(key);
+    const now = Date.now();
+    if (lastClick && (now - parseInt(lastClick, 10)) < 5000) {
+      window.open(whatsappUrl, '_blank');
+      return;
+    }
+
+    // Open blank window immediately to prevent popup blocking
+    const newWindow = window.open('about:blank', '_blank');
+
+    ongoingWhatsAppClicksRef.current.add(buttonId);
+
+    let redirected = false;
+
+    const performRedirect = () => {
+      if (redirected) return;
+      redirected = true;
+      if (newWindow) {
+        newWindow.location.href = whatsappUrl;
+      } else {
+        window.open(whatsappUrl, '_blank');
+      }
+    };
+
+    // Timeout of 1.8 seconds: redirect anyway even if Firestore is slow
+    const redirectTimeout = setTimeout(() => {
+      performRedirect();
+    }, 1800);
+
+    dbService.incrementAnalyticsView(artist.userId, false, false)
+      .then(() => {
+        // Save the 5-second lock timestamp ONLY after successful Firestore persistence
+        localStorage.setItem(key, Date.now().toString());
+        performRedirect();
+      })
+      .catch((err) => {
+        console.error("Failed to increment WhatsApp click metrics in Firestore:", err);
+        performRedirect();
+      })
+      .finally(() => {
+        clearTimeout(redirectTimeout);
+        ongoingWhatsAppClicksRef.current.delete(buttonId);
+      });
+  };
+
   const handleShareWhatsApp = () => {
-    dbService.incrementAnalyticsView(artist.userId, false, false);
     const appBaseUrl = window.location.origin;
     const artistSlug = artist.slug || artist.userId;
     const foundRep = selectedRepertoireId ? repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
@@ -801,7 +886,8 @@ export default function ArtistPublic({
       messageText = `Ouça o repertório “${foundRep.name}” de ${artist.name} no SomDrive: ${pageUrl}`;
     }
 
-    window.open(`https://wa.me/?text=${encodeURIComponent(messageText)}`, '_blank');
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
+    handleWhatsAppRedirectAndTrack('share', whatsappUrl);
     
     setWhatsappShareAlert(true);
     setTimeout(() => setWhatsappShareAlert(false), 2000);
@@ -831,17 +917,17 @@ export default function ArtistPublic({
   };
 
   const handleSpeakWithArtist = () => {
-    dbService.incrementAnalyticsView(artist.userId, false, false);
     const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
     const greetingText = `Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`;
-    window.open(`https://wa.me/${whatsappNum}?text=${encodeURIComponent(greetingText)}`, '_blank');
+    const whatsappUrl = `https://wa.me/${whatsappNum}?text=${encodeURIComponent(greetingText)}`;
+    handleWhatsAppRedirectAndTrack('speak', whatsappUrl);
   };
 
   const handleContactForTrack = (track: Track) => {
-    dbService.incrementAnalyticsView(artist.userId, false, true);
     const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
     const greetingText = `Olá ${artist.name}, encontrei sua composição "${track.title}" no catálogo SomDrive e tenho alto interesse em gravá-la / ouvir a guia de áudio!`;
-    window.open(`https://wa.me/${whatsappNum}?text=${encodeURIComponent(greetingText)}`, '_blank');
+    const whatsappUrl = `https://wa.me/${whatsappNum}?text=${encodeURIComponent(greetingText)}`;
+    handleWhatsAppRedirectAndTrack(`track_${track.trackId}`, whatsappUrl);
   };
 
   // Repertoire sharing logic
@@ -877,7 +963,8 @@ export default function ArtistPublic({
     const appBaseUrl = window.location.origin;
     const shareUrl = `${appBaseUrl}/catalogo/${artist.slug || artist.userId}?song=${track.trackId}`;
     const text = `Ouça a composição autoral "${track.title}" de ${artist.name} no SomDrive:\n${shareUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    handleWhatsAppRedirectAndTrack(`share_track_${track.trackId}`, whatsappUrl);
     setActiveMenuTrackId(null);
   };
 
@@ -957,10 +1044,10 @@ export default function ArtistPublic({
                 {!!(artist.whatsapp || artist.phone) && (
                   <button
                     onClick={() => {
-                      dbService.incrementAnalyticsView(artist.userId, false, false);
                       const cleanNum = (artist.whatsapp || artist.phone || '').replace(/\D/g, '');
                       const greeting = encodeURIComponent(`Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`);
-                      window.open(`https://wa.me/${cleanNum}?text=${greeting}`, '_blank');
+                      const whatsappUrl = `https://wa.me/${cleanNum}?text=${greeting}`;
+                      handleWhatsAppRedirectAndTrack('repertoire_contact', whatsappUrl);
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#1ed760]/10 text-[#1ed760] hover:bg-[#1ed760]/20 transition-all border border-[#1ed760]/15 cursor-pointer"
                   >

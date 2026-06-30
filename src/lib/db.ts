@@ -194,7 +194,8 @@ import {
   where,
   updateDoc,
   increment,
-  deleteField
+  deleteField,
+  writeBatch
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType } from './firebase';
@@ -1350,50 +1351,43 @@ export const dbService = {
     return newTrack;
   },
 
-  incrementPlayCount(artistId: string, trackId: string): number {
-    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
-    const tracks: Music[] = musicsMap[artistId] || [];
-    
-    const track = tracks.find(t => t.trackId === trackId);
-    if (track) {
-      track.playsCount += 1;
-      if (track.plays !== undefined) {
-        track.plays += 1;
-      } else {
-        track.plays = track.playsCount;
-      }
-      track.updatedAt = new Date().toISOString();
-      musicsMap[artistId] = tracks;
-      localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+  async incrementPlayCount(artistId: string, trackId: string): Promise<void> {
+    // 1. Persist atomic increments using a single write batch to ensure atomicity
+    try {
+      const batch = writeBatch(db);
       
-      // Update global plays in analytics table too
-      this.incrementAnalyticsView(artistId, false, true);
+      const songRef = doc(db, "songs", trackId);
+      const artistMusicRef = doc(db, "artists", artistId, "musics", trackId);
+      
+      batch.set(songRef, {
+        plays: increment(1),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      batch.set(artistMusicRef, {
+        playsCount: increment(1),
+        plays: increment(1),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      await batch.commit();
 
-      // Async sync specifically playsCount increment to Firestore
-      try {
-        setDoc(doc(db, "songs", trackId), {
-          plays: track.plays,
-          updatedAt: Timestamp.fromDate(new Date())
-        }, { merge: true }).catch(e => {
-          console.error(e);
-          handleFirestoreError(e, OperationType.WRITE, `songs/${trackId}`);
-        });
-
-        setDoc(doc(db, "artists", artistId, "musics", trackId), {
-          playsCount: track.playsCount,
-          plays: track.plays,
-          updatedAt: Timestamp.fromDate(new Date())
-        }, { merge: true }).catch(e => {
-          console.error(e);
-          handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/musics/${trackId}`);
-        });
-      } catch (err) {
-        console.error(err);
+      // 2. Optional local cache update: ONLY update if track exists in cache
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const tracks: Music[] = musicsMap[artistId] || [];
+      const track = tracks.find(t => t.trackId === trackId);
+      if (track) {
+        track.playsCount = (track.playsCount || 0) + 1;
+        track.plays = (track.plays !== undefined ? track.plays : 0) + 1;
+        track.updatedAt = new Date().toISOString();
+        musicsMap[artistId] = tracks;
+        localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
       }
-
-      return track.playsCount;
+    } catch (e: any) {
+      console.error("Firestore batch write failed in incrementPlayCount:", e);
+      handleFirestoreError(e, OperationType.WRITE, `songs/${trackId} and artists/${artistId}/musics/${trackId}`);
+      throw e;
     }
-    return 0;
   },
 
   getAnalytics(artistId: string): Analytics {
@@ -1409,32 +1403,43 @@ export const dbService = {
     return analyticsMap[artistId];
   },
 
-  incrementAnalyticsView(artistId: string, isProfileView = true, isPlayIncrement = false) {
-    const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
-    if (!analyticsMap[artistId]) {
-      analyticsMap[artistId] = { artistId, viewsCount: 1, whatsappClicks: 0 };
+  async incrementAnalyticsView(artistId: string, isProfileView = true, isPlayIncrement = false): Promise<void> {
+    if (!isProfileView && isPlayIncrement) {
+      // Se essa chamada não incrementa nenhum campo de analytics, não realizar uma escrita vazia ou desnecessária no documento.
+      return;
     }
-    
-    if (isProfileView) {
-      analyticsMap[artistId].viewsCount += 1;
-    } else if (!isPlayIncrement) {
-      analyticsMap[artistId].whatsappClicks += 1;
-    }
-    
-    localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
 
-    // Async sync updated analytics node to Firestore
+    const updateData: any = {
+      artistId,
+    };
+
+    if (isProfileView) {
+      updateData.viewsCount = increment(1);
+    } else {
+      updateData.whatsappClicks = increment(1);
+    }
+
     try {
-      setDoc(doc(db, "artists", artistId, "analytics", "metrics"), {
-        artistId,
-        viewsCount: analyticsMap[artistId].viewsCount,
-        whatsappClicks: analyticsMap[artistId].whatsappClicks
-      }, { merge: true }).catch(e => {
-        console.error(e);
-        handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/analytics/metrics`);
-      });
-    } catch (e) {
-      console.error(e);
+      // 1. Remotely persist atomic increment first
+      await setDoc(doc(db, "artists", artistId, "analytics", "metrics"), updateData, { merge: true });
+      
+      // 2. Update local cache only after remote success
+      const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+      if (!analyticsMap[artistId]) {
+        analyticsMap[artistId] = { artistId, viewsCount: 0, whatsappClicks: 0 };
+      }
+      
+      if (isProfileView) {
+        analyticsMap[artistId].viewsCount += 1;
+      } else {
+        analyticsMap[artistId].whatsappClicks += 1;
+      }
+      
+      localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+    } catch (e: any) {
+      console.error("Firestore error in incrementAnalyticsView:", e);
+      handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/analytics/metrics`);
+      throw e;
     }
   },
 

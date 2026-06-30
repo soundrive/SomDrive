@@ -439,6 +439,123 @@ export default function Dashboard({
   const [repCopiedId, setRepCopiedId] = useState<string | null>(null);
   const [editingRepertoire, setEditingRepertoire] = useState<Repertoire | null>(null);
   const [viewingRepertoireTracks, setViewingRepertoireTracks] = useState<Repertoire | null>(null);
+  const [isOrganizingFolderTracks, setIsOrganizingFolderTracks] = useState(false);
+  const [organizedFolderTrackIds, setOrganizedFolderTrackIds] = useState<string[]>([]);
+  const [isSavingTrackOrder, setIsSavingTrackOrder] = useState(false);
+  const [trackOrderError, setTrackOrderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!viewingRepertoireTracks) {
+      setIsOrganizingFolderTracks(false);
+      setOrganizedFolderTrackIds([]);
+    } else {
+      const orderedIds = viewingRepertoireTracks.orderedTrackIds || viewingRepertoireTracks.trackIds || [];
+      const matchedSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id || orderedIds.includes(t.trackId));
+      const currentValidTrackIds = matchedSongs.map(t => t.trackId);
+
+      setOrganizedFolderTrackIds(prev => {
+        if (!isOrganizingFolderTracks) {
+          const orderedSongs: Track[] = [];
+          const matchedMap = new Map<string, Track>(matchedSongs.map(t => [t.trackId, t]));
+          
+          orderedIds.forEach(id => {
+            const track = matchedMap.get(id);
+            if (track) {
+              orderedSongs.push(track);
+              matchedMap.delete(id);
+            }
+          });
+          
+          matchedMap.forEach((track: Track) => {
+            orderedSongs.push(track);
+          });
+          
+          return Array.from(new Set(orderedSongs.map(t => t.trackId)));
+        } else {
+          return prev.filter(id => currentValidTrackIds.includes(id));
+        }
+      });
+    }
+  }, [viewingRepertoireTracks, tracks, isOrganizingFolderTracks]);
+
+  const handleStartOrganizing = () => {
+    if (!viewingRepertoireTracks) return;
+
+    const orderedIds = viewingRepertoireTracks.orderedTrackIds || viewingRepertoireTracks.trackIds || [];
+    const currentRepertoireSongs = tracks.filter(t => 
+      t.repertoireId === viewingRepertoireTracks.id || orderedIds.includes(t.trackId)
+    );
+
+    const validSongsMap = new Map<string, Track>(currentRepertoireSongs.map(t => [t.trackId, t]));
+    const seenIds = new Set<string>();
+    const cleanedOrderedIds: string[] = [];
+
+    orderedIds.forEach(id => {
+      if (validSongsMap.has(id) && !seenIds.has(id)) {
+        cleanedOrderedIds.push(id);
+        seenIds.add(id);
+      }
+    });
+
+    currentRepertoireSongs.forEach(song => {
+      if (!seenIds.has(song.trackId)) {
+        cleanedOrderedIds.push(song.trackId);
+        seenIds.add(song.trackId);
+      }
+    });
+
+    setOrganizedFolderTrackIds(cleanedOrderedIds);
+    setIsOrganizingFolderTracks(true);
+    setTrackOrderError(null);
+  };
+
+  const handleMoveTrackUp = (index: number) => {
+    if (index <= 0) return;
+    setOrganizedFolderTrackIds(prev => {
+      const nextIds = [...prev];
+      const temp = nextIds[index];
+      nextIds[index] = nextIds[index - 1];
+      nextIds[index - 1] = temp;
+      return nextIds;
+    });
+  };
+
+  const handleMoveTrackDown = (index: number) => {
+    setOrganizedFolderTrackIds(prev => {
+      if (index < 0 || index >= prev.length - 1) return prev;
+      const nextIds = [...prev];
+      const temp = nextIds[index];
+      nextIds[index] = nextIds[index + 1];
+      nextIds[index + 1] = temp;
+      return nextIds;
+    });
+  };
+
+  const handleSaveTrackOrder = async () => {
+    if (!viewingRepertoireTracks) return;
+    setIsSavingTrackOrder(true);
+    setTrackOrderError(null);
+
+    try {
+      const uniqueOrderedTrackIds = Array.from(new Set(organizedFolderTrackIds));
+      const updatedRep: Repertoire = {
+        ...viewingRepertoireTracks,
+        orderedTrackIds: uniqueOrderedTrackIds,
+        updatedAt: new Date().toISOString()
+      };
+
+      await dbService.saveRepertoire(updatedRep);
+      
+      setViewingRepertoireTracks(updatedRep);
+      setIsOrganizingFolderTracks(false);
+      setToastMessage("Ordem das faixas salva com sucesso.");
+    } catch (err: any) {
+      console.error("Error saving track order:", err);
+      setTrackOrderError("Falha ao salvar a nova ordem das faixas. Tente novamente.");
+    } finally {
+      setIsSavingTrackOrder(false);
+    }
+  };
   const [managingRepTrackId, setManagingRepTrackId] = useState<string | null>(null); // Repertoire ID for checkboxes modal
   const [openMenuRepId, setOpenMenuRepId] = useState<string | null>(null);
 
@@ -852,8 +969,10 @@ export default function Dashboard({
     const messageText = `🎧 Ouça meu catálogo musical no SomDrive.\n\nAqui estão minhas composições disponíveis:\n${pageUrl}`;
     const urlEncoded = encodeURIComponent(messageText);
     
-    // Increment WhatsApp counter
-    dbService.incrementAnalyticsView(profile.userId, false, true);
+    // Increment WhatsApp counter safely
+    dbService.incrementAnalyticsView(profile.userId, false, true).catch((e) => {
+      console.error("Firestore error tracking dashboard share:", e);
+    });
     
     window.open(`https://wa.me/?text=${urlEncoded}`, '_blank');
   };
@@ -2066,7 +2185,7 @@ export default function Dashboard({
             <div className="space-y-0.5 sm:space-y-1">
               <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Total Plays</p>
               <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight font-mono text-[#d4af37]">{totalPlays}</h4>
-              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Cliques no play</p>
+              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Plays reais (mín. 5s)</p>
             </div>
             <div className="p-2 md:p-3 bg-yellow-950/40 border border-yellow-500/20 text-[#d4af37] rounded-lg md:rounded-xl self-start sm:self-center">
               <TrendingUp className="w-4 h-4 md:w-6 md:h-6" />
@@ -2078,7 +2197,7 @@ export default function Dashboard({
             <div className="space-y-0.5 sm:space-y-1">
               <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Acessos</p>
               <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight font-mono text-yellow-400">{analytics.viewsCount}</h4>
-              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Visitas únicas</p>
+              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Visitas únicas (24h)</p>
             </div>
             <div className="p-2 md:p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-lg md:rounded-xl self-start sm:self-center">
               <Eye className="w-4 h-4 md:w-6 md:h-6" />
@@ -2088,9 +2207,9 @@ export default function Dashboard({
           {/* Metric 4: WhatsApp clicks */}
           <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
             <div className="space-y-0.5 sm:space-y-1">
-              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">WhatsApp</p>
+              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">WHATSAPP</p>
               <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight font-mono text-emerald-400">{analytics.whatsappClicks}</h4>
-              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Contatos</p>
+              <p className="text-[9px] font-sans text-slate-450 hidden sm:block">Cliques no WhatsApp</p>
             </div>
             <div className="p-2 md:p-3 bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 rounded-lg md:rounded-xl self-start sm:self-center">
                <MessageSquare className="w-4 h-4 md:w-6 md:h-6" />
@@ -5016,14 +5135,17 @@ export default function Dashboard({
             
             {(() => {
               // 1. Resolve tracks belonging to this repertoire using the hybrid logic
-              const orderedIds = viewingRepertoireTracks.orderedTrackIds || viewingRepertoireTracks.trackIds || [];
-              const matchedSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id || orderedIds.includes(t.trackId));
+              const displayIds = isOrganizingFolderTracks 
+                ? organizedFolderTrackIds 
+                : (viewingRepertoireTracks.orderedTrackIds || viewingRepertoireTracks.trackIds || []);
+              
+              const matchedSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id || displayIds.includes(t.trackId));
               
               // 2. Arrange/order them according to the ordered list
               const orderedSongs: Track[] = [];
               const matchedMap = new Map<string, Track>(matchedSongs.map(t => [t.trackId, t]));
               
-              orderedIds.forEach(id => {
+              displayIds.forEach(id => {
                 const track = matchedMap.get(id);
                 if (track) {
                   orderedSongs.push(track);
@@ -5086,12 +5208,63 @@ export default function Dashboard({
                       </div>
                     </div>
 
-                    <div className="text-left px-1">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-1 border-t border-slate-850/65 pt-3">
                       <p className="text-[10px] text-slate-400 font-mono">
                         Total de plays das músicas desta pasta: <strong className="text-white">{totalPlays}</strong>
                       </p>
+
+                      {orderedSongs.length > 1 && (
+                        !isOrganizingFolderTracks ? (
+                          <button
+                            type="button"
+                            onClick={handleStartOrganizing}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded-xl text-[10px] font-mono uppercase text-orange-400 font-black tracking-wider transition flex items-center gap-1.5 cursor-pointer"
+                            title="Organizar a ordem das faixas nesta pasta"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-orange-400" />
+                            ORGANIZAR FAIXAS
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsOrganizingFolderTracks(false);
+                                const prevOrdered = viewingRepertoireTracks.orderedTrackIds || viewingRepertoireTracks.trackIds || [];
+                                const matchedSongs = tracks.filter(t => t.repertoireId === viewingRepertoireTracks.id || prevOrdered.includes(t.trackId));
+                                const prevIds = Array.from(new Set(matchedSongs.map(t => t.trackId)));
+                                setOrganizedFolderTrackIds(prevIds);
+                              }}
+                              className="px-2.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl text-[10px] font-mono uppercase text-slate-400 font-bold transition cursor-pointer"
+                            >
+                              CANCELAR
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingTrackOrder}
+                              onClick={handleSaveTrackOrder}
+                              className="px-2.5 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-slate-950 rounded-xl text-[10px] font-mono uppercase font-black tracking-wider transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                              {isSavingTrackOrder ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  SALVANDO...
+                                </>
+                              ) : (
+                                'SALVAR ORDEM'
+                              )}
+                            </button>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
+
+                  {trackOrderError && (
+                    <div className="p-3 bg-rose-950/40 border border-rose-500/30 text-rose-400 text-xs font-mono rounded-xl text-center">
+                      {trackOrderError}
+                    </div>
+                  )}
 
                   {modalMessage && (
                     <div className="p-3 bg-slate-950 border border-orange-500/30 text-orange-400 text-xs font-mono rounded-xl text-center flex items-center justify-center gap-2">
@@ -5111,7 +5284,7 @@ export default function Dashboard({
                         </p>
                       </div>
                     ) : (
-                      orderedSongs.map((track) => {
+                      orderedSongs.map((track, trackIndex) => {
                         const isCurrentlyPlaying = activeTrack?.trackId === track.trackId;
                         const isPublicActive = (track.status || 'active') === 'active';
                         const trackPlays = track.plays || track.playsCount || 0;
@@ -5124,6 +5297,31 @@ export default function Dashboard({
                           >
                             {/* Play button, Title, Composer, Singer/Performer */}
                             <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {isOrganizingFolderTracks && (
+                                <div className="flex flex-col gap-1 shrink-0 mr-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={trackIndex === 0}
+                                    onClick={() => handleMoveTrackUp(trackIndex)}
+                                    className="p-1 rounded bg-slate-900 border border-slate-800 hover:border-slate-700 text-[#1ed760] disabled:opacity-25 disabled:text-slate-700 transition cursor-pointer"
+                                    title="Mover para cima"
+                                    aria-label="Mover para cima"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={trackIndex === orderedSongs.length - 1}
+                                    onClick={() => handleMoveTrackDown(trackIndex)}
+                                    className="p-1 rounded bg-slate-900 border border-slate-800 hover:border-slate-700 text-[#1ed760] disabled:opacity-25 disabled:text-slate-700 transition cursor-pointer"
+                                    title="Mover para baixo"
+                                    aria-label="Mover para baixo"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
                               {/* Play Button */}
                               <button
                                 type="button"
