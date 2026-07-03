@@ -405,7 +405,7 @@ export default function Player({
     // Check if source changed
     if (audio.src !== currentTrack.audioUrl) {
       audio.src = currentTrack.audioUrl;
-      audio.preload = isDataSaver ? "metadata" : "auto";
+      audio.preload = "metadata";
       audio.load();
     }
 
