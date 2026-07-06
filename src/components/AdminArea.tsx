@@ -24,7 +24,8 @@ import {
   CreditCard,
   RefreshCw,
   Sparkles,
-  Megaphone
+  Megaphone,
+  Database
 } from 'lucide-react';
 import { Artist, ShareCardSettings } from '../types';
 import AnnouncementsManager from './admin/AnnouncementsManager';
@@ -32,7 +33,36 @@ import { dbService } from '../lib/db';
 import { motion } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, Timestamp } from 'firebase/firestore';
+
+const parseValToISO = (val: any): string => {
+  if (!val) return '';
+  if (typeof val.toDate === 'function') return val.toDate().toISOString();
+  if (val && typeof val === 'object' && typeof val._seconds === 'number') {
+    return new Date(val._seconds * 1000).toISOString();
+  }
+  if (val && typeof val === 'object' && typeof val.seconds === 'number') {
+    return new Date(val.seconds * 1000).toISOString();
+  }
+  if (typeof val === 'string') return val;
+  return '';
+};
+
+const formatDateBR = (isoString?: string) => {
+  if (!isoString) return '---';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '---';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch {
+    return '---';
+  }
+};
 
 interface AdminAreaProps {
   currentUser: Artist;
@@ -57,7 +87,7 @@ export default function AdminArea({
   customLogoUrl,
   onCustomLogoUrlChange
 }: AdminAreaProps) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago' | 'announcements'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago' | 'announcements' | 'infra'>('dashboard');
   const [users, setUsers] = useState<Artist[]>([]);
   
   // Appearance logo configurations (scale, visibility, and custom upload URL)
@@ -111,6 +141,45 @@ export default function AdminArea({
     message: string;
     isApiWarning?: boolean;
   } | null>(null);
+
+  interface InfraMetrics {
+    totalSongs: number;
+    totalAudioFiles: number;
+    totalSpaceUsedBytes: number;
+    r2FreeLimitPercent: number;
+    largestSong: {
+      title: string;
+      sizeBytes: number;
+      ownerName: string;
+      ownerId: string;
+    } | null;
+    averageSongSizeBytes: number;
+    topUserBySpace: {
+      userId: string;
+      userName: string;
+      songsCount: number;
+      totalSizeBytes: number;
+    } | null;
+    planStats: Record<string, { songsCount: number; spaceUsedBytes: number }>;
+    orphanFiles: {
+      id: string;
+      fileName: string;
+      fileSize: number;
+      createdAt?: string;
+    }[];
+    usersNearLimit: {
+      userId: string;
+      name: string;
+      plan: string;
+      songsCount: number;
+      limit: number;
+      percentage: number;
+    }[];
+  }
+
+  const [infraMetrics, setInfraMetrics] = useState<InfraMetrics | null>(null);
+  const [loadingInfra, setLoadingInfra] = useState(false);
+  const [infraError, setInfraError] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -442,6 +511,223 @@ export default function AdminArea({
       setLoading(false);
     }
   };
+
+  const loadInfraMetrics = async () => {
+    try {
+      setLoadingInfra(true);
+      setInfraError(null);
+
+      // 1. Fetch songs
+      const songsSnap = await getDocs(collection(db, 'songs'));
+      const songsList: any[] = [];
+      songsSnap.forEach(docSnap => {
+        songsList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+
+      // 2. Fetch audioFiles
+      const audioFilesSnap = await getDocs(collection(db, 'audioFiles'));
+      const audioFilesList: any[] = [];
+      audioFilesSnap.forEach(docSnap => {
+        audioFilesList.push({ id: docSnap.id, ...docSnap.data() });
+      });
+
+      // 3. Make sure we have latest users list
+      let currentUsers = users;
+      if (currentUsers.length === 0) {
+        currentUsers = await dbService.getAllUsersForAdmin();
+        setUsers(currentUsers);
+      }
+
+      const totalSongsCount = songsList.length;
+      const totalAudioFilesCount = audioFilesList.length;
+
+      // Calculate total physical space used based on audioFiles (which are R2 files)
+      let totalSpaceUsedBytes = 0;
+      audioFilesList.forEach(af => {
+        totalSpaceUsedBytes += Number(af.fileSize || af.size || 0);
+      });
+
+      // R2 free tier limit is 10 GB
+      const tenGBInBytes = 10 * 1024 * 1024 * 1024;
+      const r2FreeLimitPercent = totalSpaceUsedBytes > 0 ? (totalSpaceUsedBytes / tenGBInBytes) * 100 : 0;
+
+      // Find largest song from songsList
+      let maxSizeBytes = 0;
+      let largestSongObj: any = null;
+      songsList.forEach(s => {
+        const size = Number(s.fileSize || 0);
+        if (size > maxSizeBytes) {
+          maxSizeBytes = size;
+          largestSongObj = s;
+        }
+      });
+
+      let largestSong: { title: string; sizeBytes: number; ownerName: string; ownerId: string } | null = null;
+      if (largestSongObj) {
+        const ownerId = largestSongObj.ownerId || largestSongObj.userId || '';
+        const owner = currentUsers.find(u => u.userId === ownerId);
+        largestSong = {
+          title: largestSongObj.title || largestSongObj.originalFileName || 'Sem título',
+          sizeBytes: maxSizeBytes,
+          ownerName: owner ? owner.name : 'Artista Desconhecido',
+          ownerId: ownerId
+        };
+      }
+
+      // Average song size
+      const averageSongSizeBytes = totalSongsCount > 0 ? (totalSpaceUsedBytes / totalSongsCount) : 0;
+
+      // Group space by users
+      const userSpaceMap: Record<string, { songsCount: number; spaceUsedBytes: number }> = {};
+      songsList.forEach(s => {
+        const ownerId = s.ownerId || s.userId;
+        if (ownerId) {
+          if (!userSpaceMap[ownerId]) {
+            userSpaceMap[ownerId] = { songsCount: 0, spaceUsedBytes: 0 };
+          }
+          userSpaceMap[ownerId].songsCount++;
+          userSpaceMap[ownerId].spaceUsedBytes += Number(s.fileSize || 0);
+        }
+      });
+
+      // Top space user
+      let topUserBySpace: { userId: string; userName: string; songsCount: number; totalSizeBytes: number } | null = null;
+      let maxUserSpace = 0;
+      Object.entries(userSpaceMap).forEach(([uid, stats]) => {
+        if (stats.spaceUsedBytes > maxUserSpace) {
+          maxUserSpace = stats.spaceUsedBytes;
+          const userObj = currentUsers.find(u => u.userId === uid);
+          topUserBySpace = {
+            userId: uid,
+            userName: userObj ? userObj.name : 'Artista Desconhecido',
+            songsCount: stats.songsCount,
+            totalSizeBytes: stats.spaceUsedBytes
+          };
+        }
+      });
+
+      // Space and songs by plan
+      const planStats: Record<string, { songsCount: number; spaceUsedBytes: number }> = {
+        free: { songsCount: 0, spaceUsedBytes: 0 },
+        essencial: { songsCount: 0, spaceUsedBytes: 0 },
+        pro: { songsCount: 0, spaceUsedBytes: 0 },
+        premium: { songsCount: 0, spaceUsedBytes: 0 }
+      };
+
+      songsList.forEach(s => {
+        const ownerId = s.ownerId || s.userId;
+        const owner = currentUsers.find(u => u.userId === ownerId);
+        const plan = (owner?.plan || 'free').toLowerCase();
+        const validPlan = ['free', 'essencial', 'pro', 'premium'].includes(plan) ? plan : 'free';
+        planStats[validPlan].songsCount++;
+        planStats[validPlan].spaceUsedBytes += Number(s.fileSize || 0);
+      });
+
+      // Orphan files check / Possible media inconsistencies check
+      const referencedAudioFileIds = new Set();
+      const referencedStoragePaths = new Set();
+      const referencedAudioUrls = new Set();
+
+      songsList.forEach(s => {
+        if (s.audioFileId) referencedAudioFileIds.add(String(s.audioFileId).trim());
+        if (s.storagePath) {
+          const pathStr = String(s.storagePath).trim();
+          referencedStoragePaths.add(pathStr);
+          referencedStoragePaths.add(decodeURIComponent(pathStr));
+        }
+        if (s.audioUrl) {
+          const urlStr = String(s.audioUrl).trim();
+          referencedAudioUrls.add(urlStr);
+          referencedAudioUrls.add(decodeURIComponent(urlStr));
+        }
+      });
+
+      const orphanFiles: { id: string; fileName: string; fileSize: number; createdAt?: string }[] = [];
+      audioFilesList.forEach(af => {
+        const id = af.id;
+        const sPath = af.storagePath || af.path || '';
+        const afUrl = af.audioUrl || af.url || '';
+
+        const sPathDecoded = decodeURIComponent(sPath);
+        const afUrlDecoded = decodeURIComponent(afUrl);
+
+        const isReferenced = 
+          referencedAudioFileIds.has(id) || 
+          referencedStoragePaths.has(sPath) || 
+          referencedStoragePaths.has(sPathDecoded) ||
+          (sPath && Array.from(referencedStoragePaths).some(p => String(p).includes(sPath) || sPath.includes(String(p)))) ||
+          (sPathDecoded && Array.from(referencedStoragePaths).some(p => String(p).includes(sPathDecoded) || sPathDecoded.includes(String(p)))) ||
+          referencedAudioUrls.has(afUrl) ||
+          referencedAudioUrls.has(afUrlDecoded) ||
+          (afUrl && Array.from(referencedAudioUrls).some(u => String(u).includes(afUrl) || afUrl.includes(String(u)))) ||
+          (afUrlDecoded && Array.from(referencedAudioUrls).some(u => String(u).includes(afUrlDecoded) || afUrlDecoded.includes(String(u))));
+
+        if (!isReferenced) {
+          let dateStr: string | undefined = undefined;
+          if (af.createdAt) {
+            if (af.createdAt.seconds) {
+              dateStr = new Date(af.createdAt.seconds * 1000).toISOString();
+            } else if (af.createdAt instanceof Date) {
+              dateStr = af.createdAt.toISOString();
+            } else {
+              dateStr = af.createdAt;
+            }
+          }
+          orphanFiles.push({
+            id,
+            fileName: af.originalFileName || af.fileName || 'Arquivo sem nome',
+            fileSize: Number(af.fileSize || af.size || 0),
+            createdAt: dateStr
+          });
+        }
+      });
+
+      // Users close to limit
+      const usersNearLimit: { userId: string; name: string; plan: string; songsCount: number; limit: number; percentage: number }[] = [];
+      currentUsers.forEach(u => {
+        const limit = u.musicLimit !== undefined ? u.musicLimit : (u.plan === 'free' ? 3 : (u.plan === 'essencial' ? 10 : (u.plan === 'pro' ? 15 : 50)));
+        const songsCount = userSpaceMap[u.userId]?.songsCount || 0;
+        const percentage = limit > 0 ? (songsCount / limit) * 100 : 0;
+        if (percentage >= 80) {
+          usersNearLimit.push({
+            userId: u.userId,
+            name: u.name,
+            plan: u.plan || 'free',
+            songsCount,
+            limit,
+            percentage
+          });
+        }
+      });
+
+      usersNearLimit.sort((a, b) => b.percentage - a.percentage);
+
+      setInfraMetrics({
+        totalSongs: totalSongsCount,
+        totalAudioFiles: totalAudioFilesCount,
+        totalSpaceUsedBytes,
+        r2FreeLimitPercent,
+        largestSong,
+        averageSongSizeBytes,
+        topUserBySpace,
+        planStats,
+        orphanFiles,
+        usersNearLimit
+      });
+
+    } catch (err: any) {
+      console.error("Error loading infra metrics:", err);
+      setInfraError(err.message || "Não foi possível carregar as métricas de infraestrutura. Verifique a conexão com o banco de dados.");
+    } finally {
+      setLoadingInfra(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'infra') {
+      loadInfraMetrics();
+    }
+  }, [activeTab]);
 
   const loadSubscriptions = async () => {
     setLoadingSubscriptions(true);
@@ -955,6 +1241,15 @@ export default function AdminArea({
               </div>
             </button>
             <button
+              onClick={() => { setActiveTab('infra'); setSelectedUser(null); }}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium transition ${activeTab === 'infra' ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/5 text-orange-500 border-l-4 border-orange-500' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
+            >
+              <div className="flex items-center space-x-3">
+                <Database className="h-4 w-4" />
+                <span>Infraestrutura e Armazenamento</span>
+              </div>
+            </button>
+            <button
               onClick={() => { setActiveTab('announcements'); setSelectedUser(null); }}
               className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-sm font-medium transition ${activeTab === 'announcements' ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/5 text-orange-500 border-l-4 border-orange-500' : 'text-slate-400 hover:text-white hover:bg-slate-900'}`}
             >
@@ -1220,11 +1515,16 @@ export default function AdminArea({
 
               </div>
 
-              {/* Action Cards Grid */}
+              {/* Usuários Cadastrados Recentemente */}
               <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                  <h3 className="text-base font-bold text-white">Usuários Cadastrados Recentemente</h3>
-                  <button onClick={loadData} className="text-xs font-semibold text-orange-500 hover:text-orange-400 flex items-center">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse" /> Usuários Cadastrados Recentemente
+                    </h3>
+                    <p className="text-slate-400 text-xs">Últimos usuários cadastrados de verdade (ordenados por cadastro recente)</p>
+                  </div>
+                  <button onClick={loadData} className="text-xs font-semibold text-orange-500 hover:text-orange-400 flex items-center bg-slate-800 hover:bg-slate-750 px-3 py-1.5 rounded-xl transition">
                     <RefreshCw className="h-3 w-3 mr-1 animate-spin-slow" /> Atualizar
                   </button>
                 </div>
@@ -1234,29 +1534,64 @@ export default function AdminArea({
                 ) : users.length === 0 ? (
                   <div className="py-8 text-center text-slate-550 text-sm">Nenhum usuário cadastrado ainda.</div>
                 ) : (
-                  <div className="divide-y divide-slate-800">
-                    {users.slice(0, 5).map((u, idx) => (
-                      <div key={u.userId || `recent-${idx}`} className="py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <img src={u.avatarUrl || u.photoURL || u.profileImageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} alt="" className="h-10 w-10 rounded-full object-cover border border-slate-800" />
-                          <div>
-                            <h4 className="text-sm font-semibold text-white">{u.name}</h4>
-                            <p className="text-xs text-slate-400">{u.email}</p>
+                  <div className="divide-y divide-slate-800/60 space-y-4 md:space-y-0">
+                    {[...users]
+                      .sort((a, b) => {
+                        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        return dateB - dateA;
+                      })
+                      .slice(0, 5)
+                      .map((u, idx) => (
+                        <div key={u.userId || `recent-${idx}`} className="py-3.5 first:pt-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center space-x-3">
+                            <img 
+                              src={u.avatarUrl || u.photoURL || u.profileImageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"} 
+                              alt="" 
+                              className="h-10 w-10 rounded-xl object-cover border border-slate-800 shrink-0" 
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500";
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-semibold text-white truncate max-w-[200px]" title={u.name}>{u.name}</h4>
+                              <p className="text-xs text-slate-400 truncate max-w-[200px]" title={u.email}>{u.email}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`text-[10px] font-mono uppercase bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-750 ${
+                              u.plan === 'premium' ? 'text-orange-400' : (u.plan === 'pro' ? 'text-amber-400' : 'text-slate-400')
+                            }`}>
+                              {u.plan || 'free'}
+                            </span>
+                            
+                            <span className={`text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full border ${
+                              u.accessType === 'trial'
+                                ? 'bg-purple-950/40 text-purple-400 border-purple-900/30'
+                                : u.accessType === 'manual'
+                                  ? 'bg-blue-950/40 text-blue-400 border-blue-900/30'
+                                  : 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
+                            }`}>
+                              {u.accessType === 'trial' ? 'trial' : u.accessType === 'manual' ? 'manual' : 'assinante'}
+                            </span>
+                            
+                            <span className="text-xs text-slate-400 font-mono">
+                              Cadastrado em: {formatDateBR(u.createdAt)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center">
+                            <button 
+                              onClick={() => { setSelectedUser(u); setActiveTab('users'); }}
+                              className="text-xs font-semibold bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white px-3.5 py-1.5 rounded-xl transition border border-slate-750 hover:border-slate-700 shadow-md w-full md:w-auto text-center"
+                            >
+                              Gerenciar
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <span className={`text-[10px] font-mono uppercase bg-slate-800 px-2.5 py-0.5 rounded-full ${u.plan === 'premium' ? 'text-orange-400' : (u.plan === 'pro' ? 'text-amber-400' : 'text-slate-400')}`}>
-                            {u.plan}
-                          </span>
-                          <button 
-                            onClick={() => { setSelectedUser(u); setActiveTab('users'); }}
-                            className="text-xs bg-slate-800 hover:bg-slate-750 px-3 py-1 rounded-lg transition"
-                          >
-                            Gerenciar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    }
                   </div>
                 )}
               </div>
@@ -1428,6 +1763,140 @@ export default function AdminArea({
                   Cancelar
                 </button>
               </div>
+
+              {/* INFORMAÇÕES DE INFRAESTRUTURA E ARMAZENAMENTO DO USUÁRIO */}
+              {(() => {
+                const userSongs = dbService.getArtistMusics(selectedUser.userId) || [];
+                const userSpaceUsedBytes = userSongs.reduce((acc, song) => acc + Number(song.fileSize || 0), 0);
+                const userPlanLimit = selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : (selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50)));
+                const userPercentageSongsUsed = userPlanLimit > 0 ? (userSongs.length / userPlanLimit) * 100 : 0;
+
+                // Encontrar maior música
+                let userLargestSong: any = null;
+                let maxUserSongSize = 0;
+                userSongs.forEach(s => {
+                  const size = Number(s.fileSize || 0);
+                  if (size > maxUserSongSize) {
+                    maxUserSongSize = size;
+                    userLargestSong = s;
+                  }
+                });
+
+                // Último upload
+                let lastUploadDateStr = 'Nenhum';
+                let maxTime = 0;
+                userSongs.forEach(s => {
+                  if (s.createdAt) {
+                    const t = new Date(s.createdAt).getTime();
+                    if (t > maxTime) {
+                      maxTime = t;
+                      lastUploadDateStr = new Date(s.createdAt).toLocaleString('pt-BR');
+                    }
+                  }
+                });
+
+                // Determinar tipo de acesso
+                let accessType = 'Gratuito (Free)';
+                if (selectedUser.manualAccessEndsAt) {
+                  accessType = 'Manual / Cortesia';
+                } else if (selectedUser.mercadoPagoSubscriptionId || selectedUser.mercadoPagoPaymentId) {
+                  accessType = 'Assinante Mercado Pago';
+                } else if (selectedUser.plan !== 'free') {
+                  accessType = 'Outro / Cortesia';
+                }
+
+                // Verificar excesso de músicas
+                const hasExcessSongs = userSongs.length > userPlanLimit;
+                
+                // Verificar se plano expirou (se manualAccessEndsAt no passado)
+                const isExpired = selectedUser.manualAccessEndsAt && new Date(selectedUser.manualAccessEndsAt).getTime() < Date.now();
+
+                return (
+                  <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850 space-y-4">
+                    <h4 className="text-xs font-bold tracking-wider text-orange-400 uppercase flex items-center">
+                      <Database className="h-4 w-4 mr-1.5 text-orange-500" />
+                      Métricas Operacionais e Armazenamento do Usuário (Read-Only)
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs text-white">
+                      
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Plano Atual</span>
+                        <span className="font-bold text-orange-400 uppercase">{selectedUser.plan || 'free'}</span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Tipo de Acesso</span>
+                        <span className="font-bold text-slate-300">{accessType}</span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Status da Conta</span>
+                        <span className={`font-bold ${selectedUser.isBlocked ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {selectedUser.isBlocked ? 'BLOQUEADA' : 'LIBERADA'}
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Músicas em Catálogo</span>
+                        <span className="font-mono font-bold text-white">
+                          {userSongs.length} / {userPlanLimit} (limite do plano)
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Espaço Total Utilizado</span>
+                        <span className="font-mono font-bold text-white">
+                          {(userSpaceUsedBytes / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">% de Cota Consumida</span>
+                        <span className={`font-mono font-bold ${userPercentageSongsUsed >= 100 ? 'text-red-400 font-extrabold' : userPercentageSongsUsed >= 80 ? 'text-amber-400' : 'text-slate-300'}`}>
+                          {userPercentageSongsUsed.toFixed(0)}% das músicas
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1 sm:col-span-2 md:col-span-1">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Maior Música Enviada</span>
+                        <span className="font-mono block truncate font-semibold" title={userLargestSong ? userLargestSong.title : 'Nenhuma'}>
+                          {userLargestSong ? `${userLargestSong.title} (${(maxUserSongSize / (1024 * 1024)).toFixed(2)} MB)` : 'Nenhuma'}
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1 sm:col-span-2">
+                        <span className="text-[10px] text-slate-500 font-semibold block uppercase">Último Upload Realizado</span>
+                        <span className="font-mono font-bold text-slate-300">
+                          {lastUploadDateStr}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    {/* Alertas específicos de excesso e expiração */}
+                    {(hasExcessSongs || isExpired) && (
+                      <div className="p-3 bg-red-950/20 border border-red-900/20 text-red-400 text-xs rounded-xl space-y-1.5">
+                        <p className="font-bold flex items-center">
+                          <AlertTriangle className="h-4 w-4 mr-1.5 text-red-500" />
+                          Análise de Violação de Cota / Excesso:
+                        </p>
+                        <ul className="list-disc list-inside space-y-0.5 text-[11px] pl-1">
+                          {isExpired && (
+                            <li>
+                              O acesso manual expirou em <span className="font-mono font-bold">{new Date(selectedUser.manualAccessEndsAt!).toLocaleString('pt-BR')}</span>. O usuário foi revertido para o plano Free.
+                            </li>
+                          )}
+                          {hasExcessSongs && (
+                            <li>
+                              <span className="font-extrabold">Excesso de músicas detectado:</span> O usuário possui {userSongs.length} músicas ativas, ultrapassando o limite permitido de {userPlanLimit} músicas de seu plano atual.
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <form onSubmit={handleSaveUserEdit} className="space-y-6">
                 
@@ -2483,6 +2952,236 @@ export default function AdminArea({
           {activeTab === 'announcements' && (
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl animate-fade-in text-white">
               <AnnouncementsManager currentUserId={currentUser.userId} />
+            </div>
+          )}
+
+          {/* TAB: INFRASTRUCTURE & STORAGE OPERATION PANEL */}
+          {activeTab === 'infra' && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6 animate-fade-in text-white font-sans">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center">
+                    <Database className="h-5 w-5 text-orange-500 mr-2" />
+                    Infraestrutura e Armazenamento
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Painel operacional de leitura de armazenamento físico, distribuição de cota e alertas de infraestrutura.
+                  </p>
+                </div>
+                <button
+                  onClick={loadInfraMetrics}
+                  disabled={loadingInfra}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl font-bold transition flex items-center text-xs shrink-0 self-start sm:self-center"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 text-orange-500 mr-2 ${loadingInfra ? 'animate-spin' : ''}`} />
+                  Atualizar Dados
+                </button>
+              </div>
+
+              {loadingInfra ? (
+                <div className="py-16 text-center text-slate-500 text-sm flex flex-col items-center justify-center space-y-3">
+                  <RefreshCw className="h-8 w-8 text-orange-500 animate-spin" />
+                  <span>Carregando métricas de armazenamento e arquivos físicos do R2...</span>
+                </div>
+              ) : infraError ? (
+                <div className="p-5 bg-red-950/20 border border-red-900/30 rounded-2xl text-red-400 text-xs space-y-2">
+                  <p className="font-bold">⚠️ Falha ao carregar métricas:</p>
+                  <p className="font-mono">{infraError}</p>
+                </div>
+              ) : infraMetrics ? (
+                <div className="space-y-6">
+                  {/* Bento Grid Principal */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    
+                    <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Músicas em Catálogo</span>
+                      <div className="mt-2">
+                        <span className="text-2xl font-extrabold text-white">{infraMetrics.totalSongs}</span>
+                        <span className="text-[10px] text-slate-500 block">músicas registradas</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Arquivos Físicos R2</span>
+                      <div className="mt-2">
+                        <span className="text-2xl font-extrabold text-white">{infraMetrics.totalAudioFiles}</span>
+                        <span className="text-[10px] text-slate-500 block">arquivos no storage R2</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Espaço Estimado Usado</span>
+                      <div className="mt-2">
+                        <span className="text-2xl font-extrabold text-white">{(infraMetrics.totalSpaceUsedBytes / (1024 * 1024)).toFixed(2)} MB</span>
+                        <span className="text-[10px] text-slate-500 block">armazenamento físico total</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 border border-slate-850 rounded-2xl flex flex-col justify-between">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Cota Grátis R2 (10GB)</span>
+                      <div className="mt-2">
+                        <span className="text-2xl font-extrabold text-white">{infraMetrics.r2FreeLimitPercent.toFixed(4)}%</span>
+                        <div className="w-full bg-slate-800 h-1.5 rounded-full mt-1 overflow-hidden">
+                          <div className="bg-orange-500 h-full rounded-full" style={{ width: `${infraMetrics.r2FreeLimitPercent}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Segunda seção de estatísticas gerais */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    <div className="bg-slate-950/30 p-5 border border-slate-850 rounded-2xl space-y-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wide block">Média por Música</span>
+                      <p className="text-lg font-bold text-white">{(infraMetrics.averageSongSizeBytes / (1024 * 1024)).toFixed(2)} MB</p>
+                      <p className="text-[10px] text-slate-500">tamanho médio de arquivo de áudio</p>
+                    </div>
+
+                    <div className="bg-slate-950/30 p-5 border border-slate-850 rounded-2xl space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wide block">Maior Arquivo</span>
+                      {infraMetrics.largestSong ? (
+                        <>
+                          <p className="text-sm font-bold text-white truncate" title={infraMetrics.largestSong.title}>
+                            {infraMetrics.largestSong.title}
+                          </p>
+                          <p className="text-xs text-orange-400 font-semibold">
+                            {(infraMetrics.largestSong.sizeBytes / (1024 * 1024)).toFixed(2)} MB
+                          </p>
+                          <p className="text-[10px] text-slate-500 truncate">
+                            Artista: {infraMetrics.largestSong.ownerName}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-500">Nenhum arquivo de música encontrado.</p>
+                      )}
+                    </div>
+
+                    <div className="bg-slate-950/30 p-5 border border-slate-850 rounded-2xl space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wide block">Maior Consumidor de Espaço</span>
+                      {infraMetrics.topUserBySpace ? (
+                        <>
+                          <p className="text-sm font-bold text-white truncate" title={infraMetrics.topUserBySpace.userName}>
+                            {infraMetrics.topUserBySpace.userName}
+                          </p>
+                          <p className="text-xs text-orange-400 font-semibold">
+                            {(infraMetrics.topUserBySpace.totalSizeBytes / (1024 * 1024)).toFixed(2)} MB
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            Possui {infraMetrics.topUserBySpace.songsCount} músicas enviadas
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-500">Nenhum usuário com espaço medido.</p>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* Uso de espaço por plano */}
+                  <div className="bg-slate-950/20 border border-slate-850 rounded-2xl p-5 space-y-4">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">Espaço de Armazenamento por Plano</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {Object.entries(infraMetrics.planStats).map(([plan, stats]: [string, any]) => {
+                        const planLabels: Record<string, string> = {
+                          free: 'Free (Grátis)',
+                          essencial: 'Essencial (Básico)',
+                          pro: 'Pro (Intermediário)',
+                          premium: 'Premium (Completo)'
+                        };
+                        return (
+                          <div key={plan} className="bg-slate-950/60 p-4 border border-slate-850 rounded-xl space-y-2">
+                            <span className="text-[10px] font-bold text-orange-400 uppercase">{planLabels[plan] || plan}</span>
+                            <div className="space-y-0.5">
+                              <p className="text-sm font-extrabold text-white">{stats.songsCount} músicas</p>
+                              <p className="text-xs text-slate-400">{(stats.spaceUsedBytes / (1024 * 1024)).toFixed(2)} MB usados</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Usuários Próximos do Limite */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <div className="bg-slate-950/20 border border-slate-850 rounded-2xl p-5 space-y-4">
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-between">
+                        <span>Usuários Próximos de Limite</span>
+                        <span className="text-[9px] text-slate-500 lowercase">(&gt;= 80% do limite do plano)</span>
+                      </h4>
+                      
+                      {infraMetrics.usersNearLimit.length === 0 ? (
+                        <p className="text-xs text-slate-500 py-4 text-center">Nenhum usuário próximo ou acima do limite do plano atual.</p>
+                      ) : (
+                        <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                          {infraMetrics.usersNearLimit.map(user => (
+                            <div key={user.userId} className="bg-slate-950/50 p-3 rounded-xl border border-slate-850/60 flex items-center justify-between text-xs">
+                              <div>
+                                <p className="font-bold text-white truncate max-w-[180px]">{user.name}</p>
+                                <p className="text-[9px] text-slate-500 uppercase font-semibold">{user.plan} (limite: {user.limit})</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-mono font-bold text-white">{user.songsCount} / {user.limit} músicas</p>
+                                <p className={`text-[10px] font-bold ${user.percentage >= 100 ? 'text-red-400' : 'text-amber-400'}`}>
+                                  {user.percentage.toFixed(0)}% de uso
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Alerta de Possíveis Inconsistências de Mídia */}
+                    <div className="bg-slate-950/20 border border-slate-850 rounded-2xl p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center">
+                          <AlertTriangle className="h-4 w-4 text-amber-500 mr-1.5" />
+                          Possíveis Inconsistências de Mídia no R2
+                        </h4>
+                        <span className="bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-extrabold px-2 py-0.5 rounded-full">
+                          {infraMetrics.orphanFiles.length} detectadas
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                          Arquivos físicos presentes na coleção <code>audioFiles</code> que não estão vinculados a nenhuma música ativa cadastrada na coleção <code>songs</code>.
+                        </p>
+                        <p className="text-[10px] text-amber-400 bg-amber-500/5 border border-amber-500/10 rounded-lg p-2 font-semibold">
+                          ⚠️ Não apagar automaticamente. Verificação manual obrigatória.
+                        </p>
+                      </div>
+
+                      {infraMetrics.orphanFiles.length === 0 ? (
+                        <div className="p-4 bg-emerald-950/15 border border-emerald-900/20 text-emerald-400 text-xs text-center rounded-xl">
+                          Excelente! Não há nenhuma inconsistência de mídia identificada no seu armazenamento.
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                          {infraMetrics.orphanFiles.map(file => (
+                            <div key={file.id} className="bg-slate-950/50 p-3 rounded-xl border border-slate-850/60 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+                              <div className="truncate max-w-[240px]">
+                                <p className="font-semibold text-white truncate" title={file.fileName}>{file.fileName}</p>
+                                <p className="text-[9px] font-mono text-slate-500 truncate select-all">Hash / ID: {file.id}</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="font-bold text-amber-400">{(file.fileSize / (1024 * 1024)).toFixed(2)} MB</p>
+                                {file.createdAt && (
+                                  <p className="text-[9px] text-slate-500">
+                                    Enviado em: {new Date(file.createdAt).toLocaleDateString('pt-BR')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
 
