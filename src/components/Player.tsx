@@ -346,14 +346,11 @@ export default function Player({
     return () => clearInterval(interval);
   }, [currentTrack, isPlaying, isAdminView]);
   
-  // Data saver (3G/4G/5G) mode to restrict graphic re-renders and audio preloading
+  // Data saver (3G/cellular) mode to restrict graphic re-renders and audio preloading
   const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {
     try {
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('soundrive_datasaver_v2');
-        if (stored !== null) return stored === 'true';
-        
-        // Auto cellular connection, 3G/4G/5G, and browser data saver detection
+        // Auto cellular connection and browser data saver detection
         if (typeof navigator !== 'undefined' && 'connection' in navigator) {
           const conn = (navigator as any).connection;
           
@@ -380,7 +377,6 @@ export default function Player({
 
   useEffect(() => {
     try {
-      localStorage.setItem('soundrive_datasaver_v2', isDataSaver.toString());
       window.dispatchEvent(new CustomEvent('soundrive_datasaver_changed', { detail: isDataSaver }));
     } catch (e) {}
   }, [isDataSaver]);
@@ -462,16 +458,22 @@ export default function Player({
     if (!currentTrack) return;
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.somdrive.com.br';
-        const brandVersion = "v=3";
-        const SOMDRIVE_DEFAULT_ARTWORK = `${baseUrl}/somdrive-player-artwork-512.png?v=3`;
+        const fallbackBaseUrl = 'https://www.somdrive.com.br';
+        const SOMDRIVE_DEFAULT_ARTWORK = `${fallbackBaseUrl}/somdrive-player-artwork-512.png`;
+
+        const resolveAbsoluteUrl = (url: string): string => {
+          if (!url) return '';
+          if (url.startsWith('http://') || url.startsWith('https://')) return url;
+          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://www.somdrive.com.br';
+          return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+        };
 
         const isValidArtworkUrl = (url: any): boolean => {
           if (isDataSaver) return false; // Force fallback default lightweight logo in mobile/data saver mode
           if (typeof url !== 'string') return false;
           const cleaned = url.trim();
           if (cleaned.length === 0) return false;
-          if (!cleaned.startsWith("https://")) return false;
+          if (!cleaned.startsWith("https://") && !cleaned.startsWith("http://") && !cleaned.startsWith("/")) return false;
           const lower = cleaned.toLowerCase();
           if (lower.includes(".svg")) return false;
           if (lower.includes("favicon") && !lower.includes("somdrive-player")) return false;
@@ -482,32 +484,32 @@ export default function Player({
 
         const artwork = [
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-96.png?${brandVersion}`,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-96.png`,
             sizes: "96x96",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-128.png?${brandVersion}`,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-128.png`,
             sizes: "128x128",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-192.png?${brandVersion}`,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-192.png`,
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-256.png?${brandVersion}`,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-256.png`,
             sizes: "256x256",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : `${baseUrl}/somdrive-player-384.png?${brandVersion}`,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-384.png`,
             sizes: "384x384",
             type: "image/png",
           },
           {
-            src: hasValidCover ? currentTrack.coverUrl! : SOMDRIVE_DEFAULT_ARTWORK,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : SOMDRIVE_DEFAULT_ARTWORK,
             sizes: "512x512",
             type: "image/png",
           },

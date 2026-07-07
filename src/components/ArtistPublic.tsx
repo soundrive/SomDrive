@@ -324,13 +324,10 @@ export default function ArtistPublic({
   const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'composicoes' | 'sobre'>('composicoes');
 
-  // Invisible smart data saver state matching player's localStorage key
+  // Invisible smart data saver state matching player's in-memory key
   const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {
     try {
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('soundrive_datasaver_v2');
-        if (stored !== null) return stored === 'true';
-        
         if (typeof navigator !== 'undefined' && 'connection' in navigator) {
           const conn = (navigator as any).connection;
           if (conn?.saveData) return true;
@@ -345,7 +342,6 @@ export default function ArtistPublic({
 
   useEffect(() => {
     try {
-      localStorage.setItem('soundrive_datasaver_v2', isDataSaver.toString());
       window.dispatchEvent(new CustomEvent('soundrive_datasaver_changed', { detail: isDataSaver }));
     } catch (e) {}
   }, [isDataSaver]);
