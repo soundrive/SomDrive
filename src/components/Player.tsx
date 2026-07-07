@@ -362,22 +362,16 @@ export default function Player({
             return true;
           }
           
-          // If connection type is cellular (3G, 4G, 5G, or generic mobile data)
+          // If connection type is cellular (3G, or generic mobile data)
           if (conn?.type === 'cellular') {
             return true;
           }
 
-          // If the connection quality is classified as typical cellular bands
+          // If the connection quality is classified as typical cellular bands (slow-2g, 2g, 3g)
           const effective = conn?.effectiveType || '';
-          if (['cellular', 'slow-2g', '2g', '3g', '4g'].includes(effective)) {
+          if (['slow-2g', '2g', '3g'].includes(effective)) {
             return true;
           }
-        }
-
-        // Fallback: If it's a mobile device (touch primary and screen size), default to active saver on cellular to protect user data
-        if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
-          // If we are on a smartphone, assume they might be using mobile data and gently auto-optimize to preloading metadata only
-          return true;
         }
       }
     } catch (e) {}
@@ -387,8 +381,22 @@ export default function Player({
   useEffect(() => {
     try {
       localStorage.setItem('soundrive_datasaver_v2', isDataSaver.toString());
+      window.dispatchEvent(new CustomEvent('soundrive_datasaver_changed', { detail: isDataSaver }));
     } catch (e) {}
   }, [isDataSaver]);
+
+  useEffect(() => {
+    const handleCustomChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsDataSaver(customEvent.detail);
+      }
+    };
+    window.addEventListener('soundrive_datasaver_changed', handleCustomChange);
+    return () => {
+      window.removeEventListener('soundrive_datasaver_changed', handleCustomChange);
+    };
+  }, []);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -459,6 +467,7 @@ export default function Player({
         const SOMDRIVE_DEFAULT_ARTWORK = `${baseUrl}/somdrive-player-artwork-512.png?v=3`;
 
         const isValidArtworkUrl = (url: any): boolean => {
+          if (isDataSaver) return false; // Force fallback default lightweight logo in mobile/data saver mode
           if (typeof url !== 'string') return false;
           const cleaned = url.trim();
           if (cleaned.length === 0) return false;

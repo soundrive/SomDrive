@@ -323,6 +323,45 @@ export default function ArtistPublic({
   // Active states
   const [expandedLyricsTrackId, setExpandedLyricsTrackId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'composicoes' | 'sobre'>('composicoes');
+
+  // Invisible smart data saver state matching player's localStorage key
+  const [isDataSaver, setIsDataSaver] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('soundrive_datasaver_v2');
+        if (stored !== null) return stored === 'true';
+        
+        if (typeof navigator !== 'undefined' && 'connection' in navigator) {
+          const conn = (navigator as any).connection;
+          if (conn?.saveData) return true;
+          if (conn?.type === 'cellular') return true;
+          const effective = conn?.effectiveType || '';
+          if (['slow-2g', '2g', '3g'].includes(effective)) return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('soundrive_datasaver_v2', isDataSaver.toString());
+      window.dispatchEvent(new CustomEvent('soundrive_datasaver_changed', { detail: isDataSaver }));
+    } catch (e) {}
+  }, [isDataSaver]);
+
+  useEffect(() => {
+    const handleCustomChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsDataSaver(customEvent.detail);
+      }
+    };
+    window.addEventListener('soundrive_datasaver_changed', handleCustomChange);
+    return () => {
+      window.removeEventListener('soundrive_datasaver_changed', handleCustomChange);
+    };
+  }, []);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Custom context menus / shares
@@ -411,6 +450,7 @@ export default function ArtistPublic({
     let active = true;
 
     const loadData = async () => {
+      const startTime = Date.now();
       // Avoid redundant fetches if the parameters haven't changed (e.g. from slug to ID state updates)
       if (
         lastLoadedParamsRef.current &&
@@ -914,6 +954,10 @@ export default function ArtistPublic({
         if (active) {
           setIsLoading(false);
           setIsInitialLoadDone(true);
+          const loadDuration = Date.now() - startTime;
+          if (loadDuration > 1500) {
+            setIsDataSaver(true);
+          }
         }
       }
     };
@@ -1595,7 +1639,7 @@ export default function ArtistPublic({
             <div className="flex sm:flex-col items-center sm:items-stretch gap-4 sm:gap-0 mb-4 sm:mb-0 w-full">
               {/* Picture block */}
               <div className="w-[96px] h-[115px] sm:w-[150px] sm:h-[150px] lg:w-[130px] lg:h-[130px] xl:w-[160px] xl:h-[160px] sm:self-start rounded-xl bg-[#090d14] border border-zinc-800 overflow-hidden relative group shadow-md shrink-0 sm:mb-4">
-                {artist.avatarUrl || artist.photoURL || artist.profileImageUrl ? (
+                {(artist.avatarUrl || artist.photoURL || artist.profileImageUrl) && !isDataSaver ? (
                   <img 
                     src={artist.avatarUrl || artist.photoURL || artist.profileImageUrl} 
                     alt={artist.name}
@@ -1603,12 +1647,17 @@ export default function ArtistPublic({
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0c0f18] to-slate-950 font-black text-2xl text-zinc-650 font-mono">
-                    {(artist.name || 'S').substring(0, 1).toUpperCase()}
+                  /* High-end smart streaming CSS placeholder */
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-950 via-zinc-900 to-emerald-950/40 relative group-hover:scale-105 transition-transform duration-500">
+                    <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-inner">
+                      <span className="text-xl sm:text-2xl font-black text-[#10b981] tracking-tight font-sans">
+                        {(artist?.name || 'S').substring(0, 1).toUpperCase()}
+                      </span>
+                    </div>
                   </div>
                 )}
                 {/* Overlay styling */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#18181c]/80 via-transparent to-transparent opacity-90"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-[#18181c]/80 via-transparent to-transparent opacity-90 pointer-events-none"></div>
               </div>
 
               {/* Metadata Text Details */}

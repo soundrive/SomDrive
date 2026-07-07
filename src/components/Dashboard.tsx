@@ -1747,6 +1747,24 @@ export default function Dashboard({
       return;
     }
 
+    if (newAudioFile) {
+      const fileExt = '.' + newAudioFile.name.split('.').pop()?.toLowerCase();
+      const mimeLower = newAudioFile.type.toLowerCase();
+      const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
+      const isMp3Ext = fileExt === '.mp3';
+
+      if (!isMp3Mime && !isMp3Ext) {
+        setFormError('Formato de arquivo inválido! Por favor, selecione apenas arquivos no formato MP3.');
+        return;
+      }
+
+      const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+      if (newAudioFile.size > MAX_AUDIO_SIZE_BYTES) {
+        setFormError('Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente.');
+        return;
+      }
+    }
+
     setIsUploading(true);
     setUploadProgress(5);
 
@@ -4528,10 +4546,32 @@ export default function Dashboard({
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center text-center space-y-2 hover:border-orange-500/50 transition relative">
                   <input 
                     type="file" 
-                    accept="audio/*" 
+                    accept=".mp3,audio/mpeg" 
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
-                        setNewAudioFile(e.target.files[0]);
+                        const file = e.target.files[0];
+                        const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+                        const mimeLower = file.type.toLowerCase();
+                        const isMp3Mime = mimeLower === 'audio/mpeg' || mimeLower === 'audio/mp3' || mimeLower === 'audio/x-mpeg' || mimeLower === 'audio/x-mp3' || mimeLower === 'audio/mpeg3';
+                        const isMp3Ext = fileExt === '.mp3';
+
+                        if (!isMp3Mime && !isMp3Ext) {
+                          setFormError('Formato de arquivo inválido! Por favor, selecione apenas arquivos no formato MP3.');
+                          setNewAudioFile(null);
+                          e.target.value = '';
+                          return;
+                        }
+
+                        const MAX_AUDIO_SIZE_BYTES = 6 * 1024 * 1024;
+                        if (file.size > MAX_AUDIO_SIZE_BYTES) {
+                          setFormError('Este arquivo possui mais de 6 MB. Converta a música para MP3 em 96 ou 128 kbps e tente novamente.');
+                          setNewAudioFile(null);
+                          e.target.value = '';
+                          return;
+                        }
+
+                        setFormError('');
+                        setNewAudioFile(file);
                       }
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
