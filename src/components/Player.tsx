@@ -458,54 +458,30 @@ export default function Player({
     if (!currentTrack) return;
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
-        const fallbackBaseUrl = 'https://www.somdrive.com.br';
-        const SOMDRIVE_DEFAULT_ARTWORK = `${fallbackBaseUrl}/somdrive-player-512.png`;
-
-        const resolveAbsoluteUrl = (url: string): string => {
-          if (!url) return '';
-          if (url.startsWith('http://') || url.startsWith('https://')) return url;
-          const origin = 'https://www.somdrive.com.br';
-          return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
-        };
-
-        const isValidArtworkUrl = (url: any): boolean => {
-          if (isDataSaver) return false; // Force fallback default lightweight logo in mobile/data saver mode
-          if (typeof url !== 'string') return false;
-          const cleaned = url.trim();
-          if (cleaned.length === 0) return false;
-          if (!cleaned.startsWith("https://") && !cleaned.startsWith("http://") && !cleaned.startsWith("/")) return false;
-          const lower = cleaned.toLowerCase();
-          if (lower.includes(".svg")) return false;
-          if (lower.includes("favicon") && !lower.includes("somdrive-player")) return false;
-          return true;
-        };
-
-        const hasValidCover = currentTrack.coverUrl && isValidArtworkUrl(currentTrack.coverUrl);
-
-        const artwork = [
-          {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-96.png`,
-            sizes: "96x96",
-            type: "image/png",
-          },
-          {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-192.png`,
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-512.png`,
-            sizes: "512x512",
-            type: "image/png",
-          },
-        ];
-
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.title || "SomDrive",
-          artist: currentTrack.singer || currentTrack.composer || "SomDrive",
-          album: "SomDrive - Catálogo Musical",
-          artwork: artwork
+          artist: (currentTrack as any).artist || currentTrack.singer || currentTrack.composer || "SomDrive",
+          album: "SomDrive",
+          artwork: [
+            {
+              src: "https://www.somdrive.com.br/somdrive-player-96.png",
+              sizes: "96x96",
+              type: "image/png"
+            },
+            {
+              src: "https://www.somdrive.com.br/somdrive-player-192.png",
+              sizes: "192x192",
+              type: "image/png"
+            },
+            {
+              src: "https://www.somdrive.com.br/somdrive-player-512.png",
+              sizes: "512x512",
+              type: "image/png"
+            }
+          ]
         });
+
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
 
         navigator.mediaSession.setActionHandler('play', () => {
           onPlayPause();
@@ -523,7 +499,7 @@ export default function Player({
         console.warn("navigator.mediaSession setup failed:", err);
       }
     }
-  }, [currentTrack, onPlayPause, onPrev, onNext]);
+  }, [currentTrack, isPlaying, onPlayPause, onPrev, onNext]);
 
   if (!currentTrack) return null;
 
