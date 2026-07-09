@@ -396,6 +396,17 @@ export default function Player({
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Store unmemoized parent callbacks in refs to prevent useEffect triggers on every parent render
+  const onPlayPauseRef = useRef(onPlayPause);
+  const onNextRef = useRef(onNext);
+  const onPrevRef = useRef(onPrev);
+
+  useEffect(() => {
+    onPlayPauseRef.current = onPlayPause;
+    onNextRef.current = onNext;
+    onPrevRef.current = onPrev;
+  });
+
   // Synchronize audio element state
   useEffect(() => {
     if (!currentTrack) return;
@@ -413,10 +424,10 @@ export default function Player({
       audio.load();
     }
 
-    // Set callbacks
+    // Set callbacks using refs to prevent dependency updates
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration || 0);
-    const onEnded = () => onNext();
+    const onEnded = () => onNextRef.current();
 
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
@@ -438,7 +449,7 @@ export default function Player({
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', onEnded);
     };
-  }, [currentTrack, isPlaying, onNext]);
+  }, [currentTrack, isPlaying]);
 
   // Handle play/pause, volume, mute toggling
   useEffect(() => {
@@ -484,22 +495,22 @@ export default function Player({
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
 
         navigator.mediaSession.setActionHandler('play', () => {
-          onPlayPause();
+          onPlayPauseRef.current();
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-          onPlayPause();
+          onPlayPauseRef.current();
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => {
-          onPrev();
+          onPrevRef.current();
         });
         navigator.mediaSession.setActionHandler('nexttrack', () => {
-          onNext();
+          onNextRef.current();
         });
       } catch (err) {
         console.warn("navigator.mediaSession setup failed:", err);
       }
     }
-  }, [currentTrack, isPlaying, onPlayPause, onPrev, onNext]);
+  }, [currentTrack, isPlaying]);
 
   if (!currentTrack) return null;
 
