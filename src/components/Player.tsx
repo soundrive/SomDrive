@@ -459,12 +459,12 @@ export default function Player({
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
         const fallbackBaseUrl = 'https://www.somdrive.com.br';
-        const SOMDRIVE_DEFAULT_ARTWORK = `${fallbackBaseUrl}/somdrive-player-artwork-512.png`;
+        const SOMDRIVE_DEFAULT_ARTWORK = `${fallbackBaseUrl}/somdrive-player-512.png`;
 
         const resolveAbsoluteUrl = (url: string): string => {
           if (!url) return '';
           if (url.startsWith('http://') || url.startsWith('https://')) return url;
-          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://www.somdrive.com.br';
+          const origin = 'https://www.somdrive.com.br';
           return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
         };
 
@@ -489,27 +489,12 @@ export default function Player({
             type: "image/png",
           },
           {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-128.png`,
-            sizes: "128x128",
-            type: "image/png",
-          },
-          {
             src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-192.png`,
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-256.png`,
-            sizes: "256x256",
-            type: "image/png",
-          },
-          {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-384.png`,
-            sizes: "384x384",
-            type: "image/png",
-          },
-          {
-            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : SOMDRIVE_DEFAULT_ARTWORK,
+            src: hasValidCover ? resolveAbsoluteUrl(currentTrack.coverUrl!) : `${fallbackBaseUrl}/somdrive-player-512.png`,
             sizes: "512x512",
             type: "image/png",
           },

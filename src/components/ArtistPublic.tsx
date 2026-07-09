@@ -951,7 +951,7 @@ export default function ArtistPublic({
           setIsLoading(false);
           setIsInitialLoadDone(true);
           const loadDuration = Date.now() - startTime;
-          if (loadDuration > 1500) {
+          if (loadDuration > 3000) {
             setIsDataSaver(true);
           }
         }
@@ -1635,7 +1635,7 @@ export default function ArtistPublic({
             <div className="flex sm:flex-col items-center sm:items-stretch gap-4 sm:gap-0 mb-4 sm:mb-0 w-full">
               {/* Picture block */}
               <div className="w-[96px] h-[115px] sm:w-[150px] sm:h-[150px] lg:w-[130px] lg:h-[130px] xl:w-[160px] xl:h-[160px] sm:self-start rounded-xl bg-[#090d14] border border-zinc-800 overflow-hidden relative group shadow-md shrink-0 sm:mb-4">
-                {(artist.avatarUrl || artist.photoURL || artist.profileImageUrl) && !isDataSaver ? (
+                {(artist.avatarUrl || artist.photoURL || artist.profileImageUrl) ? (
                   <img 
                     src={artist.avatarUrl || artist.photoURL || artist.profileImageUrl} 
                     alt={artist.name}
