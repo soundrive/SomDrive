@@ -106,6 +106,13 @@ export interface Music {
   publicationDestination?: "general" | "repertoire";
   isActive?: boolean;
   isPublic?: boolean;
+
+  // Audio Optimization fields (Etapa 2B)
+  optimizedAudioUrl?: string;
+  optimizedFileSize?: number;
+  originalFileSize?: number;
+  audioOptimizationStatus?: "none" | "processing" | "ready" | "failed";
+  audioOptimizationSavings?: number;
 }
 
 export interface Analytics {

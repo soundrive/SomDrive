@@ -10,6 +10,10 @@ import mercadopagoWebhookHandler, { processPaymentStatus, runAutomaticReconcilia
 import createCheckoutPaymentHandler from "./api/mercadopago/create-checkout-payment";
 import checkIntegrationsHandler from "./api/admin/check-integrations";
 import sharp from "sharp";
+import fs from "fs";
+import crypto from "crypto";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 dotenv.config();
 
@@ -359,6 +363,166 @@ async function startServer() {
     }
   });
 
+  // Helper to update Firestore song documents with merge: true
+  async function updateSongFirestoreStatus(songId: string, userId: string, fields: any) {
+    try {
+      const rootDocRef = db.collection("songs").doc(songId);
+      const subDocRef = db.collection("artists").doc(userId).collection("musics").doc(songId);
+      
+      const fieldsWithTime = {
+        ...fields,
+        updatedAt: FieldValue.serverTimestamp()
+      };
+      
+      await rootDocRef.set(fieldsWithTime, { merge: true });
+      await subDocRef.set(fieldsWithTime, { merge: true });
+      console.log(`[Audio Optimizer] Updated Firestore for song ${songId}:`, fields);
+    } catch (err: any) {
+      console.error(`[Audio Optimizer] Failed to write Firestore status for song ${songId}:`, err);
+    }
+  }
+
+  // Controlled Synchronous Audio Optimization (Model A)
+  async function runSynchronousAudioOptimization(params: {
+    userId: string;
+    songId: string;
+    originalStoragePath: string;
+    originalBuffer: Buffer;
+    originalFileName: string;
+    originalType: string;
+    s3Client: S3Client;
+    R2_BUCKET_NAME: string;
+    R2_PUBLIC_BASE_URL: string;
+  }) {
+    // 1. check if flag is enabled
+    const isEnabled = process.env.ENABLE_AUDIO_OPTIMIZER === "true";
+    if (!isEnabled) {
+      console.log(`[Audio Optimizer] Disabled (ENABLE_AUDIO_OPTIMIZER is false). Skipping optimization for song: ${params.songId}`);
+      return;
+    }
+    
+    console.log(`[Audio Optimizer] Starting controlled synchronous optimization for song ${params.songId}`);
+    
+    const execAsync = promisify(exec);
+    const originalSize = params.originalBuffer.length;
+    const originalSizeMB = originalSize / (1024 * 1024);
+    
+    const randSuffix = crypto.randomBytes(4).toString("hex");
+    const tempOrigPath = path.join("/tmp", `orig_${params.songId}_${randSuffix}.mp3`);
+    const tempOptPath = path.join("/tmp", `opt_${params.songId}_${randSuffix}.mp3`);
+    
+    try {
+      // Ensure /tmp directory exists
+      if (!fs.existsSync("/tmp")) {
+        fs.mkdirSync("/tmp", { recursive: true });
+      }
+
+      // Write original buffer to disk
+      fs.writeFileSync(tempOrigPath, params.originalBuffer);
+      
+      // Probe metadata (bitrate, duration) using ffprobe
+      let bitrateKbps = 0;
+      try {
+        const { stdout } = await execAsync(`ffprobe -v error -show_entries format=duration,bit_rate -of default=noprint_wrappers=1 "${tempOrigPath}"`);
+        const bitrateMatch = stdout.match(/bit_rate=(\d+)/);
+        if (bitrateMatch) {
+          bitrateKbps = Math.round(parseInt(bitrateMatch[1], 10) / 1000);
+        }
+      } catch (err: any) {
+        console.warn(`[Audio Optimizer] ffprobe failed: ${err.message}`);
+      }
+      
+      // Apply rules
+      let skip = false;
+      let reason = "";
+      if (originalSize <= 2 * 1024 * 1024) {
+        skip = true;
+        reason = `Original file size is already small (<= 2 MB: ${originalSizeMB.toFixed(2)} MB).`;
+      } else if (bitrateKbps > 0 && bitrateKbps <= 128) {
+        skip = true;
+        reason = `Original bitrate is already low (<= 128 kbps: ${bitrateKbps} kbps).`;
+      }
+      
+      if (skip) {
+        console.log(`[Audio Optimizer] Skipped optimization for song ${params.songId}: ${reason}`);
+        await updateSongFirestoreStatus(params.songId, params.userId, {
+          audioOptimizationStatus: "none",
+          originalFileSize: originalSize
+        });
+        return;
+      }
+      
+      // Update firestore status to processing
+      await updateSongFirestoreStatus(params.songId, params.userId, {
+        audioOptimizationStatus: "processing",
+        originalFileSize: originalSize
+      });
+      
+      // Run FFmpeg to encode at 96kbps
+      console.log(`[Audio Optimizer] Encoding to 96 kbps for song ${params.songId}...`);
+      await execAsync(`ffmpeg -y -i "${tempOrigPath}" -codec:a libmp3lame -b:a 96k "${tempOptPath}"`);
+      
+      if (!fs.existsSync(tempOptPath)) {
+        throw new Error("Optimized file was not created by ffmpeg.");
+      }
+      
+      const optimizedSize = fs.statSync(tempOptPath).size;
+      const savingsPercent = (1 - (optimizedSize / originalSize)) * 100;
+      
+      if (savingsPercent < 15.0) {
+        console.log(`[Audio Optimizer] Optimization discarded: savings (${savingsPercent.toFixed(1)}%) < 15%`);
+        await updateSongFirestoreStatus(params.songId, params.userId, {
+          audioOptimizationStatus: "none",
+          originalFileSize: originalSize
+        });
+        return;
+      }
+      
+      // Upload optimized to R2 in a separate path
+      const originalDir = path.dirname(params.originalStoragePath);
+      const originalBase = path.basename(params.originalStoragePath);
+      const optimizedStoragePath = `${originalDir}/optimized_96k_${originalBase}`;
+      
+      const optimizedBuffer = fs.readFileSync(tempOptPath);
+      
+      console.log(`[Audio Optimizer] Uploading optimized file to R2: ${optimizedStoragePath}`);
+      const putCmd = new PutObjectCommand({
+        Bucket: params.R2_BUCKET_NAME,
+        Key: optimizedStoragePath,
+        Body: optimizedBuffer,
+        ContentType: "audio/mpeg",
+      });
+      await params.s3Client.send(putCmd);
+      
+      const baseSlash = params.R2_PUBLIC_BASE_URL.endsWith("/") ? params.R2_PUBLIC_BASE_URL.slice(0, -1) : params.R2_PUBLIC_BASE_URL;
+      const optimizedAudioUrl = `${baseSlash}/${optimizedStoragePath}`;
+      
+      // Update Firestore to ready!
+      await updateSongFirestoreStatus(params.songId, params.userId, {
+        optimizedAudioUrl,
+        optimizedFileSize: optimizedSize,
+        originalFileSize: originalSize,
+        audioOptimizationStatus: "ready",
+        audioOptimizationSavings: parseFloat(savingsPercent.toFixed(1))
+      });
+      console.log(`[Audio Optimizer] Optimization successfully completed and registered for song ${params.songId}! Saved: ${savingsPercent.toFixed(1)}%`);
+      
+    } catch (err: any) {
+      console.error(`[Audio Optimizer] Synchronous optimization failed for song ${params.songId}:`, err);
+      await updateSongFirestoreStatus(params.songId, params.userId, {
+        audioOptimizationStatus: "failed"
+      });
+    } finally {
+      // Cleanup /tmp
+      try {
+        if (fs.existsSync(tempOrigPath)) fs.unlinkSync(tempOrigPath);
+      } catch (_) {}
+      try {
+        if (fs.existsSync(tempOptPath)) fs.unlinkSync(tempOptPath);
+      } catch (_) {}
+    }
+  }
+
   // API Route for Cloudflare R2 proxy upload (bypasses CORS entirely)
   app.post("/api/r2-proxy-upload", express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
     try {
@@ -497,6 +661,23 @@ async function startServer() {
         storagePath,
         publicAudioUrl
       });
+
+      // Run controlled synchronous audio optimization (Model A)
+      try {
+        await runSynchronousAudioOptimization({
+          userId,
+          songId,
+          originalStoragePath: storagePath,
+          originalBuffer: fileBuffer,
+          originalFileName: fileName,
+          originalType: fileType,
+          s3Client: s3,
+          R2_BUCKET_NAME,
+          R2_PUBLIC_BASE_URL
+        });
+      } catch (err) {
+        console.error("[Audio Optimizer] Synchronous optimization error (upload remains intact):", err);
+      }
 
       return res.json({
         storagePath,

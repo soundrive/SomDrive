@@ -594,23 +594,91 @@ export default function Dashboard({
   // Custom multi-selection sharing in Shares and Dissemination Tab
   const [selectedTracksForCustomShare, setSelectedTracksForCustomShare] = useState<string[]>([]);
 
-
-
   // Warnings system for upcoming or post expiration cases
   const getPlanExpiryWarnings = () => {
+    const currentSongsCount = tracks.length;
+    const isFreePlan = (profile.plan || 'free').toLowerCase() === 'free';
+
+    // 1. If within the limit (currentSongsCount <= limitCount)
+    if (currentSongsCount <= limitCount) {
+      if (isFreePlan) {
+        return {
+          type: 'free_within_limit',
+          title: "Você está no SomDrive Free ✨",
+          message: `Seu plano gratuito permite até ${limitCount} músicas no catálogo. Faça upgrade quando quiser liberar mais espaço para suas composições.`,
+          showSelector: false,
+          actionButton: true,
+          buttonText: "Ver planos"
+        };
+      }
+
+      const endsAtStr = profile.subscriptionEndsAt || profile.trialEndsAt || profile.manualAccessEndsAt;
+      if (!endsAtStr) return null;
+
+      const now = new Date();
+      const endsAt = new Date(endsAtStr);
+      const diffMs = endsAt.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      
+      const isExpired = diffMs < 0;
+
+      if (!isExpired) {
+        if (diffDays <= 7 && diffDays >= 0) {
+          let warnText = "";
+          if (diffDays === 7) warnText = "Faltam exatamente 7 dias para o vencimento do seu plano.";
+          else if (diffDays === 3) warnText = "Faltam exatamente 3 dias para o vencimento do seu plano.";
+          else if (diffDays === 1) warnText = "Falta exatamente 1 dia para o vencimento do seu plano (Vence amanhã!).";
+          else if (diffDays === 0) warnText = "Seu plano vence HOJE! Renove agora para evitar o bloqueio do seu catálogo.";
+          else warnText = `Seu plano está próximo do vencimento (restam ${diffDays} dias).`;
+
+          return {
+            type: 'warn_near_expiry',
+            title: "Aviso importante de vencimento ⚠️",
+            message: `${warnText} Faça upgrade ou renove para manter seus limites ativados.`,
+            showSelector: false,
+            actionButton: true,
+            buttonText: "RENOVAR PLANO"
+          };
+        }
+      } else {
+        // Expired but within limit
+        if (isFreePlan) {
+          return {
+            type: 'free_within_limit',
+            title: "Você está no SomDrive Free ✨",
+            message: `Seu plano gratuito permite até ${limitCount} músicas no catálogo. Faça upgrade quando quiser liberar mais espaço para suas composições.`,
+            showSelector: false,
+            actionButton: true,
+            buttonText: "Ver planos"
+          };
+        } else {
+          return {
+            type: 'expired_within_limit',
+            title: "Assinatura Expirada ⚠️",
+            message: "Sua assinatura expirou. Suas músicas continuam ativas por estarem dentro do limite. Faça a renovação para reativar seus recursos premium e limites ampliados.",
+            showSelector: false,
+            actionButton: true,
+            buttonText: "RENOVAR PLANO"
+          };
+        }
+      }
+
+      return null;
+    }
+
+    // 2. If exceeding the limit (currentSongsCount > limitCount)
     const endsAtStr = profile.subscriptionEndsAt || profile.trialEndsAt || profile.manualAccessEndsAt;
-    if (!endsAtStr) return null;
+    const excedentes = currentSongsCount - limitCount;
 
     const now = new Date();
-    const endsAt = new Date(endsAtStr);
-    const diffMs = endsAt.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    
+    const endsAt = endsAtStr ? new Date(endsAtStr) : new Date();
+    const diffMs = endsAtStr ? endsAt.getTime() - now.getTime() : -1;
     const isExpired = diffMs < 0;
     const elapsedDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
     const daysUntilDeletion = 30 - elapsedDays;
 
-    if (!isExpired) {
+    if (!isExpired && endsAtStr) {
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       if (diffDays <= 7 && diffDays >= 0) {
         let warnText = "";
         if (diffDays === 7) warnText = "Faltam exatamente 7 dias para o vencimento do seu plano.";
@@ -622,39 +690,43 @@ export default function Dashboard({
         return {
           type: 'warn_near_expiry',
           title: "Aviso importante de vencimento ⚠️",
-          message: `${warnText} Escolha as 3 músicas que deseja manter ativas caso não renove.`,
+          message: `${warnText} Escolha as ${limitCount} músicas que deseja manter ativas caso não renove.`,
           showSelector: true,
           actionButton: true,
           buttonText: "RENOVAR PLANO"
         };
       }
     } else {
-      if (elapsedDays <= 5) {
+      const effectiveElapsed = endsAtStr ? elapsedDays : 0;
+      const effectiveDaysUntilDeletion = 30 - effectiveElapsed;
+
+      if (effectiveElapsed <= 5) {
         let deletionCountdown = "";
-        if (daysUntilDeletion === 15) deletionCountdown = " Faltam 15 dias para a exclusão definitiva de seus arquivos.";
-        else if (daysUntilDeletion === 5) deletionCountdown = " ATENÇÃO: Restam apenas 5 dias para a exclusão definitiva!";
-        else if (daysUntilDeletion === 1) deletionCountdown = " CRÍTICO: Resta apenas 1 dia para a exclusão definitiva!";
+        if (effectiveDaysUntilDeletion === 15) deletionCountdown = " Faltam 15 dias para a exclusão definitiva de seus arquivos.";
+        else if (effectiveDaysUntilDeletion === 5) deletionCountdown = " ATENÇÃO: Restam apenas 5 dias para a exclusão definitiva!";
+        else if (effectiveDaysUntilDeletion === 1) deletionCountdown = " CRÍTICO: Resta apenas 1 dia para a exclusão definitiva!";
 
         return {
           type: 'expired_1_to_5',
-          title: "Seu plano venceu ⚠️",
-          message: `Seu plano venceu. As músicas acima do limite gratuito estão temporariamente indisponíveis. Renove para restaurar todo o seu catálogo.${deletionCountdown}`,
+          title: "Músicas Excedentes Bloqueadas 🔒",
+          message: `Você possui ${excedentes} música(s) acima do limite do seu plano. Elas estão temporariamente indisponíveis. Renove ou faça upgrade para restaurar todo o seu catálogo.${deletionCountdown}`,
           showSelector: true,
           actionButton: true,
           buttonText: "RENOVAR PLANO"
         };
-      } else if (elapsedDays < 30) {
+      } else if (effectiveElapsed < 30) {
         let deletionCountdown = "";
-        if (daysUntilDeletion === 15) deletionCountdown = " Faltam exatamente 15 dias para a exclusão definitiva.";
-        else if (daysUntilDeletion === 5) deletionCountdown = " IMPORTANTE: Faltam exatamente 5 dias para a exclusão definitiva.";
-        else if (daysUntilDeletion === 1) deletionCountdown = " URGENTE: Falta apenas 1 dia para a exclusão definitiva!";
+        if (effectiveDaysUntilDeletion === 15) deletionCountdown = " Faltam exatamente 15 dias para a exclusão definitiva.";
+        else if (effectiveDaysUntilDeletion === 5) deletionCountdown = " IMPORTANTE: Faltam exatamente 5 dias para a exclusão definitiva.";
+        else if (effectiveDaysUntilDeletion === 1) deletionCountdown = " URGENTE: Falta apenas 1 dia para a exclusão definitiva!";
 
-        const deletionDate = new Date(endsAt.getTime() + 30 * 24 * 3600 * 1000).toLocaleDateString('pt-BR');
+        const baseTime = endsAtStr ? endsAt.getTime() : now.getTime();
+        const deletionDate = new Date(baseTime + 30 * 24 * 3600 * 1000).toLocaleDateString('pt-BR');
 
         return {
           type: 'expired_6_to_29',
           title: "Músicas Excedentes Bloqueadas 🔒",
-          message: `Seis arquivos excedentes estão armazenados temporariamente. Renove até ${deletionDate} para evitar a exclusão definitiva de seus arquivos em MP3.${deletionCountdown}`,
+          message: `Você possui ${excedentes} música(s) acima do limite do seu plano. Elas estão armazenadas temporariamente. Renove ou faça upgrade até ${deletionDate} para evitar a exclusão definitiva de seus arquivos em MP3.${deletionCountdown}`,
           showSelector: true,
           actionButton: true,
           buttonText: "RENOVAR PLANO"
@@ -663,7 +735,7 @@ export default function Dashboard({
         return {
           type: 'expired_over_30',
           title: "Músicas Excedentes Removidas 🗑️",
-          message: `O prazo de 30 dias de segurança terminou e seus arquivos excedentes foram excluídos permanentemente por falta de renovação. Seus dados cadastrais e as 3 faixas mantidas permanecem totalmente ativos e preservados.`,
+          message: `O prazo de 30 dias de segurança terminou e seus arquivos excedentes foram excluídos permanentemente por falta de renovação. Seus dados cadastrais e as ${limitCount} faixas mantidas permanecem totalmente ativos e preservados.`,
           showSelector: false,
           actionButton: false
         };
@@ -2175,6 +2247,33 @@ export default function Dashboard({
             </div>
           </div>
         )}
+
+        {/* Card Conversor de Áudio Grátis */}
+        <div className="p-4 bg-gradient-to-r from-slate-900/95 via-cyan-950/20 to-slate-900/95 border border-cyan-500/20 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg backdrop-blur-sm hover:border-cyan-500/40 transition duration-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-cyan-950/60 border border-cyan-500/20 text-cyan-400 rounded-xl shrink-0 mt-0.5">
+              <Music className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm md:text-base font-heading font-black uppercase text-white flex items-center gap-1.5 flex-wrap">
+                Conversor de Áudio Grátis
+                <span className="px-1.5 py-0.5 bg-cyan-950/40 text-cyan-400 text-[8px] font-mono font-bold tracking-wider rounded border border-cyan-400/20 uppercase">Ferramenta</span>
+              </h4>
+              <p className="text-slate-300 text-xs md:text-sm leading-relaxed max-w-3xl">
+                Deixe sua música mais leve antes de enviar ao SomDrive. Converta para MP3 96 kbps e ajude o áudio a tocar melhor no celular e no carro.
+              </p>
+            </div>
+          </div>
+          <a
+            href="https://conversor.somdrive.com.br"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition hover:from-cyan-400 hover:to-blue-400 hover:scale-102 shrink-0 self-start md:self-center shadow-md shadow-cyan-500/10"
+          >
+            Converter áudio agora
+            <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
+          </a>
+        </div>
 
         {/* METRICS Bento Block */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">

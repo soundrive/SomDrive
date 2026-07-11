@@ -256,6 +256,7 @@ export default function Player({
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isMobileExpanded, setIsMobileExpanded] = useState(true);
+  const [failedOptimizedTracks, setFailedOptimizedTracks] = useState<Record<string, boolean>>({});
 
   // Reliable 5-second play-time tracking with 30-second browser deduplication
   const playTimeRef = useRef<number>(0);
@@ -417,9 +418,14 @@ export default function Player({
 
     const audio = audioRef.current;
     
+    // Resolve targeted audio URL to play based on optimization
+    const hasOptimized = !!(currentTrack.optimizedAudioUrl && currentTrack.audioOptimizationStatus === "ready");
+    const tryOptimized = hasOptimized && !failedOptimizedTracks[currentTrack.trackId];
+    const targetUrl = tryOptimized ? currentTrack.optimizedAudioUrl! : currentTrack.audioUrl;
+
     // Check if source changed
-    if (audio.src !== currentTrack.audioUrl) {
-      audio.src = currentTrack.audioUrl;
+    if (audio.src !== targetUrl) {
+      audio.src = targetUrl;
       audio.preload = "metadata";
       audio.load();
     }
@@ -429,9 +435,21 @@ export default function Player({
     const updateDuration = () => setDuration(audio.duration || 0);
     const onEnded = () => onNextRef.current();
 
+    const onError = (e: Event) => {
+      console.warn("Audio element error triggered:", audio.error);
+      if (tryOptimized) {
+        console.log("Optimized audio failed to load. Falling back to original URL:", currentTrack.audioUrl);
+        setFailedOptimizedTracks(prev => ({
+          ...prev,
+          [currentTrack.trackId]: true
+        }));
+      }
+    };
+
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
 
     // Apply active volume state
     audio.volume = isMuted ? 0 : volume;
@@ -448,8 +466,9 @@ export default function Player({
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
-  }, [currentTrack, isPlaying]);
+  }, [currentTrack, isPlaying, failedOptimizedTracks]);
 
   // Handle play/pause, volume, mute toggling
   useEffect(() => {
