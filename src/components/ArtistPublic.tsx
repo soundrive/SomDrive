@@ -35,7 +35,7 @@ import {
   Code,
   ShieldAlert
 } from 'lucide-react';
-import { Artist, Music as Track, Analytics, Repertoire } from '../types';
+import { Artist, Music as Track, Analytics, Repertoire, getCleanComposer } from '../types';
 import { dbService } from '../lib/db';
 import { BrandLogo } from './BrandLogo';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -593,6 +593,9 @@ export default function ArtistPublic({
                         audioUrl: sd.audioUrl || sd.fileUrl || '',
                         coverUrl: sd.coverUrl || '',
                         lyrics: sd.lyrics || '',
+                        composer: sd.composer || sd.author || '',
+                        singer: sd.singer || sd.performer || '',
+                        performer: sd.performer || '',
                         status: sd.status || 'active',
                         genre: sd.genre || '',
                         duration: sd.duration || 0,
@@ -629,6 +632,9 @@ export default function ArtistPublic({
                           audioUrl: sd.audioUrl || sd.fileUrl || '',
                           coverUrl: sd.coverUrl || '',
                           lyrics: sd.lyrics || '',
+                          composer: sd.composer || sd.author || '',
+                          singer: sd.singer || sd.performer || '',
+                          performer: sd.performer || '',
                           status: sd.status || 'active',
                           genre: sd.genre || '',
                           duration: sd.duration || 0,
@@ -768,6 +774,9 @@ export default function ArtistPublic({
                       audioUrl: sd.audioUrl || sd.fileUrl || '',
                       coverUrl: sd.coverUrl || '',
                       lyrics: sd.lyrics || '',
+                      composer: sd.composer || sd.author || '',
+                      singer: sd.singer || sd.performer || '',
+                      performer: sd.performer || '',
                       status: sd.status || 'active',
                       genre: sd.genre || '',
                       duration: sd.duration || 0,
@@ -804,6 +813,9 @@ export default function ArtistPublic({
                         audioUrl: sd.audioUrl || sd.fileUrl || '',
                         coverUrl: sd.coverUrl || '',
                         lyrics: sd.lyrics || '',
+                        composer: sd.composer || sd.author || '',
+                        singer: sd.singer || sd.performer || '',
+                        performer: sd.performer || '',
                         status: sd.status || 'active',
                         genre: sd.genre || '',
                         duration: sd.duration || 0,
@@ -1471,11 +1483,9 @@ export default function ArtistPublic({
                           <h4 className={`text-base font-extrabold uppercase truncate tracking-wide ${isCurrentlyPlaying ? 'text-[#84cc16]' : 'text-zinc-100'}`}>
                             {track.title}
                           </h4>
-                          {track.composer && (
-                            <p className="text-xs text-zinc-500 font-mono uppercase mt-0.5 truncate">
-                              Autor / Compositor: {track.composer}
-                            </p>
-                          )}
+                          <p className="text-xs text-zinc-500 font-mono uppercase mt-0.5 truncate">
+                            Autor / Compositor: {getCleanComposer(track, track.artistName || artist?.name || '')}
+                          </p>
                           {track.description && typeof track.description === 'string' && track.description.trim() && (
                             <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed line-clamp-2 font-sans pr-2 normal-case">
                               {track.description}
@@ -2096,11 +2106,9 @@ export default function ArtistPublic({
                               {track.title}
                             </h4>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 mt-0.5 min-w-0">
-                              {track.composer && (
-                                <p className="text-[12px] sm:text-[12px] text-zinc-500 font-mono uppercase truncate">
-                                  Autor: {track.composer}
-                                </p>
-                              )}
+                              <p className="text-[12px] sm:text-[12px] text-zinc-500 font-mono uppercase truncate">
+                                Autor: {getCleanComposer(track, track.artistName || artist?.name || '')}
+                              </p>
                               <span className="inline-flex self-start px-1.5 py-[2px] bg-zinc-900 border border-zinc-800 text-zinc-350 font-mono text-[10px] sm:text-[11px] font-bold rounded uppercase shrink-0">
                                 {track.genre || 'Sertanejo'}
                               </span>

@@ -113,6 +113,7 @@ export interface Music {
   originalFileSize?: number;
   audioOptimizationStatus?: "none" | "processing" | "ready" | "failed";
   audioOptimizationSavings?: number;
+  artistName?: string;
 }
 
 export interface Analytics {
@@ -202,5 +203,87 @@ export interface Announcement {
   updatedAt: string; // ISO string in UI, Timestamp in DB
   createdBy: string;
 }
+
+export function getCleanComposer(
+  track?: { composer?: string; artistName?: string; singer?: string; genre?: string },
+  catalogArtistName?: string
+ ): string {
+   if (!track) return catalogArtistName || '';
+   const artist = (catalogArtistName || track.artistName || '').trim();
+   const composer = (track.composer || '').trim();
+   const genre = (track.genre || '').trim();
+   
+   const lowerComposer = composer.toLowerCase();
+   
+   const exactGenres = [
+     'sertanejo',
+     'sertanejo universitário',
+     'sertanejo universitario',
+     'modão',
+     'modao',
+     'arrocha',
+     'piseiro',
+     'forró',
+     'forro',
+     'pisadinha',
+     'pagode',
+     'samba',
+     'pop',
+     'rock',
+     'funk',
+     'gospel',
+     'mpb',
+     'trap',
+     'rap',
+     'reggae',
+     'axé',
+     'axe',
+     'country',
+     'bachata',
+     'brega',
+     'bossa nova',
+     'romântico',
+     'romantico',
+     'lambada',
+     'catálogo',
+     'catalogo'
+   ];
+ 
+   const lowerAdminTerms = [
+     'starnejo',
+     'sertanejo premier',
+     'video premier',
+     'somdrive',
+     'suporte somdrive',
+     'admin',
+     'administrador',
+     'som drive',
+     'star nejo',
+     'sertanejopremier',
+     'videopremier',
+     'suporte',
+     'teste',
+     'test',
+     'administrador logado',
+     'conta de teste'
+   ];
+ 
+   // Use exact matching for genres to prevent false positives like "Raphael" (which contains "rap")
+   const isGenreOrStyle = exactGenres.includes(lowerComposer);
+   
+   // Admin names should still be blocked if they appear as substrings since they represent system default text
+   const isAdminName = lowerAdminTerms.some(term => lowerComposer.includes(term)) ||
+     lowerComposer === 'starnejo' ||
+     lowerComposer === 'somdrive';
+ 
+   // Also check if composer field is equal to genre field (case-insensitive)
+   const matchesGenreField = genre && lowerComposer === genre.toLowerCase();
+   
+   if (!composer || isGenreOrStyle || isAdminName || matchesGenreField) {
+     return artist || 'SomDrive';
+   }
+   
+   return composer;
+ }
 
 

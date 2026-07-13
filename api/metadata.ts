@@ -873,7 +873,7 @@ export default async function handler(req: any, res: any) {
 
     if (repertoire) {
       titleText = `${repertoire.name} — ${artist.name} | SomDrive`;
-      descText = `Ouça este repertório com ${repertoire.trackCount} faixas no SomDrive.`;
+      descText = `Ouça este repertório com ${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'faixa' : 'faixas'} no SomDrive.`;
       canonicalUrl = `${appBaseUrl}/s/${artistSlug}/repertorio/${repertoire.slug || repertoire.id}`;
     } else {
       titleText = `Catálogo musical de ${artist.name} | SomDrive`;

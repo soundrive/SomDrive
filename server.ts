@@ -1273,8 +1273,8 @@ async function startServer() {
       let customDescription = `Ouça músicas e composições de ${formattedName} compartilhadas no SomDrive.`;
 
       if (repertoireId && repertoireName && !isRepertoirePrivate) {
-        customTitle = `${repertoireName} — Pasta de ${formattedName} | SomDrive`;
-        customDescription = `Acesse e ouça o repertório "${repertoireName}" de ${formattedName} com ${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'faixa' : 'faixas'} no SomDrive.`;
+        customTitle = `${repertoireName} — ${formattedName} | SomDrive`;
+        customDescription = `Ouça este repertório com ${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'faixa' : 'faixas'} no SomDrive.`;
       }
 
       const ogPayload = `
@@ -2342,12 +2342,15 @@ async function startServer() {
     let descText = subtitle;
 
     if (isRepertoire) {
-      pillText = "PASTA DE MÚSICAS";
+      pillText = "REPERTÓRIO DIGITAL";
       mainTitle = escapeXml((repertoireName || "Pasta Compartilhada").trim().toUpperCase());
-      if (mainTitle.length > 24) {
-        mainTitle = mainTitle.substring(0, 23) + "...";
+      if (mainTitle.length > 28) {
+        mainTitle = mainTitle.substring(0, 27) + "...";
       }
-      composerText = `por ${cleanName}`;
+      composerText = `POR ${cleanName}`;
+      if (composerText.length > 28) {
+        composerText = composerText.substring(0, 27) + "...";
+      }
       descText = `${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'MÚSICA AUTORAL' : 'MÚSICAS AUTORAIS'} \u2022 ${cleanGenre}`;
     }
 
@@ -2545,10 +2548,10 @@ async function startServer() {
     </g>
 
     <!-- Main Title -->
-    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="${isRepertoire ? 38 : 44}" fill="#ffffff" letter-spacing="-1px">${mainTitle}</text>
+    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="${isRepertoire ? 42 : 44}" fill="#ffffff" letter-spacing="-1px">${mainTitle}</text>
 
     <!-- Composer Name -->
-    <text x="0" y="165" class="title-text" font-size="${isRepertoire ? 46 : 52}" font-weight="850" filter="url(#shadow)" letter-spacing="-1">${composerText}</text>
+    <text x="0" y="160" font-family="'Space Grotesk', -apple-system, sans-serif" font-size="${isRepertoire ? 32 : 52}" font-weight="800" fill="${isRepertoire ? '#1ed760' : '#ffffff'}" filter="url(#shadow)" letter-spacing="-0.5px">${composerText}</text>
 
     <!-- City and Music genre info -->
     <text x="0" y="215" class="sub-text" font-size="20" fill="${isRepertoire ? '#1ed760' : '#9AA6B2'}">${descText}</text>

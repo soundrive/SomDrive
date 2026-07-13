@@ -452,13 +452,16 @@ export default async function handler(req: any, res: any) {
     const isRepertoire = !!repertoire;
 
     if (repertoire) {
-      pillText = "REPERTÓRIO MUSICAL";
+      pillText = "REPERTÓRIO DIGITAL";
       mainTitle = escapeXml((repertoire.name || "Pasta Compartilhada").trim().toUpperCase());
-      if (mainTitle.length > 24) {
-        mainTitle = mainTitle.substring(0, 23) + "...";
+      if (mainTitle.length > 28) {
+        mainTitle = mainTitle.substring(0, 27) + "...";
       }
-      composerText = `por ${cleanName}`;
-      descText = `${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'MÚSICA' : 'MÚSICAS'}`;
+      composerText = `POR ${cleanName}`;
+      if (composerText.length > 28) {
+        composerText = composerText.substring(0, 27) + "...";
+      }
+      descText = `${repertoire.trackCount} ${repertoire.trackCount === 1 ? 'MÚSICA AUTORAL' : 'MÚSICAS AUTORAIS'}`;
     }
 
     const initialLetter = escapeXml((repertoire ? (repertoire.name || "P") : (artist.name || "S")).trim().substring(0, 1).toUpperCase());
@@ -679,9 +682,9 @@ export default async function handler(req: any, res: any) {
     </g>
     `}
 
-    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="${isRepertoire ? 38 : 44}" fill="#ffffff" letter-spacing="-1px">${mainTitle}</text>
+    <text x="0" y="90" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="850" font-size="${isRepertoire ? 42 : 44}" fill="#ffffff" letter-spacing="-1px">${mainTitle}</text>
 
-    <text x="0" y="165" class="title-text" font-size="${isRepertoire ? 46 : 52}" font-weight="850" filter="url(#shadow)" letter-spacing="-1">${composerText}</text>
+    <text x="0" y="160" font-family="'Space Grotesk', -apple-system, sans-serif" font-size="${isRepertoire ? 32 : 52}" font-weight="800" fill="${isRepertoire ? '#1ed760' : '#ffffff'}" filter="url(#shadow)" letter-spacing="-0.5px">${composerText}</text>
 
     <text x="0" y="215" class="sub-text" font-size="20" fill="${isRepertoire ? folderColor : '#9AA6B2'}">${descText}</text>
 

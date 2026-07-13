@@ -25,7 +25,7 @@ import {
   List,
   ChevronDown
 } from 'lucide-react';
-import { Music } from '../types';
+import { Music, getCleanComposer } from '../types';
 
 // Premium Soundrive custom curly-ribbon wireframe brand logo (S) with emerald gradient
 const SLogoIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -490,7 +490,7 @@ export default function Player({
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.title || "SomDrive",
-          artist: (currentTrack as any).artist || currentTrack.singer || currentTrack.composer || "SomDrive",
+          artist: getCleanComposer(currentTrack, currentTrack?.artistName) || "SomDrive",
           album: "SomDrive",
           artwork: [
             {
@@ -679,7 +679,7 @@ export default function Player({
               {currentTrack.title}
             </h1>
             <p className="text-[10px] sm:text-xs text-zinc-400 font-mono tracking-wide mt-0.5">
-              Auto: <span className="font-bold text-zinc-300">{currentTrack.singer || currentTrack.composer || "STARNEJO"}</span>
+              Autor: <span className="font-bold text-zinc-300">{getCleanComposer(currentTrack, currentTrack?.artistName)}</span>
             </p>
           </div>
         </div>
@@ -764,7 +764,7 @@ export default function Player({
                             {track.title}
                           </p>
                           <p className="text-[9.5px] text-zinc-500 font-mono tracking-wide truncate mt-0.5">
-                            {track.singer || track.composer || "STARNEJO"}
+                            {getCleanComposer(track, track?.artistName)}
                           </p>
                         </div>
                       </div>
@@ -928,7 +928,7 @@ export default function Player({
                       {currentTrack.title}
                     </h4>
                     <p className="text-[10px] text-[#10b981]/90 uppercase font-mono tracking-wider font-extrabold mt-0.5 truncate">
-                      {currentTrack.singer || currentTrack.composer || "STARNEJO"}
+                      {getCleanComposer(currentTrack, currentTrack?.artistName)}
                     </p>
                   </div>
                 </div>
@@ -1011,7 +1011,7 @@ export default function Player({
                         {currentTrack.title}
                       </h4>
                       <p id="player-track-artist-mobile" className="text-[10px] text-[#10b981] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-1.5">
-                        {currentTrack.singer || "STARNEJO"}
+                        {getCleanComposer(currentTrack, currentTrack?.artistName)}
                         {!isSharedFolderView && (
                           <span className="text-[7.5px] font-sans font-black text-[#10b981] whitespace-nowrap bg-[#10b981]/10 border border-[#10b981]/25 px-1.2 py-[1px] rounded leading-none shrink-0 scale-95 origin-left">
                             VOLTAR 📁
@@ -1173,7 +1173,7 @@ export default function Player({
               </div>
               
               <p id="player-track-artist" className="text-[10px] sm:text-xs text-[#10b981] uppercase font-mono tracking-wider font-extrabold mt-1.5 leading-none flex items-center gap-2">
-                {currentTrack.singer || "STARNEJO"}
+                {getCleanComposer(currentTrack, currentTrack?.artistName)}
                 {!isSharedFolderView && (
                   <span className="text-[8px] font-sans font-bold text-zinc-400 border border-zinc-850 rounded-full px-2 py-0.5 bg-zinc-950 group-hover/desktop-meta:border-[#10b981]/45 group-hover/desktop-meta:text-[#10b981] transition-all whitespace-nowrap leading-none">
                     VER COMPOSITOR 📁
@@ -1346,7 +1346,7 @@ export default function Player({
           <div className="space-y-1.5 text-[11px] text-zinc-300 leading-relaxed">
             <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Música:</strong> {currentTrack.title}</p>
             <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Intérprete:</strong> {currentTrack.singer || "Não especificado"}</p>
-            {currentTrack.composer && <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Compositores:</strong> {currentTrack.composer}</p>}
+            {currentTrack.composer && <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Compositores:</strong> {getCleanComposer(currentTrack, currentTrack?.artistName)}</p>}
             {currentTrack.genre && <p><strong className="text-zinc-500 font-bold uppercase tracking-wide">Estilo:</strong> {currentTrack.genre}</p>}
             {currentTrack.description && (
               <p className="mt-2 text-zinc-400 italic border-l-2 border-[#10b981] pl-2 py-0.5 leading-relaxed bg-zinc-900/30 rounded-r">
