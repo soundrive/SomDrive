@@ -2710,8 +2710,22 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    
+    // Configure aggressive caching for Vite's hashed/versioned production assets under /assets
+    app.use('/assets', express.static(path.join(distPath, 'assets'), {
+      maxAge: '365d',
+      immutable: true,
+      fallthrough: false
+    }));
+
+    // Serve other standard static files normally
+    app.use(express.static(distPath, {
+      maxAge: '1h'
+    }));
+
     app.get('*', (req, res) => {
+      // Do not cache index.html/SPA shell to ensure users receive immediate updates
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

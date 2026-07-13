@@ -1,17 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { dbService } from './lib/db';
 import { Artist, Music as Track } from './types';
-import LandingPage from './components/LandingPage';
-import AuthScreen from './components/AuthScreen';
-import Dashboard from './components/Dashboard';
 import ArtistPublic from './components/ArtistPublic';
 import Player from './components/Player';
-import AdminArea from './components/AdminArea';
-import PaymentReturnScreen from './components/PaymentReturnScreen';
 import { ShieldAlert } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { onSnapshot, doc } from 'firebase/firestore';
+
+// Lazy load heavy views to optimize initial bundle size for public catalogs
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const AuthScreen = lazy(() => import('./components/AuthScreen'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const AdminArea = lazy(() => import('./components/AdminArea'));
+const PaymentReturnScreen = lazy(() => import('./components/PaymentReturnScreen'));
+
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="h-8 w-8 rounded-full border-2 border-t-emerald-500 border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+      <p className="text-slate-400 text-sm font-medium tracking-wide">Carregando SomDrive...</p>
+    </div>
+  </div>
+);
 
 export default function App() {
   // SPA Routing state sync with address bar
@@ -340,96 +351,98 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 font-sans antialiased text-white">
       
       {/* Route Views Switching Router */}
-      {currentView === 'landing' && (
-        <LandingPage 
-          onNavigate={handleNavigate} 
-          currentUser={currentUser} 
-          onLogout={handleLogout} 
-          logoScale={logoScale}
-          showLogo={showLogo}
-          customLogoUrl={customLogoUrl}
-        />
-      )}
+      <Suspense fallback={<LoadingFallback />}>
+        {currentView === 'landing' && (
+          <LandingPage 
+            onNavigate={handleNavigate} 
+            currentUser={currentUser} 
+            onLogout={handleLogout} 
+            logoScale={logoScale}
+            showLogo={showLogo}
+            customLogoUrl={customLogoUrl}
+          />
+        )}
 
-      {currentView === 'auth' && (
-        <AuthScreen 
-          onNavigate={handleNavigate} 
-          onLoginSuccess={handleLoginSuccess}
-          startInRegister={routePayload?.isRegister || false}
-          initPremium={routePayload?.startPremium || false}
-          logoScale={logoScale}
-          showLogo={showLogo}
-          customLogoUrl={customLogoUrl}
-        />
-      )}
+        {currentView === 'auth' && (
+          <AuthScreen 
+            onNavigate={handleNavigate} 
+            onLoginSuccess={handleLoginSuccess}
+            startInRegister={routePayload?.isRegister || false}
+            initPremium={routePayload?.startPremium || false}
+            logoScale={logoScale}
+            showLogo={showLogo}
+            customLogoUrl={customLogoUrl}
+          />
+        )}
 
-      {currentView === 'dashboard' && currentUser && (
-        <Dashboard 
-          currentUser={currentUser}
-          onLogout={handleLogout}
-          onNavigate={handleNavigate}
-          onSelectTrack={handleSelectTrack}
-          activeTrack={currentTrack}
-          isPlaying={isPlaying}
-        />
-      )}
+        {currentView === 'dashboard' && currentUser && (
+          <Dashboard 
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            onNavigate={handleNavigate}
+            onSelectTrack={handleSelectTrack}
+            activeTrack={currentTrack}
+            isPlaying={isPlaying}
+          />
+        )}
 
-      {/* Fallback to make sure Dashboard doesn't crash on null session */}
-      {currentView === 'dashboard' && !currentUser && (
-        <AuthScreen 
-          onNavigate={handleNavigate} 
-          onLoginSuccess={handleLoginSuccess}
-          startInRegister={false}
-          initPremium={false}
-          logoScale={logoScale}
-          showLogo={showLogo}
-          customLogoUrl={customLogoUrl}
-        />
-      )}
+        {/* Fallback to make sure Dashboard doesn't crash on null session */}
+        {currentView === 'dashboard' && !currentUser && (
+          <AuthScreen 
+            onNavigate={handleNavigate} 
+            onLoginSuccess={handleLoginSuccess}
+            startInRegister={false}
+            initPremium={false}
+            logoScale={logoScale}
+            showLogo={showLogo}
+            customLogoUrl={customLogoUrl}
+          />
+        )}
 
-      {currentView === 'public' && (
-        <ArtistPublic 
-          artistId={routePayload?.id || ""}
-          initialRepertoireId={routePayload?.repertoireId || null}
-          onNavigate={handleNavigate}
-          onSelectTrack={handleSelectTrack}
-          activeTrack={currentTrack}
-          isPlaying={isPlaying}
-          onPlayPause={handlePlayPause}
-          setCarMode={setCarMode}
-          autoCarMode={routePayload?.autoCar || false}
-          logoScale={logoScale}
-          showLogo={showLogo}
-          customLogoUrl={customLogoUrl}
-        />
-      )}
+        {currentView === 'public' && (
+          <ArtistPublic 
+            artistId={routePayload?.id || ""}
+            initialRepertoireId={routePayload?.repertoireId || null}
+            onNavigate={handleNavigate}
+            onSelectTrack={handleSelectTrack}
+            activeTrack={currentTrack}
+            isPlaying={isPlaying}
+            onPlayPause={handlePlayPause}
+            setCarMode={setCarMode}
+            autoCarMode={routePayload?.autoCar || false}
+            logoScale={logoScale}
+            showLogo={showLogo}
+            customLogoUrl={customLogoUrl}
+          />
+        )}
 
-      {currentView === 'admin' && currentUser && (
-        <AdminArea 
-          currentUser={currentUser}
-          onLogout={handleLogout}
-          onNavigate={handleNavigate}
-          logoScale={logoScale}
-          onLogoScaleChange={setLogoScale}
-          showLogo={showLogo}
-          onShowLogoChange={setShowLogo}
-          customLogoUrl={customLogoUrl}
-          onCustomLogoUrlChange={setCustomLogoUrl}
-        />
-      )}
+        {currentView === 'admin' && currentUser && (
+          <AdminArea 
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            onNavigate={handleNavigate}
+            logoScale={logoScale}
+            onLogoScaleChange={setLogoScale}
+            showLogo={showLogo}
+            onShowLogoChange={setShowLogo}
+            customLogoUrl={customLogoUrl}
+            onCustomLogoUrlChange={setCustomLogoUrl}
+          />
+        )}
 
-      {currentView === 'payment_return' && (
-        <PaymentReturnScreen 
-          currentUser={currentUser}
-          onNavigate={handleNavigate}
-          onRefreshProfile={() => {
-            const freshUser = dbService.getCurrentUser();
-            if (freshUser) {
-              setCurrentUser(freshUser);
-            }
-          }}
-        />
-      )}
+        {currentView === 'payment_return' && (
+          <PaymentReturnScreen 
+            currentUser={currentUser}
+            onNavigate={handleNavigate}
+            onRefreshProfile={() => {
+              const freshUser = dbService.getCurrentUser();
+              if (freshUser) {
+                setCurrentUser(freshUser);
+              }
+            }}
+          />
+        )}
+      </Suspense>
 
       {/* Restrict warning overlay modal */}
       {routePayload?.errorMsg && (
