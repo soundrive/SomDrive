@@ -1651,6 +1651,7 @@ export default function ArtistPublic({
                     alt={artist.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
                   />
                 ) : (
                   /* High-end smart streaming CSS placeholder */

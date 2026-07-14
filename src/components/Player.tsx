@@ -419,14 +419,19 @@ export default function Player({
     const audio = audioRef.current;
     
     // Resolve targeted audio URL to play based on optimization
-    const hasOptimized = !!(currentTrack.optimizedAudioUrl && currentTrack.audioOptimizationStatus === "ready");
+    const hasOptimized = !!(
+      (currentTrack.audioUrlOptimized && currentTrack.optimizedStatus === "ready") ||
+      (currentTrack.optimizedAudioUrl && currentTrack.audioOptimizationStatus === "ready")
+    );
     const tryOptimized = hasOptimized && !failedOptimizedTracks[currentTrack.trackId];
-    const targetUrl = tryOptimized ? currentTrack.optimizedAudioUrl! : currentTrack.audioUrl;
+    const targetUrl = tryOptimized 
+      ? (currentTrack.audioUrlOptimized || currentTrack.optimizedAudioUrl!) 
+      : currentTrack.audioUrl;
 
     // Check if source changed
     if (audio.src !== targetUrl) {
       audio.src = targetUrl;
-      audio.preload = "metadata";
+      audio.preload = isDataSaver ? "none" : "metadata";
       audio.load();
     }
 
@@ -468,7 +473,7 @@ export default function Player({
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [currentTrack, isPlaying, failedOptimizedTracks]);
+  }, [currentTrack, isPlaying, failedOptimizedTracks, isDataSaver]);
 
   // Handle play/pause, volume, mute toggling
   useEffect(() => {

@@ -114,6 +114,15 @@ export interface Music {
   audioOptimizationStatus?: "none" | "processing" | "ready" | "failed";
   audioOptimizationSavings?: number;
   artistName?: string;
+
+  // VBR Beta Optimizer fields (Etapa 3 - Beta q7)
+  audioUrlOriginal?: string;
+  audioUrlOptimized?: string;
+  optimizedStatus?: "pending" | "ready" | "failed" | "skipped";
+  optimizedFormat?: "mp3";
+  optimizedPreset?: "vbr_q7";
+  optimizedBitrateAverage?: number;
+  optimizedCreatedAt?: any;
 }
 
 export interface Analytics {
