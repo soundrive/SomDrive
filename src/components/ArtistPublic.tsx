@@ -36,7 +36,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { Artist, Music as Track, Analytics, Repertoire, getCleanComposer } from '../types';
-import { dbService } from '../lib/db';
+import { dbService, getSafeExpirationDate } from '../lib/db';
 import { BrandLogo } from './BrandLogo';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -55,6 +55,66 @@ const normalizeVisibility = (
 
   return 'private';
 };
+
+export function getPublicVisibleTracks(rawSongs: Track[], artist: Artist): Track[] {
+  if (!artist) return [];
+  const artistId = artist.userId || '';
+  const slug = artist.slug || '';
+  const plan = artist.plan || 'free';
+  const musicLimit = artist.musicLimit !== undefined ? Number(artist.musicLimit) : 3;
+
+  // 1. Determine if the plan is expired
+  const expirationDate = getSafeExpirationDate(artist);
+  const now = new Date();
+  const isExpired = expirationDate ? expirationDate < now : false;
+
+  // 2. Determine the effective plan and dynamic limit
+  const effectivePlan = isExpired ? 'free' : plan;
+  const dynamicLimit = effectivePlan === 'free' ? 3 : (effectivePlan === 'essencial' ? 10 : (effectivePlan === 'pro' ? 15 : 50));
+
+  // 3. Filter raw songs
+  // Filter out any songs with status === 'inactive' or status === 'locked_by_expired_plan' (since they are officially locked by db)
+  // But also enforce the limit of `dynamicLimit` songs in the visible list.
+  // We sort candidates:
+  const candidates = rawSongs.filter(t => t.status !== 'inactive' && t.status !== 'locked_by_expired_plan');
+
+  // Let's filter/sort according to preferredFreeTracks or fallback
+  const preferredIds = artist.preferredFreeTracks || [];
+  const visibleSongs: Track[] = [];
+
+  // First, add preferred tracks if they are among active candidates
+  preferredIds.forEach(pId => {
+    const found = candidates.find(t => t.trackId === pId);
+    if (found && visibleSongs.length < dynamicLimit) {
+      visibleSongs.push(found);
+    }
+  });
+
+  // Then add the rest of candidates sorted by their positions/indices
+  const sortedCandidates = [...candidates].sort((a, b) => {
+    const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
+    const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
+    if (posA !== posB) return posA - posB;
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  sortedCandidates.forEach(cand => {
+    if (visibleSongs.length < dynamicLimit && !visibleSongs.some(s => s.trackId === cand.trackId)) {
+      visibleSongs.push(cand);
+    }
+  });
+
+  console.log('[PUBLIC_LIMIT_DEBUG]', {
+    artistId, slug, plan, musicLimit, expirationDate, isExpired,
+    effectivePlan, dynamicLimit, rawCount: rawSongs.length,
+    visibleCount: visibleSongs.length,
+    visibleIds: visibleSongs.map(t => t.trackId)
+  });
+
+  return visibleSongs;
+}
 
 const FOLDER_COLORS = [
   {
@@ -274,7 +334,7 @@ export default function ArtistPublic({
   artistId,
   initialRepertoireId = null,
   onNavigate,
-  onSelectTrack,
+  onSelectTrack: onSelectTrackProp,
   activeTrack,
   isPlaying,
   onPlayPause,
@@ -286,7 +346,22 @@ export default function ArtistPublic({
 }: ArtistPublicProps) {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [allTracks, setAllTracks] = useState<Track[]>([]);
+  const [allVisibleTracks, setAllVisibleTracks] = useState<Track[]>([]);
   const [repertoires, setRepertoires] = useState<Repertoire[]>([]);
+
+  const onSelectTrack = (track: Track, list: Track[]) => {
+    console.log('[AUDIT_PLAY_BUTTON_QUEUE]', {
+      slug: artist?.slug || artistId.trim().toLowerCase(),
+      queueCount: list.length,
+      queueSongs: list.map(s => ({
+        id: (s as any).id || s.trackId,
+        trackId: s.trackId,
+        title: s.title,
+        status: s.status
+      }))
+    });
+    onSelectTrackProp(track, list);
+  };
   
   const [isLoading, setIsLoading] = useState(true);
   const ongoingWhatsAppClicksRef = useRef<Set<string>>(new Set());
@@ -383,6 +458,28 @@ export default function ArtistPublic({
       });
     }
   }, [repertoireNotFoundOrPrivate, selectedRepertoireId, artist]);
+
+  useEffect(() => {
+    if (selectedRepertoireId) {
+      const rep = repertoires.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()));
+      if (rep) {
+        const allowedIds = rep.orderedTrackIds || rep.trackIds || [];
+        const visibleRepTracks = allTracks.filter(t => allowedIds.includes(t.trackId));
+        console.log('[AUDIT_PUBLIC_REPERTOIRE]', {
+          slug: artist?.slug || artistId.trim().toLowerCase(),
+          repertoireName: rep.name,
+          originalTrackIdsCount: allowedIds.length,
+          visibleTrackIdsCount: visibleRepTracks.length,
+          visibleRepTracks: visibleRepTracks.map(s => ({
+            id: (s as any).id || s.trackId,
+            trackId: s.trackId,
+            title: s.title,
+            status: s.status
+          }))
+        });
+      }
+    }
+  }, [selectedRepertoireId, repertoires, allTracks, artist, artistId]);
 
   // Dynamic Browser Tab Meta Title
   useEffect(() => {
@@ -863,6 +960,58 @@ export default function ArtistPublic({
         // 4. Determine if we are loading a specific shared repertoire or the complete catalog
         const isSharedPage = !forceAllView && (!!initialRepertoireId || window.location.pathname.includes('/repertorio/')) && !!selectedRepertoireId;
         
+        // Enforce public plan limits and visibility
+        const visibleSongs = getPublicVisibleTracks(rawSongs, resolvedArtist);
+        setAllVisibleTracks(visibleSongs);
+
+        console.log('[AUDIT_PUBLIC_RAW_SONGS]', {
+          slug: resolvedArtist?.slug || artistId.trim().toLowerCase(),
+          rawSongsCount: rawSongs.length,
+          rawSongs: rawSongs.map(s => ({
+            id: (s as any).id || s.trackId,
+            trackId: s.trackId,
+            title: s.title,
+            status: s.status,
+            orderIndex: s.orderIndex,
+            position: s.position,
+            createdAt: s.createdAt
+          }))
+        });
+
+        console.log('[AUDIT_PUBLIC_VISIBLE_SONGS]', {
+          slug: resolvedArtist?.slug || artistId.trim().toLowerCase(),
+          rawSongsCount: rawSongs.length,
+          visibleSongsCount: visibleSongs.length,
+          visibleSongs: visibleSongs.map(s => ({
+            id: (s as any).id || s.trackId,
+            trackId: s.trackId,
+            title: s.title,
+            status: s.status
+          })),
+          blockedSongs: rawSongs
+            .filter(raw => !visibleSongs.some(v => v.trackId === raw.trackId))
+            .map(s => ({
+              id: (s as any).id || s.trackId,
+              trackId: s.trackId,
+              title: s.title,
+              status: s.status
+            }))
+        });
+
+        console.log('[PUBLIC_PROFILE_LIMIT_REAL]', {
+          slug: resolvedArtist?.slug || artistId.trim().toLowerCase(),
+          artistId: resolvedArtist?.userId,
+          plan: resolvedArtist?.plan,
+          musicLimit: resolvedArtist?.musicLimit,
+          subscriptionStatus: resolvedArtist?.subscriptionStatus,
+          rawSongsCount: rawSongs.length,
+          visibleSongsCount: visibleSongs.length,
+          visibleTitles: visibleSongs.map(s => s.title),
+          blockedTitles: rawSongs
+            .filter(s => !visibleSongs.some(v => v.trackId === s.trackId))
+            .map(s => s.title)
+        });
+
         if (isSharedPage) {
           // Shared repertoire focus: filter tracks strictly to this repertoire
           const currentRepertoire = selectedRepertoireId ? repsList.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
@@ -883,7 +1032,7 @@ export default function ArtistPublic({
           setRepertoires([currentRepertoire]);
 
           const allowedTrackIds = currentRepertoire.orderedTrackIds || currentRepertoire.trackIds || [];
-          const filteredTracks = rawSongs.filter(track => {
+          const filteredTracks = visibleSongs.filter(track => {
             return allowedTrackIds.includes(track.trackId) || track.repertoireId === currentRepertoire.id;
           });
 
@@ -901,7 +1050,7 @@ export default function ArtistPublic({
           lastLoadedRepertoireIdRef.current = currentRepertoire.id;
         } else {
           // General catalog: show all active tracks, sort them cleanly by orderIndex / position
-          const sortedAllTracks = rawSongs.sort((a, b) => {
+          const sortedAllTracks = visibleSongs.sort((a, b) => {
             const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
             const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
             return posA - posB;
@@ -1095,6 +1244,35 @@ export default function ArtistPublic({
     activeDisplayTracks = activeDisplayTracks.filter(t => t.genre === selectedGenreFilter);
   }
 
+  console.log('[AUDIT_PUBLIC_ARTIST]', {
+    slug: artist?.slug || artistId.trim().toLowerCase(),
+    artistId: (artist as any)?.id || (artist as any)?.uid || artist?.userId,
+    artistName: artist?.name,
+    plan: artist?.plan,
+    accessType: artist?.accessType,
+    subscriptionStatus: artist?.subscriptionStatus,
+    musicLimit: artist?.musicLimit,
+    planExpiresAt: artist?.planExpiresAt,
+    subscriptionEndsAt: artist?.subscriptionEndsAt
+  });
+
+  console.log('[AUDIT_RENDER_LIST]', {
+    slug: artist?.slug || artistId.trim().toLowerCase(),
+    renderedCount: activeDisplayTracks.length,
+    renderedSongs: activeDisplayTracks.map(s => ({
+      id: (s as any).id || s.trackId,
+      trackId: s.trackId,
+      title: s.title,
+      status: s.status
+    }))
+  });
+
+  console.log('[AUDIT_BUILD_VERSION]', {
+    buildTime: '2026-07-15T14:12:00-03:00',
+    commit: 'checkpoint-1-limit-audit',
+    feature: 'public-limit-audit-active'
+  });
+
   const genres = ['All', ...Array.from(new Set(allTracks.map(t => t.genre).filter(Boolean)))];
 
   // Action Helpers
@@ -1228,7 +1406,11 @@ export default function ArtistPublic({
 
   const handlePlayRepertoire = (rep: Repertoire, e: React.MouseEvent) => {
     e.stopPropagation();
-    const repTracks = allTracks.filter(t => rep.trackIds?.includes(t.trackId));
+    const repTrackIds = rep.orderedTrackIds || rep.trackIds || [];
+    const repTracks = repTrackIds
+      .map(id => allVisibleTracks.find(t => t.trackId === id))
+      .filter((t): t is Track => !!t);
+
     if (repTracks.length > 0) {
       onSelectTrack(repTracks[0], repTracks);
     } else {
@@ -1811,7 +1993,8 @@ export default function ArtistPublic({
                   {repertoires
                     .filter(rep => !openedAsRepertoireOnly || rep.id === selectedRepertoireId || (rep.slug && selectedRepertoireId && rep.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase()))
                     .map((rep, idx) => {
-                      const repTracksNum = (rep.trackIds || []).length;
+                      const repTrackIds = rep.orderedTrackIds || rep.trackIds || [];
+                      const repTracksNum = repTrackIds.filter(tid => allVisibleTracks.some(t => t.trackId === tid)).length;
                       const isRepActive = selectedRepertoireId === rep.id || (rep.slug && selectedRepertoireId && rep.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase());
                       const folderColor = getFolderColor(idx);
 

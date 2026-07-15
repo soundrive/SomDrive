@@ -258,6 +258,20 @@ export default function Player({
   const [isMobileExpanded, setIsMobileExpanded] = useState(true);
   const [failedOptimizedTracks, setFailedOptimizedTracks] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    if (!isAdminView) {
+      console.log('[AUDIT_PLAYER_PUBLIC_QUEUE]', {
+        queueCount: trackList?.length,
+        queueSongs: trackList?.map(s => ({
+          id: (s as any).id || s.trackId,
+          trackId: s.trackId,
+          title: s.title,
+          status: s.status
+        }))
+      });
+    }
+  }, [trackList, isAdminView]);
+
   // Reliable 5-second play-time tracking with 30-second browser deduplication
   const playTimeRef = useRef<number>(0);
   const hasCountedPlayRef = useRef<boolean>(false);
@@ -419,14 +433,9 @@ export default function Player({
     const audio = audioRef.current;
     
     // Resolve targeted audio URL to play based on optimization
-    const hasOptimized = !!(
-      (currentTrack.audioUrlOptimized && currentTrack.optimizedStatus === "ready") ||
-      (currentTrack.optimizedAudioUrl && currentTrack.audioOptimizationStatus === "ready")
-    );
-    const tryOptimized = hasOptimized && !failedOptimizedTracks[currentTrack.trackId];
-    const targetUrl = tryOptimized 
-      ? (currentTrack.audioUrlOptimized || currentTrack.optimizedAudioUrl!) 
-      : currentTrack.audioUrl;
+    const hasOptimized = false; // Forced to false to guarantee player only plays the primary audioUrl
+    const tryOptimized = false;
+    const targetUrl = currentTrack.audioUrl;
 
     // Check if source changed
     if (audio.src !== targetUrl) {

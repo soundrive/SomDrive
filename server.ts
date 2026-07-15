@@ -523,124 +523,7 @@ async function startServer() {
     }
   }
 
-  // Controlled Synchronous VBR Beta Audio Optimization (Etapa 3 - Beta q7)
-  async function runVbrBetaAudioOptimization(params: {
-    userId: string;
-    songId: string;
-    originalStoragePath: string;
-    originalBuffer: Buffer;
-    originalFileName: string;
-    s3Client: S3Client;
-    R2_BUCKET_NAME: string;
-    R2_PUBLIC_BASE_URL: string;
-  }) {
-    console.log(`[VBR Beta Optimizer] Starting synchronous VBR q7 beta optimization for song ${params.songId}`);
-    const execAsync = promisify(exec);
-    const originalSize = params.originalBuffer.length;
 
-    // Immediately record 'pending' state
-    await updateSongFirestoreStatus(params.songId, params.userId, {
-      audioUrlOriginal: `${params.R2_PUBLIC_BASE_URL.endsWith("/") ? params.R2_PUBLIC_BASE_URL.slice(0, -1) : params.R2_PUBLIC_BASE_URL}/${params.originalStoragePath}`,
-      optimizedStatus: "pending",
-      optimizedFormat: "mp3",
-      optimizedPreset: "vbr_q7",
-      originalFileSize: originalSize,
-    });
-
-    const randSuffix = crypto.randomBytes(4).toString("hex");
-    const tempOrigPath = path.join("/tmp", `vbr_orig_${params.songId}_${randSuffix}.mp3`);
-    const tempOptPath = path.join("/tmp", `vbr_opt_${params.songId}_${randSuffix}.mp3`);
-
-    try {
-      if (!fs.existsSync("/tmp")) {
-        fs.mkdirSync("/tmp", { recursive: true });
-      }
-
-      // Write original buffer to disk
-      fs.writeFileSync(tempOrigPath, params.originalBuffer);
-
-      // Convert to VBR q7 with requested parameters
-      console.log(`[VBR Beta Optimizer] Converting via FFmpeg for song ${params.songId}...`);
-      await execAsync(`ffmpeg -y -i "${tempOrigPath}" -codec:a libmp3lame -q:a 7 -ar 44100 "${tempOptPath}"`);
-
-      if (!fs.existsSync(tempOptPath)) {
-        throw new Error("VBR optimized file was not created by FFmpeg.");
-      }
-
-      const optimizedSize = fs.statSync(tempOptPath).size;
-      const savingsPercent = ((originalSize - optimizedSize) / originalSize) * 100;
-
-      // Extract average bitrate using ffprobe
-      let optimizedBitrateAverage = 128; // default fallback
-      try {
-        const { stdout } = await execAsync(`ffprobe -v error -show_entries format=duration,bit_rate -of default=noprint_wrappers=1 "${tempOptPath}"`);
-        const bitrateMatch = stdout.match(/bit_rate=(\d+)/);
-        if (bitrateMatch) {
-          optimizedBitrateAverage = Math.round(parseInt(bitrateMatch[1], 10) / 1000);
-        }
-      } catch (probeErr: any) {
-        console.warn(`[VBR Beta Optimizer] ffprobe failed: ${probeErr.message}`);
-      }
-
-      console.log(`[VBR Beta Optimizer] Sizing check - Original: ${originalSize} B, Optimized: ${optimizedSize} B. Savings: ${savingsPercent.toFixed(1)}%`);
-
-      // Se não economizar pelo menos 5%, marcar como skipped e não subir ao R2
-      if (savingsPercent < 5.0) {
-        console.log(`[VBR Beta Optimizer] Optimization skipped: savings (${savingsPercent.toFixed(1)}%) < 5% threshold.`);
-        await updateSongFirestoreStatus(params.songId, params.userId, {
-          optimizedStatus: "skipped",
-          optimizedFileSize: optimizedSize,
-          optimizedBitrateAverage,
-          audioOptimizationSavings: parseFloat(savingsPercent.toFixed(1)),
-        });
-        return;
-      }
-
-      // Upload optimized to R2 in separate path
-      const originalDir = path.dirname(params.originalStoragePath);
-      const originalBase = path.basename(params.originalStoragePath);
-      const optimizedStoragePath = `${originalDir}/optimized_vbr_q7_${originalBase}`;
-
-      const optimizedBuffer = fs.readFileSync(tempOptPath);
-
-      console.log(`[VBR Beta Optimizer] Uploading VBR q7 optimized file to R2: ${optimizedStoragePath}`);
-      const putCmd = new PutObjectCommand({
-        Bucket: params.R2_BUCKET_NAME,
-        Key: optimizedStoragePath,
-        Body: optimizedBuffer,
-        ContentType: "audio/mpeg",
-      });
-      await params.s3Client.send(putCmd);
-
-      const baseSlash = params.R2_PUBLIC_BASE_URL.endsWith("/") ? params.R2_PUBLIC_BASE_URL.slice(0, -1) : params.R2_PUBLIC_BASE_URL;
-      const audioUrlOptimized = `${baseSlash}/${optimizedStoragePath}`;
-
-      // Update Firestore to ready!
-      await updateSongFirestoreStatus(params.songId, params.userId, {
-        audioUrlOptimized,
-        optimizedStatus: "ready",
-        optimizedFileSize: optimizedSize,
-        optimizedBitrateAverage,
-        audioOptimizationSavings: parseFloat(savingsPercent.toFixed(1)),
-        optimizedCreatedAt: FieldValue.serverTimestamp(),
-      });
-      console.log(`[VBR Beta Optimizer] Synchronous optimization successfully completed and registered!`);
-
-    } catch (err: any) {
-      console.error(`[VBR Beta Optimizer] Synchronous optimization failed for song ${params.songId}:`, err);
-      await updateSongFirestoreStatus(params.songId, params.userId, {
-        optimizedStatus: "failed",
-      });
-    } finally {
-      // Cleanup /tmp
-      try {
-        if (fs.existsSync(tempOrigPath)) fs.unlinkSync(tempOrigPath);
-      } catch (_) {}
-      try {
-        if (fs.existsSync(tempOptPath)) fs.unlinkSync(tempOptPath);
-      } catch (_) {}
-    }
-  }
 
   // API Route for Cloudflare R2 proxy upload (bypasses CORS entirely)
   app.post("/api/r2-proxy-upload", express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
@@ -781,47 +664,9 @@ async function startServer() {
         publicAudioUrl
       });
 
-      // Determine optimizer path based on VBR q7 Beta configurations
-      let userEmail = "";
-      try {
-        const userDoc = await db.collection("users").doc(userId).get();
-        if (userDoc.exists) {
-          userEmail = (userDoc.data()?.email || "").toLowerCase().trim();
-        }
-        if (!userEmail) {
-          const artistDoc = await db.collection("artists").doc(userId).get();
-          if (artistDoc.exists) {
-            userEmail = (artistDoc.data()?.email || "").toLowerCase().trim();
-          }
-        }
-        console.log(`[VBR Beta Optimizer] Resolved email for userId ${userId}: "${userEmail}"`);
-      } catch (dbErr: any) {
-        console.error(`[VBR Beta Optimizer] Error looking up user email for userId ${userId}:`, dbErr);
-      }
-
-      const enableVbrBeta = process.env.ENABLE_VBR_OPTIMIZER_BETA === "true";
-      const allowedEmailsRaw = process.env.VBR_OPTIMIZER_BETA_EMAILS || "videopremieroficial@gmail.com";
-      const allowedEmails = allowedEmailsRaw.split(",").map(e => e.trim().toLowerCase());
-      const isBetaUser = !!(userEmail && allowedEmails.includes(userEmail));
-
-      if (enableVbrBeta && isBetaUser) {
-        console.log(`[VBR Beta Optimizer] Running VBR q7 beta optimization path for user: ${userEmail}`);
-        try {
-          await runVbrBetaAudioOptimization({
-            userId,
-            songId,
-            originalStoragePath: storagePath,
-            originalBuffer: fileBuffer,
-            originalFileName: fileName,
-            s3Client: s3,
-            R2_BUCKET_NAME,
-            R2_PUBLIC_BASE_URL
-          });
-        } catch (err) {
-          console.error("[VBR Beta Optimizer] Synchronous optimization error:", err);
-        }
-      } else {
-        // Run original legacy controlled synchronous audio optimization (Model A)
+      // Legacy optimizer can only run if ENABLE_AUDIO_OPTIMIZER is explicitly set to true
+      const isEnabled = process.env.ENABLE_AUDIO_OPTIMIZER === "true";
+      if (isEnabled) {
         try {
           await runSynchronousAudioOptimization({
             userId,
@@ -835,7 +680,7 @@ async function startServer() {
             R2_PUBLIC_BASE_URL
           });
         } catch (err) {
-          console.error("[Audio Optimizer] Synchronous optimization error (upload remains intact):", err);
+          console.error("[Audio Optimizer] Synchronous optimization error:", err);
         }
       }
 
@@ -2890,104 +2735,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", async () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
-
-    console.log("[Boot Reconciliation] Running database recovery checks for live payment ID 163948928296...");
-    try {
-      const paymentId = "163948928296";
-      const subDocRef = db.collection("mp_subscriptions").doc(paymentId);
-      const subDoc = await subDocRef.get();
-      if (subDoc.exists) {
-        const subData = subDoc.data();
-        const userId = subData?.userId || "xzAqVzHsj3WAqbNkhcXQj4zmuaN2";
-        console.log(`[Boot Reconciliation] Found purchase 163948928296 in mp_subscriptions. Associated UID: ${userId}`);
-        
-        const userRef = db.collection("users").doc(userId);
-        const artistRef = db.collection("artists").doc(userId);
-        
-        const updates = {
-          plan: "pro", 
-          musicLimit: 15,
-          subscriptionStatus: "active",
-          planStatus: "active",
-          paymentStatus: "approved",
-          mercadoPagoPaymentId: paymentId,
-          accessType: "subscriber",
-          updatedAt: FieldValue.serverTimestamp()
-        };
-        
-        await userRef.set(updates, { merge: true });
-        await artistRef.set(updates, { merge: true });
-        
-        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-          paymentId: paymentId,
-          paymentStatus: "approved",
-          planCode: "pro_mensal",
-          metadataUid: userId,
-          externalReferenceUid: userId,
-          matchedUid: userId,
-          matchedBy: "boot_reconciliation_exact",
-          officialUserDocumentPath: `artists/${userId}`,
-          previousPlan: "free",
-          newPlan: "pro",
-          previousLimit: 3,
-          newLimit: 15,
-          subscriptionEndsAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
-          transactionSaved: true,
-          dashboardSourcePath: `artists/${userId}`,
-          automaticActivationCompleted: true,
-          automaticProcessingCompleted: true,
-          processingAction: "activation",
-          errorMessage: null
-        }));
-
-        console.log(`[Boot Reconciliation] Successfully updated users/${userId} and artists/${userId} to 'pro' with 15 songs limit!`);
-      } else {
-        const fallbackUid = "xzAqVzHsj3WAqbNkhcXQj4zmuaN2";
-        const uRef = db.collection("users").doc(fallbackUid);
-        const aRef = db.collection("artists").doc(fallbackUid);
-        
-        const updates = {
-          plan: "pro",
-          musicLimit: 15,
-          subscriptionStatus: "active",
-          planStatus: "active",
-          paymentStatus: "approved",
-          mercadoPagoPaymentId: paymentId,
-          accessType: "subscriber",
-          updatedAt: FieldValue.serverTimestamp()
-        };
-        await uRef.set(updates, { merge: true });
-        await aRef.set(updates, { merge: true });
-        
-        console.log("[MERCADOPAGO WEBHOOK SECURE LOG]", JSON.stringify({
-          paymentId: paymentId,
-          paymentStatus: "approved",
-          planCode: "pro_mensal",
-          metadataUid: fallbackUid,
-          externalReferenceUid: fallbackUid,
-          matchedUid: fallbackUid,
-          matchedBy: "boot_reconciliation_fallback",
-          officialUserDocumentPath: `artists/${fallbackUid}`,
-          previousPlan: "free",
-          newPlan: "pro",
-          previousLimit: 3,
-          newLimit: 15,
-          subscriptionEndsAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
-          transactionSaved: true,
-          dashboardSourcePath: `artists/${fallbackUid}`,
-          automaticActivationCompleted: true,
-          automaticProcessingCompleted: true,
-          processingAction: "activation",
-          errorMessage: null
-        }));
-        
-        console.log(`[Boot Reconciliation] Successfully performed check fallback update on users/${fallbackUid} and artists/${fallbackUid} to PRO!`);
-      }
-    } catch (err: any) {
-      console.error("[Boot Reconciliation] Error during database recovery checks:", err);
-    }
   });
 }
 
