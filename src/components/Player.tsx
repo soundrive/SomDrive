@@ -415,12 +415,22 @@ export default function Player({
   const onPlayPauseRef = useRef(onPlayPause);
   const onNextRef = useRef(onNext);
   const onPrevRef = useRef(onPrev);
+  const isRepeatRef = useRef(isRepeat);
 
   useEffect(() => {
     onPlayPauseRef.current = onPlayPause;
     onNextRef.current = onNext;
     onPrevRef.current = onPrev;
+    isRepeatRef.current = isRepeat;
   });
+
+  // Synchronize loop/repeat property on the audio element dynamically
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.loop = isRepeat;
+    }
+  }, [isRepeat]);
 
   // Synchronize audio element state
   useEffect(() => {
@@ -447,7 +457,16 @@ export default function Player({
     // Set callbacks using refs to prevent dependency updates
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration || 0);
-    const onEnded = () => onNextRef.current();
+    const onEnded = () => {
+      if (isRepeatRef.current) {
+        audio.currentTime = 0;
+        audio.play().catch((err) => {
+          console.warn("Loop playback fallback failed:", err);
+        });
+      } else {
+        onNextRef.current();
+      }
+    };
 
     const onError = (e: Event) => {
       console.warn("Audio element error triggered:", audio.error);
@@ -465,8 +484,9 @@ export default function Player({
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
 
-    // Apply active volume state
+    // Apply active volume and loop state
     audio.volume = isMuted ? 0 : volume;
+    audio.loop = isRepeatRef.current;
 
     if (isPlaying) {
       audio.play().catch((err) => {

@@ -128,6 +128,7 @@ export default function AdminArea({
   const [editSubCycle, setEditSubCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [editSubStatus, setEditSubStatus] = useState('authorized');
   const [editSubUserId, setEditSubUserId] = useState('');
+  const [showTechnicalDocs, setShowTechnicalDocs] = useState(false);
 
   // Manual payment verification panel states
   const [manualPaymentId, setManualPaymentId] = useState('');
@@ -1007,19 +1008,17 @@ export default function AdminArea({
     e.preventDefault();
     if (!selectedUser) return;
 
-    // Validation: Expiration date mandatory for manual/trial active plans
+    // Validation: Expiration date check for trial active plans. Manual plans do not require an expiration date.
     const accessType = selectedUser.accessType || 'free';
     const plan = selectedUser.plan || 'free';
 
     if (plan !== 'free') {
       if (accessType === 'manual') {
-        if (!selectedUser.manualAccessEndsAt) {
-          triggerNotification("Erro: Todo plano manual precisa obrigatoriamente ter uma data de término do acesso manual definida.", true);
-          return;
-        }
-        if (new Date(selectedUser.manualAccessEndsAt) <= new Date()) {
-          triggerNotification("Erro: A data de término do acesso manual precisa ser no futuro.", true);
-          return;
+        if (selectedUser.manualAccessEndsAt) {
+          if (new Date(selectedUser.manualAccessEndsAt) <= new Date()) {
+            triggerNotification("Erro: A data de término do acesso manual precisa ser no futuro.", true);
+            return;
+          }
         }
       } else if (accessType === 'trial') {
         if (!selectedUser.trialEndsAt) {
@@ -1127,13 +1126,18 @@ export default function AdminArea({
     // Confirm manual release
     askConfirmation(
       "Confirmar Ativação Manual",
-      `Deseja liberar o acesso ao plano ${manualPlan.toUpperCase()} com limite de ${manualLimit} músicas por ${manualDuration} dias para o usuário ${matchedUser.name}?\n\nIsso gerará um vencimento obrigatório em ${manualDuration} dias.`,
+      manualDuration === 'unlimited'
+        ? `Deseja liberar o acesso permanente ao plano ${manualPlan.toUpperCase()} com limite de ${manualLimit} músicas SEM VENCIMENTO para o usuário ${matchedUser.name}?`
+        : `Deseja liberar o acesso ao plano ${manualPlan.toUpperCase()} com limite de ${manualLimit} músicas por ${manualDuration} dias para o usuário ${matchedUser.name}?\n\nIsso gerará um vencimento obrigatório em ${manualDuration} dias.`,
       async () => {
         try {
-          console.log(`[PLAN_RELEASE_DEBUG] Iniciando liberação manual para usuário ${matchedUser.userId}. Plano: ${manualPlan}, Limite: ${manualLimit}, Duração: ${manualDuration} dias.`);
+          console.log(`[PLAN_RELEASE_DEBUG] Iniciando liberação manual para usuário ${matchedUser.userId}. Plano: ${manualPlan}, Limite: ${manualLimit}, Duração: ${manualDuration}.`);
           const now = new Date();
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + Number(manualDuration));
+          let expiresAt: Date | null = null;
+          if (manualDuration !== 'unlimited') {
+            expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + Number(manualDuration));
+          }
 
           const updatedFields: Partial<Artist> = {
             plan: manualPlan,
@@ -1142,9 +1146,9 @@ export default function AdminArea({
             planStatus: 'active',
             subscriptionStatus: 'ativo',
             musicLimit: Number(manualLimit),
-            manualAccessEndsAt: expiresAt.toISOString(),
+            manualAccessEndsAt: expiresAt ? expiresAt.toISOString() : null,
             subscriptionStartedAt: now.toISOString(),
-            subscriptionEndsAt: expiresAt.toISOString(),
+            subscriptionEndsAt: expiresAt ? expiresAt.toISOString() : null,
             bio: manualNotes ? `${matchedUser.bio || ''} - Nota Admin: ${manualNotes}` : matchedUser.bio
           };
 
@@ -1153,7 +1157,11 @@ export default function AdminArea({
           console.log(`[PLAN_RELEASE_DEBUG] Perfil atualizado no Firestore para ${matchedUser.userId}. Executando reenquadramento de faixas...`);
           await dbService.enforceTracksByPlanValidityAsync(matchedUser.userId, manualPlan, Number(manualLimit));
           console.log(`[PLAN_RELEASE_DEBUG] Reenquadramento de faixas finalizado com sucesso para ${matchedUser.userId}.`);
-          triggerNotification(`Acesso manual de ${manualDuration} dias liberado para ${matchedUser.name}!`);
+          triggerNotification(
+            manualDuration === 'unlimited'
+              ? `Acesso manual sem vencimento liberado para ${matchedUser.name}!`
+              : `Acesso manual de ${manualDuration} dias liberado para ${matchedUser.name}!`
+          );
           setManualEmail('');
           setManualNotes('');
           loadData();
@@ -1234,18 +1242,145 @@ export default function AdminArea({
   const blockedCount = users.filter(u => u.isBlocked).length;
   const totalSongs = dbService.getTotalSongsCount();
 
-  const pendingActivationPayments = mpSubscriptions.filter(sub => 
-    (sub.status === 'approved' || sub.status === 'active' || sub.status === 'authorized' || sub.status === 'orphan_payment') && 
-    sub.planActivated !== true
-  );
+  // Find a real associated user in the system, excluding empty or unknown IDs/emails
+  const findAssociatedUser = (sub: any) => {
+    if (!sub) return null;
+    const subUid = (sub.userId || sub.uid || '').trim();
+    const subEmail = (sub.email || '').toLowerCase().trim();
+    
+    if (!subUid || subUid === 'unknown' || subUid === 'null') {
+      return null;
+    }
+    
+    // Find by exact user ID or by email
+    const found = users.find(u => {
+      const uId = (u.userId || u.id || '').trim();
+      const uEmail = (u.email || '').toLowerCase().trim();
+      if (!uId || uId === 'unknown' || uId === 'null') return false;
+      
+      // Match by ID first
+      if (uId === subUid) return true;
+      
+      // Match by non-empty email
+      if (subEmail && subEmail !== 'unknown' && uEmail === subEmail) return true;
+      
+      return false;
+    });
+    return found || null;
+  };
+
+  // Helper for origin classification
+  const getSubscriptionOrigin = (sub: any, assocUser: any) => {
+    const isSignatureError = sub.status === 'SIGNATURE_ERROR' || sub.status === 'signature_error' || (sub.errorMessage && sub.errorMessage.toLowerCase().includes('signature'));
+    if (isSignatureError) {
+      return { label: 'Erro', color: 'bg-rose-500/15 text-rose-400 border border-rose-500/25' };
+    }
+
+    const isNotFound = sub.status === 'NOT_FOUND' || sub.status === 'not_found' || (sub.errorMessage && sub.errorMessage.toLowerCase().includes('not_found'));
+    if (isNotFound) {
+      return { label: 'Erro', color: 'bg-rose-500/15 text-rose-400 border border-rose-500/25' };
+    }
+
+    const isSandbox = 
+      (sub.email && sub.email.toLowerCase().includes('sandbox')) || 
+      (sub.status && sub.status.toLowerCase().includes('sandbox')) ||
+      (sub.userId && sub.userId.toLowerCase().includes('sandbox'));
+    if (isSandbox) {
+      return { label: 'Sandbox', color: 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25' };
+    }
+
+    const isTest = 
+      (sub.email && sub.email.toLowerCase().includes('test')) || 
+      (sub.status && sub.status.toLowerCase().includes('test')) ||
+      (sub.id && sub.id.toLowerCase().includes('test'));
+    if (isTest) {
+      return { label: 'Teste', color: 'bg-blue-500/15 text-blue-400 border border-blue-500/25' };
+    }
+
+    const hasUnknownUser = 
+      !sub.userId || 
+      sub.userId === 'unknown' || 
+      sub.userId === 'null' || 
+      !sub.email || 
+      sub.email === 'unknown' || 
+      sub.email === 'null' ||
+      sub.email.toLowerCase().includes('unknown');
+
+    const isOrphan = !assocUser || hasUnknownUser;
+    if (isOrphan) {
+      return { label: 'Órfão', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/25' };
+    }
+
+    if (assocUser?.accessType === 'manual') {
+      return { label: 'Manual', color: 'bg-blue-500/15 text-blue-400 border border-blue-500/25' };
+    }
+
+    return { label: 'Mercado Pago', color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' };
+  };
+
+  // Helper for expiration calculation
+  const getExpirationDetails = (sub: any, assocUser: any) => {
+    const dateVal = assocUser?.subscriptionEndsAt || assocUser?.planExpiresAt || assocUser?.manualAccessEndsAt || sub.expiresAt || sub.planExpiresAt || sub.subscriptionEndsAt;
+    if (!dateVal) {
+      return { text: 'Sem vencimento', daysLeft: null, date: null };
+    }
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) {
+        return { text: 'Não identificado', daysLeft: null, date: null };
+      }
+      const now = new Date();
+      const dZero = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diffTime = dZero.getTime() - nowZero.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      const dateFormatted = d.toLocaleDateString('pt-BR');
+      
+      if (diffDays < 0) {
+        return { text: `${dateFormatted} (Expirado)`, daysLeft: diffDays, date: d };
+      } else if (diffDays === 0) {
+        return { text: `${dateFormatted} (Expira hoje)`, daysLeft: diffDays, date: d };
+      } else {
+        return { text: `${dateFormatted} (${diffDays} dias restantes)`, daysLeft: diffDays, date: d };
+      }
+    } catch {
+      return { text: 'Não identificado', daysLeft: null, date: null };
+    }
+  };
+
+  const pendingActivationPayments = mpSubscriptions.filter(sub => {
+    const assocUser = findAssociatedUser(sub);
+    const origin = getSubscriptionOrigin(sub, assocUser);
+    
+    // Only flag as a pending activation alert if it's a real user and real subscription
+    if (origin.label !== 'Real' || !assocUser) return false;
+
+    // Must have a valid email and userId, not unknown
+    const subUid = sub.userId || sub.uid;
+    if (!subUid || subUid === 'unknown' || subUid === 'null' || !sub.email || sub.email === 'unknown' || sub.email === 'null') {
+      return false;
+    }
+
+    return (sub.status === 'approved' || sub.status === 'active' || sub.status === 'authorized' || sub.status === 'orphan_payment') && 
+      sub.planActivated !== true;
+  });
 
   const pendingReversalRefunds = mpSubscriptions.filter(sub => {
-    if (sub.status !== 'refunded' && sub.status !== 'cancelled' && sub.status !== 'charged_back' && sub.status !== 'chargedback') return false;
-    const associatedUser = users.find(u => u.userId === sub.userId || u.userId === sub.uid);
-    if (associatedUser) {
-      return associatedUser.plan && associatedUser.plan !== 'free';
+    const assocUser = findAssociatedUser(sub);
+    const origin = getSubscriptionOrigin(sub, assocUser);
+    
+    // Only flag as a pending reversal alert if it's a real user and real subscription
+    if (origin.label !== 'Real' || !assocUser) return false;
+
+    // Must have a valid email and userId, not unknown
+    const subUid = sub.userId || sub.uid;
+    if (!subUid || subUid === 'unknown' || subUid === 'null' || !sub.email || sub.email === 'unknown' || sub.email === 'null') {
+      return false;
     }
-    return false;
+
+    if (sub.status !== 'refunded' && sub.status !== 'cancelled' && sub.status !== 'charged_back' && sub.status !== 'chargedback') return false;
+    
+    return assocUser.plan && assocUser.plan !== 'free';
   });
 
   return (
@@ -2157,6 +2292,7 @@ export default function AdminArea({
                         onChange={(e) => setManualDuration(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-850 px-3 py-2.5 rounded-xl text-xs outline-none text-slate-300"
                       >
+                        <option value="unlimited">Sem vencimento</option>
                         <option value="7">7 dias</option>
                         <option value="15">15 dias</option>
                         <option value="30">30 dias</option>
@@ -3326,255 +3462,289 @@ export default function AdminArea({
                 </div>
               </div>
 
-              {/* Pendências de reembolso e ativação */}
-              {(pendingActivationPayments.length > 0 || pendingReversalRefunds.length > 0) && (
-                <div className="space-y-4 animate-fade-in p-5 bg-slate-950/20 border border-slate-850/60 rounded-2xl">
-                  <div className="flex items-center space-x-2 text-rose-500">
-                    <AlertTriangle className="h-5 w-5 font-bold animate-pulse text-rose-500 shrink-0" />
-                    <h3 className="text-xs font-black uppercase tracking-wider text-rose-500">Pendências de reembolso e ativação</h3>
-                  </div>
 
-                  <div className="grid grid-cols-1 gap-4">
-                    {/* 1. Pagamentos Aprovados Aguardando Ativação */}
-                    {pendingActivationPayments.map((sub) => {
-                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
-                      const lastAttempt = sub.updatedAt 
-                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
-                        : dateStr;
-                      const attemptCount = sub.retryCount || sub.attempts || 1;
-                      return (
-                        <div key={`alert-act-${sub.id}`} className="bg-rose-950/20 border-l-4 border-rose-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-500/10 pb-2">
-                            <div>
-                              <span className="text-xs font-extrabold text-rose-400 uppercase tracking-wide">
-                                ⚠️ Pagamento aprovado aguardando ativação
-                              </span>
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                O pagamento foi aprovado pelo Mercado Pago, mas o plano do usuário correspondente ainda não foi atualizado no Firestore.
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => askConfirmation(
-                                "Confirmar Reprocessamento",
-                                `Deseja realmente reprocessar o webhook de ativação para a assinatura ${sub.id}?`,
-                                () => handleVerifySubscription(sub.id)
-                              )}
-                              className="px-3 py-1 bg-rose-500 hover:bg-rose-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
-                            >
-                              Reprocessar
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
-                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Usuário</span>
-                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
-                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Plano adquirido</span>
-                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Horário da Transação</span>
-                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <div className="md:col-span-2 text-slate-350">
-                              <span className="text-slate-500 font-bold">Erro de Ativação:</span> <span className="text-rose-400">{sub.errorMessage || 'Sem usuário vinculado ou erro de escrita'}</span>
-                            </div>
-                            <div className="text-slate-350">
-                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
-                              <span className="text-slate-300 font-mono text-[10px]">
-                                {attemptCount}x — {lastAttempt}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* 2. Reembolsos Confirmados Aguardando Reversão */}
-                    {pendingReversalRefunds.map((sub) => {
-                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
-                      const lastAttempt = sub.updatedAt 
-                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
-                        : dateStr;
-                      const attemptCount = sub.retryCount || sub.attempts || 1;
-                      return (
-                        <div key={`alert-rev-${sub.id}`} className="bg-amber-950/20 border-l-4 border-amber-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/10 pb-2">
-                            <div>
-                              <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wide">
-                                ⚠️ Reembolso confirmado aguardando reversão
-                              </span>
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                A compra foi estornada/reembolsada, mas o usuário correspondente ainda mantém acesso ao plano pago no Firestore.
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => askConfirmation(
-                                "Confirmar Reversão de Assinatura",
-                                `Deseja realmente reverter o plano e remover o acesso pago associado ao pagamento ${sub.paymentId || sub.id}?`,
-                                () => handleVerifySubscription(sub.id)
-                              )}
-                              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
-                            >
-                              Reverter agora
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
-                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Usuário</span>
-                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
-                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Plano a ser revogado</span>
-                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Horário do Reembolso</span>
-                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <div className="md:col-span-2 text-slate-350">
-                              <span className="text-slate-500 font-bold">Erro de Reversão:</span> <span className="text-amber-400">Usuário ainda ativo no plano {sub.plan}</span>
-                            </div>
-                            <div className="text-slate-350">
-                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
-                              <span className="text-slate-300 font-mono text-[10px]">
-                                {attemptCount}x — {lastAttempt}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               {loadingSubscriptions ? (
                 <div className="py-16 text-center text-slate-500 text-sm flex flex-col items-center justify-center space-y-2">
                   <RefreshCw className="h-6 w-6 text-orange-500 animate-spin" />
                   <span>Carregando dados das assinaturas...</span>
                 </div>
-              ) : (
-                <div className="overflow-x-auto rounded-2xl border border-slate-850">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-950/60 border-b border-slate-850 text-slate-400 text-[10px] font-bold tracking-wider uppercase">
-                        <th className="p-4">E-mail do Usuário</th>
-                        <th className="p-4">Plano</th>
-                        <th className="p-4">Status</th>
-                        <th className="p-4">Data do Pagamento</th>
-                        <th className="p-4">ID Assinatura / Pagamento</th>
-                        <th className="p-4 text-right">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-850/60 text-xs">
-                      {mpSubscriptions.filter(sub => {
-                        const mSearch = subscriptionSearch.toLowerCase().trim();
-                        if (!mSearch) return true;
-                        return (sub.email || '').toLowerCase().includes(mSearch) ||
-                               (sub.plan || '').toLowerCase().includes(mSearch) ||
-                               (sub.status || '').toLowerCase().includes(mSearch);
-                      }).length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-500 text-xs">
-                            Nenhuma assinatura ou pagamento verificado via webhook.
-                          </td>
-                        </tr>
-                      ) : (
-                        mpSubscriptions.filter(sub => {
-                          const mSearch = subscriptionSearch.toLowerCase().trim();
-                          if (!mSearch) return true;
-                          return (sub.email || '').toLowerCase().includes(mSearch) ||
-                                 (sub.plan || '').toLowerCase().includes(mSearch) ||
-                                 (sub.status || '').toLowerCase().includes(mSearch);
-                        }).map((sub) => {
+              ) : (() => {
+                const filteredSubs = mpSubscriptions.filter(sub => {
+                  const mSearch = subscriptionSearch.toLowerCase().trim();
+                  if (!mSearch) return true;
+                  return (sub.email || '').toLowerCase().includes(mSearch) ||
+                         (sub.plan || '').toLowerCase().includes(mSearch) ||
+                         (sub.status || '').toLowerCase().includes(mSearch);
+                });
+
+                const realSubs = filteredSubs.filter(sub => {
+                  const assocUser = findAssociatedUser(sub);
+                  const origin = getSubscriptionOrigin(sub, assocUser);
+                  return origin.label === 'Mercado Pago' || origin.label === 'Manual';
+                });
+
+                const techSubs = filteredSubs.filter(sub => {
+                  const assocUser = findAssociatedUser(sub);
+                  const origin = getSubscriptionOrigin(sub, assocUser);
+                  return origin.label !== 'Mercado Pago' && origin.label !== 'Manual';
+                });
+
+                const expBadge = (exp: any) => {
+                  if (exp.daysLeft === null) {
+                    return <span className="text-slate-500 italic text-[11px]">Sem vencimento</span>;
+                  }
+                  if (exp.daysLeft < 0) {
+                    return (
+                      <div className="flex flex-col">
+                        <span className="text-rose-400 font-semibold text-xs">{exp.text.split(' ')[0]}</span>
+                        <span className="text-[9px] text-rose-500 font-medium">Expirado</span>
+                      </div>
+                    );
+                  }
+                  if (exp.daysLeft <= 5) {
+                    return (
+                      <div className="flex flex-col">
+                        <span className="text-amber-400 font-semibold text-xs">{exp.text.split(' ')[0]}</span>
+                        <span className="text-[9px] text-amber-500 font-bold">Expira em {exp.daysLeft}d</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex flex-col">
+                      <span className="text-emerald-400 font-semibold text-xs">{exp.text.split(' ')[0]}</span>
+                      <span className="text-[9px] text-slate-400">{exp.daysLeft} dias</span>
+                    </div>
+                  );
+                };
+
+                const renderSubscriptionList = (subs: any[]) => {
+                  if (subs.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        Nenhum registro encontrado para esta categoria.
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      {/* MOBILE LIST: Visible only on small screens */}
+                      <div className="block md:hidden space-y-4 p-4">
+                        {subs.map((sub) => {
+                          const assocUser = findAssociatedUser(sub);
+                          const origin = getSubscriptionOrigin(sub, assocUser);
+                          const exp = getExpirationDetails(sub, assocUser);
                           const isNowActive = sub.status === 'authorized' || sub.status === 'approved' || sub.status === 'active';
-                          const planLabel = sub.plan === 'premium' ? 'Premium' : (sub.plan === 'pro' ? 'Pro' : 'Grátis');
+                          const planLabel = sub.plan === 'premium' ? 'Premium' : (sub.plan === 'pro' ? 'Pro' : (sub.plan === 'essencial' ? 'Essencial' : 'Grátis'));
                           const cycleLabel = sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'Anual' : 'Mensal';
                           const paidDate = sub.paidAt ? new Date(sub.paidAt).toLocaleDateString('pt-BR') : '-';
 
                           return (
-                            <tr key={sub.id} className="hover:bg-slate-950/20 transition-colors">
-                              <td className="p-4 font-medium text-slate-100 flex flex-col">
-                                <span>{sub.email}</span>
-                                <span className="text-[10px] text-slate-500 font-mono select-all">UID: {sub.userId || 'Não Associado'}</span>
-                              </td>
-                              <td className="p-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] border tracking-wide uppercase ${sub.plan === 'premium' ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
-                                  {planLabel} ({cycleLabel})
-                                </span>
-                              </td>
-                              <td className="p-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[9px] border tracking-wider uppercase ${sub.status === 'refunded' ? 'bg-amber-600/15 border-amber-500/25 text-amber-500' : isNowActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
-                                  ● {sub.status === 'refunded' ? 'REEMBOLSADO' : sub.status}
-                                </span>
-                              </td>
-                              <td className="p-4 text-slate-300">
-                                {paidDate}
-                              </td>
-                              <td className="p-4 font-mono text-[10px] text-slate-400">
-                                <div className="space-y-0.5">
-                                  {sub.subscriptionId && <p><span className="text-slate-650">Sub ID:</span> {sub.subscriptionId}</p>}
-                                  {sub.paymentId && <p><span className="text-slate-650">Pay ID:</span> {sub.paymentId}</p>}
-                                  {!sub.subscriptionId && !sub.paymentId && <p><span className="text-slate-650">Tx ID:</span> {sub.id}</p>}
+                            <div key={sub.id} className="bg-slate-900/40 border border-slate-850/70 rounded-2xl p-4 space-y-3 shadow-md text-left">
+                              <div className="flex items-start justify-between gap-2 border-b border-slate-850 pb-2">
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-xs font-bold text-slate-100 truncate">{sub.email}</span>
+                                  <span className="text-[9px] text-slate-500 font-mono select-all truncate">UID: {sub.userId || 'Não Associado'}</span>
                                 </div>
-                              </td>
-                              <td className="p-4 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => askConfirmation(
-                                      "Confirmar Verificação de Assinatura",
-                                      `Deseja realmente sincronizar os dados da assinatura "${sub.id}" diretamente com a API do Mercado Pago para atualizar o faturamento no sistema?`,
-                                      () => handleVerifySubscription(sub.id)
-                                    )}
-                                    disabled={verifyingId !== null}
-                                    className="px-3 py-1.5 bg-orange-600/10 hover:bg-orange-600 border border-orange-500/15 hover:border-orange-500 text-orange-400 hover:text-slate-950 font-bold rounded-lg transition text-[11px] disabled:opacity-50 flex items-center gap-1 cursor-pointer select-none"
-                                  >
-                                    <RefreshCw className={`h-3 w-3 ${verifyingId === sub.id ? 'animate-spin' : ''}`} />
-                                    {verifyingId === sub.id ? 'Sincronizando...' : 'Verificar agora'}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedSub(sub);
-                                      setEditSubEmail(sub.email || '');
-                                      setEditSubPlan(sub.plan || 'pro');
-                                      setEditSubCycle(sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'yearly' : 'monthly');
-                                      setEditSubStatus(sub.status || 'authorized');
-                                      setEditSubUserId(sub.userId === 'unknown' ? '' : (sub.userId || ''));
-                                    }}
-                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-755 hover:text-white text-[11px] font-bold text-slate-200 rounded-lg transition font-sans cursor-pointer select-none"
-                                  >
-                                    Editar
-                                  </button>
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] border tracking-wide uppercase shrink-0 ${origin.color}`}>
+                                  {origin.label}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Plano</span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded font-bold text-[9px] uppercase mt-0.5 ${sub.plan === 'premium' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400' : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'}`}>
+                                    {planLabel} ({cycleLabel})
+                                  </span>
                                 </div>
-                              </td>
-                            </tr>
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Status MP</span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded font-bold text-[9px] uppercase mt-0.5 ${sub.status === 'refunded' ? 'bg-amber-600/15 text-amber-500' : isNowActive ? 'bg-emerald-500/10 text-emerald-450' : 'bg-red-500/10 text-red-400'}`}>
+                                    {sub.status === 'refunded' ? 'REEMBOLSADO' : sub.status}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Data Pagamento</span>
+                                  <span className="text-slate-300 font-medium block mt-0.5">{paidDate}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block">Vencimento</span>
+                                  <span className="block mt-0.5 text-slate-300">{exp.text}</span>
+                                </div>
+                              </div>
+
+                              <div className="text-[9px] text-slate-500 font-mono bg-slate-950/40 p-2 rounded-xl space-y-0.5 select-all">
+                                {sub.subscriptionId && <p>Sub ID: {sub.subscriptionId}</p>}
+                                {sub.paymentId && <p>Pay ID: {sub.paymentId}</p>}
+                                {!sub.subscriptionId && !sub.paymentId && <p>Tx ID: {sub.id}</p>}
+                              </div>
+
+                              <div className="flex items-center gap-2 pt-2 border-t border-slate-850/60 justify-end">
+                                <button
+                                  onClick={() => askConfirmation(
+                                    "Confirmar Verificação de Assinatura",
+                                    `Deseja realmente sincronizar os dados da assinatura "${sub.id}" diretamente com a API do Mercado Pago para atualizar o faturamento no sistema?`,
+                                    () => handleVerifySubscription(sub.id)
+                                  )}
+                                  disabled={verifyingId !== null}
+                                  className="px-2.5 py-1.5 bg-orange-600/10 hover:bg-orange-600 border border-orange-500/15 hover:border-orange-500 text-orange-400 hover:text-slate-950 font-bold rounded-lg transition text-[10px] disabled:opacity-50 flex items-center gap-1 cursor-pointer select-none"
+                                >
+                                  <RefreshCw className={`h-2.5 w-2.5 ${verifyingId === sub.id ? 'animate-spin' : ''}`} />
+                                  Verificar
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedSub(sub);
+                                    setEditSubEmail(sub.email || '');
+                                    setEditSubPlan(sub.plan || 'pro');
+                                    setEditSubCycle(sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'yearly' : 'monthly');
+                                    setEditSubStatus(sub.status || 'authorized');
+                                    setEditSubUserId(sub.userId === 'unknown' ? '' : (sub.userId || ''));
+                                  }}
+                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-755 hover:text-white text-[10px] font-bold text-slate-200 rounded-lg transition font-sans cursor-pointer select-none"
+                                >
+                                  Editar
+                                </button>
+                              </div>
+                            </div>
                           );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                        })}
+                      </div>
+
+                      {/* DESKTOP TABLE: Visible on medium screens and up */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left border-collapse table-fixed">
+                          <thead>
+                            <tr className="bg-slate-950/60 border-b border-slate-850 text-slate-400 text-[10px] font-extrabold tracking-wider uppercase">
+                              <th className="p-4 w-[22%]">E-mail / UID</th>
+                              <th className="p-4 w-[15%]">Plano</th>
+                              <th className="p-4 w-[12%]">Status MP</th>
+                              <th className="p-4 w-[11%]">Pagamento</th>
+                              <th className="p-4 w-[15%]">Vencimento</th>
+                              <th className="p-4 w-[10%]">Origem</th>
+                              <th className="p-4 w-[15%] text-right">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-850/60 text-xs">
+                            {subs.map((sub) => {
+                              const assocUser = findAssociatedUser(sub);
+                              const origin = getSubscriptionOrigin(sub, assocUser);
+                              const exp = getExpirationDetails(sub, assocUser);
+                              const isNowActive = sub.status === 'authorized' || sub.status === 'approved' || sub.status === 'active';
+                              const planLabel = sub.plan === 'premium' ? 'Premium' : (sub.plan === 'pro' ? 'Pro' : (sub.plan === 'essencial' ? 'Essencial' : 'Grátis'));
+                              const cycleLabel = sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'Anual' : 'Mensal';
+                              const paidDate = sub.paidAt ? new Date(sub.paidAt).toLocaleDateString('pt-BR') : '-';
+
+                              return (
+                                <tr key={sub.id} className="hover:bg-slate-950/25 transition-colors">
+                                  <td className="p-4 font-medium text-slate-100 flex flex-col justify-center min-w-0 text-left">
+                                    <span className="truncate" title={sub.email}>{sub.email}</span>
+                                    <span className="text-[9px] text-slate-500 font-mono select-all truncate mt-0.5">UID: {sub.userId || 'Não Associado'}</span>
+                                  </td>
+                                  <td className="p-4">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] border tracking-wide uppercase ${sub.plan === 'premium' ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                                      {planLabel} ({cycleLabel})
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[9px] border tracking-wider uppercase ${sub.status === 'refunded' ? 'bg-amber-600/15 border-amber-500/25 text-amber-500' : isNowActive ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                                      ● {sub.status === 'refunded' ? 'REEMBOLSADO' : sub.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-slate-300">
+                                    {paidDate}
+                                  </td>
+                                  <td className="p-4">
+                                    {expBadge(exp)}
+                                  </td>
+                                  <td className="p-4">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-extrabold text-[9px] border tracking-wider uppercase ${origin.color}`}>
+                                      {origin.label}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        onClick={() => askConfirmation(
+                                          "Confirmar Verificação de Assinatura",
+                                          `Deseja realmente sincronizar os dados da assinatura "${sub.id}" diretamente com a API do Mercado Pago para atualizar o faturamento no sistema?`,
+                                          () => handleVerifySubscription(sub.id)
+                                        )}
+                                        disabled={verifyingId !== null}
+                                        className="p-1.5 bg-orange-600/10 hover:bg-orange-600 border border-orange-500/15 hover:border-orange-500 text-orange-400 hover:text-slate-950 rounded-lg transition disabled:opacity-50 flex items-center justify-center cursor-pointer select-none"
+                                        title="Verificar agora"
+                                      >
+                                        <RefreshCw className={`h-3 w-3 ${verifyingId === sub.id ? 'animate-spin' : ''}`} />
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setSelectedSub(sub);
+                                          setEditSubEmail(sub.email || '');
+                                          setEditSubPlan(sub.plan || 'pro');
+                                          setEditSubCycle(sub.billingCycle === 'annual' || sub.billingCycle === 'yearly' ? 'yearly' : 'monthly');
+                                          setEditSubStatus(sub.status || 'authorized');
+                                          setEditSubUserId(sub.userId === 'unknown' ? '' : (sub.userId || ''));
+                                        }}
+                                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-755 hover:text-white text-[11px] font-bold text-slate-200 rounded-lg transition font-sans cursor-pointer select-none"
+                                      >
+                                        Editar
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                };
+
+                return (
+                  <div className="space-y-6">
+                    {/* REAL SUBSCRIPTIONS CONTAINER */}
+                    <div className="bg-slate-900/10 border border-slate-850/70 rounded-3xl overflow-hidden shadow-lg">
+                      <div className="px-6 py-4 bg-slate-950/45 border-b border-slate-850 flex items-center justify-between gap-4 flex-wrap">
+                        <div className="text-left">
+                          <h3 className="font-extrabold text-sm text-white uppercase tracking-wider">Assinaturas Reais / Ativas</h3>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Lista limpa com assinantes reais e faturamentos válidos vinculados</p>
+                        </div>
+                        <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black rounded-full uppercase tracking-wider">
+                          {realSubs.length} Assinantes
+                        </span>
+                      </div>
+                      {renderSubscriptionList(realSubs)}
+                    </div>
+
+                    {/* COLLAPSIBLE TECHNICAL/SANDBOX SUBSCRIPTIONS CONTAINER */}
+                    <div className="bg-slate-900/10 border border-slate-850/70 rounded-3xl overflow-hidden shadow-lg">
+                      <button
+                        onClick={() => setShowTechnicalDocs(!showTechnicalDocs)}
+                        className="w-full px-6 py-4 bg-slate-950/25 hover:bg-slate-900/30 border-b border-slate-850 flex items-center justify-between hover:text-white transition text-left cursor-pointer select-none"
+                      >
+                        <div className="flex flex-col min-w-0 mr-4 text-left">
+                          <div className="flex items-center gap-2">
+                            <Settings className="h-4 w-4 text-slate-500 shrink-0" />
+                            <h3 className="font-extrabold text-sm text-slate-300 uppercase tracking-wider">Registros Técnicos / Órfãos / Erros / Sandbox</h3>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Contém simulações, sandbox, registros com erro de assinatura ou órfãos sem UID cadastrado</p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-mono rounded-full">
+                            {techSubs.length} registros
+                          </span>
+                          <span className="text-orange-400 font-extrabold text-xs uppercase tracking-wider select-none">
+                            {showTechnicalDocs ? 'Ocultar ▲' : 'Expandir ▼'}
+                          </span>
+                        </div>
+                      </button>
+                      {showTechnicalDocs && renderSubscriptionList(techSubs)}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* MANUAL ACTION INFORMATION MODAL */}
               {selectedSub && (
