@@ -213,6 +213,29 @@ export default function AdminArea({
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  const askConfirmation = (title: string, message: string, callback: () => void | Promise<void>) => {
+    setConfirmModal({
+      title,
+      message,
+      onConfirm: async () => {
+        try {
+          await callback();
+        } catch (e) {
+          console.error("Error running confirmed action:", e);
+        } finally {
+          setConfirmModal(null);
+        }
+      }
+    });
+  };
+
   // Global share card states
   const [shareCardSettings, setShareCardSettings] = useState<ShareCardSettings | null>(null);
   const [isUploadingShareCard, setIsUploadingShareCard] = useState(false);
@@ -857,66 +880,74 @@ export default function AdminArea({
       return;
     }
 
-    try {
-      const limit = editSubPlan === 'premium' ? 50 : (editSubPlan === 'pro' ? 15 : (editSubPlan === 'essencial' ? 10 : 3));
-      const isNowActive = editSubStatus === 'authorized' || editSubStatus === 'approved' || editSubStatus === 'active';
-      const actualPlan = isNowActive ? editSubPlan : 'free';
-      const actualLimit = isNowActive ? limit : 5;
-      const paymentStatus = isNowActive ? 'active' : 'inactive';
-      
-      const activatedAt = new Date();
-      const expiresAt = new Date();
-      if (editSubCycle === 'yearly') {
-        expiresAt.setFullYear(activatedAt.getFullYear() + 1);
-      } else {
-        expiresAt.setDate(activatedAt.getDate() + 31);
+    askConfirmation(
+      "Confirmar Sincronização de Plano",
+      `Deseja realmente sincronizar manualmente os dados da assinatura ${selectedSub.id} para o usuário ID "${editSubUserId}"? Isso alterará as permissões de acesso deste usuário imediatamente no banco de dados.`,
+      async () => {
+        try {
+          const limit = editSubPlan === 'premium' ? 50 : (editSubPlan === 'pro' ? 15 : (editSubPlan === 'essencial' ? 10 : 3));
+          const isNowActive = editSubStatus === 'authorized' || editSubStatus === 'approved' || editSubStatus === 'active';
+          const actualPlan = isNowActive ? editSubPlan : 'free';
+          const actualLimit = isNowActive ? limit : 5;
+          const paymentStatus = isNowActive ? 'active' : 'inactive';
+          
+          const activatedAt = new Date();
+          const expiresAt = new Date();
+          if (editSubCycle === 'yearly') {
+            expiresAt.setFullYear(activatedAt.getFullYear() + 1);
+          } else {
+            expiresAt.setDate(activatedAt.getDate() + 31);
+          }
+
+          const activatedStr = activatedAt.toISOString();
+          const expiresStr = expiresAt.toISOString();
+
+          const userPayload = {
+            plan: actualPlan,
+            billingCycle: editSubCycle === 'yearly' ? 'annual' : 'monthly',
+            musicLimit: actualLimit,
+            subscriptionStatus: isNowActive ? 'ativo' : 'cancelado',
+            paymentStatus: paymentStatus,
+            accessType: isNowActive ? 'subscriber' : 'free',
+            mercadoPagoSubscriptionId: selectedSub.subscriptionId || selectedSub.id,
+            mercadoPagoPaymentId: selectedSub.paymentId || selectedSub.id,
+            planActivatedAt: isNowActive ? activatedStr : null,
+            planExpiresAt: isNowActive ? expiresStr : null,
+            subscriptionStartedAt: isNowActive ? activatedStr : null,
+            subscriptionEndsAt: isNowActive ? expiresStr : null,
+            updatedAt: activatedStr
+          };
+
+          const { doc, setDoc } = await import('firebase/firestore');
+          await setDoc(doc(db, 'users', editSubUserId), userPayload, { merge: true });
+          await setDoc(doc(db, 'artists', editSubUserId), userPayload, { merge: true });
+
+          await setDoc(doc(db, 'mp_subscriptions', selectedSub.id), {
+            id: selectedSub.id,
+            userId: editSubUserId,
+            email: editSubEmail,
+            plan: actualPlan,
+            billingCycle: editSubCycle === 'yearly' ? 'annual' : 'monthly',
+            status: editSubStatus,
+            paymentId: selectedSub.paymentId || "",
+            subscriptionId: selectedSub.subscriptionId || "",
+            musicLimit: actualLimit,
+            paidAt: activatedStr,
+            updatedAt: new Date()
+          }, { merge: true });
+
+          await dbService.enforceTracksByPlanValidityAsync(editSubUserId, actualPlan, actualLimit);
+
+          triggerNotification("Assinatura e plano do usuário sincronizados com sucesso!");
+          setSelectedSub(null);
+          loadSubscriptions();
+        } catch (err: any) {
+          console.error("Error saving subscription manual edit:", err);
+          triggerNotification("Erro ao atualizar dados: " + (err.message || String(err)), true);
+          handleFirestoreError(err, OperationType.WRITE, `mp_subscriptions/${selectedSub?.id}`);
+        }
       }
-
-      const activatedStr = activatedAt.toISOString();
-      const expiresStr = expiresAt.toISOString();
-
-      const userPayload = {
-        plan: actualPlan,
-        billingCycle: editSubCycle === 'yearly' ? 'annual' : 'monthly',
-        musicLimit: actualLimit,
-        subscriptionStatus: isNowActive ? 'ativo' : 'cancelado',
-        paymentStatus: paymentStatus,
-        accessType: isNowActive ? 'subscriber' : 'free',
-        mercadoPagoSubscriptionId: selectedSub.subscriptionId || selectedSub.id,
-        mercadoPagoPaymentId: selectedSub.paymentId || selectedSub.id,
-        planActivatedAt: isNowActive ? activatedStr : null,
-        planExpiresAt: isNowActive ? expiresStr : null,
-        subscriptionStartedAt: isNowActive ? activatedStr : null,
-        subscriptionEndsAt: isNowActive ? expiresStr : null,
-        updatedAt: activatedStr
-      };
-
-      const { doc, setDoc } = await import('firebase/firestore');
-      await setDoc(doc(db, 'users', editSubUserId), userPayload, { merge: true });
-      await setDoc(doc(db, 'artists', editSubUserId), userPayload, { merge: true });
-
-      await setDoc(doc(db, 'mp_subscriptions', selectedSub.id), {
-        id: selectedSub.id,
-        userId: editSubUserId,
-        email: editSubEmail,
-        plan: actualPlan,
-        billingCycle: editSubCycle === 'yearly' ? 'annual' : 'monthly',
-        status: editSubStatus,
-        paymentId: selectedSub.paymentId || "",
-        subscriptionId: selectedSub.subscriptionId || "",
-        musicLimit: actualLimit,
-        paidAt: activatedStr,
-        updatedAt: new Date()
-      }, { merge: true });
-
-      triggerNotification("Assinatura e plano do usuário sincronizados com sucesso!");
-      setSelectedSub(null);
-      loadSubscriptions();
-    } catch (err: any) {
-      console.error("Error saving subscription manual edit:", err);
-      triggerNotification("Erro ao atualizar dados: " + (err.message || String(err)), true);
-      handleFirestoreError(err, OperationType.WRITE, `mp_subscriptions/${selectedSub?.id}`);
-    }
+    );
   };
 
   useEffect(() => {
@@ -975,40 +1006,98 @@ export default function AdminArea({
   const handleSaveUserEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-    
-    try {
-      // Calculate custom limit based on plan default if not modified
-      let finalLimit = selectedUser.musicLimit;
-      if (finalLimit === undefined) {
-        finalLimit = selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50));
+
+    // Validation: Expiration date mandatory for manual/trial active plans
+    const accessType = selectedUser.accessType || 'free';
+    const plan = selectedUser.plan || 'free';
+
+    if (plan !== 'free') {
+      if (accessType === 'manual') {
+        if (!selectedUser.manualAccessEndsAt) {
+          triggerNotification("Erro: Todo plano manual precisa obrigatoriamente ter uma data de término do acesso manual definida.", true);
+          return;
+        }
+        if (new Date(selectedUser.manualAccessEndsAt) <= new Date()) {
+          triggerNotification("Erro: A data de término do acesso manual precisa ser no futuro.", true);
+          return;
+        }
+      } else if (accessType === 'trial') {
+        if (!selectedUser.trialEndsAt) {
+          triggerNotification("Erro: Todo plano trial/teste precisa obrigatoriamente ter uma data de término do teste grátis definida.", true);
+          return;
+        }
+        if (new Date(selectedUser.trialEndsAt) <= new Date()) {
+          triggerNotification("Erro: A data de término do teste grátis precisa ser no futuro.", true);
+          return;
+        }
+      }
+    }
+
+    const originalUser = users.find(u => u.userId === selectedUser.userId);
+    let finalLimit = selectedUser.musicLimit;
+    if (finalLimit === undefined) {
+      finalLimit = selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50));
+    }
+
+    const hasPlanChanged = originalUser && originalUser.plan !== selectedUser.plan;
+    const hasLimitChanged = originalUser && Number(originalUser.musicLimit) !== Number(finalLimit);
+    const hasStatusChanged = originalUser && (
+      originalUser.accessType !== selectedUser.accessType ||
+      originalUser.paymentStatus !== selectedUser.paymentStatus
+    );
+
+    const executeSave = async () => {
+      try {
+        const updatedFields: Partial<Artist> = {
+          plan: selectedUser.plan,
+          role: selectedUser.role || 'user',
+          paymentStatus: selectedUser.paymentStatus || 'inactive',
+          accessType: selectedUser.accessType || 'free',
+          musicLimit: Number(finalLimit),
+          trialEndsAt: selectedUser.trialEndsAt || null,
+          manualAccessEndsAt: selectedUser.manualAccessEndsAt || null,
+          subscriptionStartedAt: selectedUser.subscriptionStartedAt || null,
+          subscriptionEndsAt: selectedUser.subscriptionEndsAt || null,
+          mercadoPagoPaymentId: selectedUser.mercadoPagoPaymentId || null,
+          mercadoPagoSubscriptionId: selectedUser.mercadoPagoSubscriptionId || null,
+          isBlocked: selectedUser.isBlocked || false,
+          name: selectedUser.name,
+          city: selectedUser.city,
+          state: selectedUser.state,
+          whatsapp: selectedUser.whatsapp,
+          instagram: selectedUser.instagram,
+        };
+
+        await dbService.updateUserDataFromAdmin(selectedUser.userId, updatedFields);
+        await dbService.enforceTracksByPlanValidityAsync(selectedUser.userId, updatedFields.plan || 'free', Number(updatedFields.musicLimit));
+        triggerNotification("Alterações salvas com sucesso!");
+        setSelectedUser(null);
+        loadData();
+      } catch {
+        triggerNotification("Erro ao salvar alterações.", true);
+      }
+    };
+
+    if (hasPlanChanged || hasLimitChanged || hasStatusChanged) {
+      const changesList: string[] = [];
+      if (hasPlanChanged) {
+        changesList.push(`- Plano: "${originalUser.plan?.toUpperCase() || 'FREE'}" ➔ "${selectedUser.plan?.toUpperCase()}"`);
+      }
+      if (hasLimitChanged) {
+        changesList.push(`- Limite de Músicas: ${originalUser.musicLimit || 3} ➔ ${finalLimit}`);
+      }
+      if (hasStatusChanged) {
+        changesList.push(`- Tipo de Acesso: "${originalUser.accessType?.toUpperCase() || 'FREE'}" ➔ "${selectedUser.accessType?.toUpperCase()}"`);
+        changesList.push(`- Status de Pagamento: "${originalUser.paymentStatus?.toUpperCase() || 'INACTIVE'}" ➔ "${selectedUser.paymentStatus?.toUpperCase()}"`);
       }
 
-      const updatedFields: Partial<Artist> = {
-        plan: selectedUser.plan,
-        role: selectedUser.role || 'user',
-        paymentStatus: selectedUser.paymentStatus || 'inactive',
-        accessType: selectedUser.accessType || 'free',
-        musicLimit: Number(finalLimit),
-        trialEndsAt: selectedUser.trialEndsAt || null,
-        manualAccessEndsAt: selectedUser.manualAccessEndsAt || null,
-        subscriptionStartedAt: selectedUser.subscriptionStartedAt || null,
-        subscriptionEndsAt: selectedUser.subscriptionEndsAt || null,
-        mercadoPagoPaymentId: selectedUser.mercadoPagoPaymentId || null,
-        mercadoPagoSubscriptionId: selectedUser.mercadoPagoSubscriptionId || null,
-        isBlocked: selectedUser.isBlocked || false,
-        name: selectedUser.name,
-        city: selectedUser.city,
-        state: selectedUser.state,
-        whatsapp: selectedUser.whatsapp,
-        instagram: selectedUser.instagram,
-      };
-
-      await dbService.updateUserDataFromAdmin(selectedUser.userId, updatedFields);
-      triggerNotification("Alterações salvas com sucesso!");
-      setSelectedUser(null);
-      loadData();
-    } catch {
-      triggerNotification("Erro ao salvar alterações.", true);
+      askConfirmation(
+        "Confirmar Alterações Críticas",
+        `Deseja realmente salvar as seguintes alterações críticas de faturamento para o usuário ${selectedUser.name || 'Não identificado'}?\n\n` + changesList.join('\n'),
+        executeSave
+      );
+    } else {
+      executeSave();
     }
   };
 
@@ -1027,30 +1116,38 @@ export default function AdminArea({
       return;
     }
 
-    try {
-      const now = new Date();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + Number(manualDuration));
+    // Confirm manual release
+    askConfirmation(
+      "Confirmar Ativação Manual",
+      `Deseja liberar o acesso ao plano ${manualPlan.toUpperCase()} com limite de ${manualLimit} músicas por ${manualDuration} dias para o usuário ${matchedUser.name}?\n\nIsso gerará um vencimento obrigatório em ${manualDuration} dias.`,
+      async () => {
+        try {
+          const now = new Date();
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + Number(manualDuration));
 
-      const updatedFields: Partial<Artist> = {
-        plan: manualPlan,
-        accessType: 'manual',
-        paymentStatus: 'manual',
-        musicLimit: Number(manualLimit),
-        manualAccessEndsAt: expiresAt.toISOString(),
-        subscriptionStartedAt: now.toISOString(),
-        subscriptionEndsAt: expiresAt.toISOString(),
-        bio: manualNotes ? `${matchedUser.bio || ''} - Nota Admin: ${manualNotes}` : matchedUser.bio
-      };
+          const updatedFields: Partial<Artist> = {
+            plan: manualPlan,
+            accessType: 'manual',
+            paymentStatus: 'manual',
+            musicLimit: Number(manualLimit),
+            manualAccessEndsAt: expiresAt.toISOString(),
+            subscriptionStartedAt: now.toISOString(),
+            subscriptionEndsAt: expiresAt.toISOString(),
+            bio: manualNotes ? `${matchedUser.bio || ''} - Nota Admin: ${manualNotes}` : matchedUser.bio
+          };
 
-      await dbService.updateUserDataFromAdmin(matchedUser.userId, updatedFields);
-      triggerNotification(`Acesso manual de ${manualDuration} dias liberado para ${matchedUser.name}!`);
-      setManualEmail('');
-      setManualNotes('');
-      loadData();
-    } catch {
-      triggerNotification("Erro ao aplicar liberação manual.", true);
-    }
+          await dbService.updateUserDataFromAdmin(matchedUser.userId, updatedFields);
+          await dbService.enforceTracksByPlanValidityAsync(matchedUser.userId, manualPlan, Number(manualLimit));
+          triggerNotification(`Acesso manual de ${manualDuration} dias liberado para ${matchedUser.name}!`);
+          setManualEmail('');
+          setManualNotes('');
+          loadData();
+        } catch {
+          triggerNotification("Erro ao aplicar liberação manual.", true);
+        }
+      }
+    );
   };
 
   const handleCreateTrial = async (e: React.FormEvent) => {
@@ -1068,28 +1165,36 @@ export default function AdminArea({
       return;
     }
 
-    try {
-      const now = new Date();
-      const trialEnds = new Date();
-      trialEnds.setDate(trialEnds.getDate() + Number(trialDuration));
+    // Confirm trial creation
+    askConfirmation(
+      "Confirmar Criação de Teste Grátis",
+      `Deseja criar um período de teste de ${trialDuration} dias no plano ${trialPlan.toUpperCase()} para o usuário ${matchedUser.name}?\n\nIsso gerará um vencimento obrigatório em ${trialDuration} dias.`,
+      async () => {
+        try {
+          const now = new Date();
+          const trialEnds = new Date();
+          trialEnds.setDate(trialEnds.getDate() + Number(trialDuration));
 
-      const updatedFields: Partial<Artist> = {
-        plan: trialPlan,
-        accessType: 'trial',
-        paymentStatus: 'active',
-        musicLimit: Number(trialLimit),
-        trialEndsAt: trialEnds.toISOString(),
-        subscriptionStartedAt: now.toISOString(),
-        subscriptionEndsAt: trialEnds.toISOString(),
-      };
+          const updatedFields: Partial<Artist> = {
+            plan: trialPlan,
+            accessType: 'trial',
+            paymentStatus: 'active',
+            musicLimit: Number(trialLimit),
+            trialEndsAt: trialEnds.toISOString(),
+            subscriptionStartedAt: now.toISOString(),
+            subscriptionEndsAt: trialEnds.toISOString(),
+          };
 
-      await dbService.updateUserDataFromAdmin(matchedUser.userId, updatedFields);
-      triggerNotification(`Teste grátis de ${trialDuration} dias (Plano ${trialPlan.toUpperCase()}) criado e ativado para ${matchedUser.name}!`);
-      setTrialEmail('');
-      loadData();
-    } catch {
-      triggerNotification("Erro ao criar teste grátis.", true);
-    }
+          await dbService.updateUserDataFromAdmin(matchedUser.userId, updatedFields);
+          await dbService.enforceTracksByPlanValidityAsync(matchedUser.userId, trialPlan, Number(trialLimit));
+          triggerNotification(`Teste grátis de ${trialDuration} dias (Plano ${trialPlan.toUpperCase()}) criado e ativado para ${matchedUser.name}!`);
+          setTrialEmail('');
+          loadData();
+        } catch {
+          triggerNotification("Erro ao criar teste grátis.", true);
+        }
+      }
+    );
   };
 
   // Filter logic
@@ -1287,140 +1392,6 @@ export default function AdminArea({
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               
-              {/* SEÇÃO DE ALERTAS ADMINISTRATIVOS DE PAGAMENTO */}
-              {(pendingActivationPayments.length > 0 || pendingReversalRefunds.length > 0) && (
-                <div className="space-y-4 animate-fade-in">
-                  <div className="flex items-center space-x-2 text-rose-500">
-                    <AlertTriangle className="h-5 w-5 font-bold animate-pulse text-rose-500 shrink-0" />
-                    <h3 className="text-xs font-black uppercase tracking-wider text-rose-500">Alertas de Sincronização Urgentes</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    {/* 1. Pagamentos Aprovados Aguardando Ativação */}
-                    {pendingActivationPayments.map((sub) => {
-                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
-                      const lastAttempt = sub.updatedAt 
-                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
-                        : dateStr;
-                      const attemptCount = sub.retryCount || sub.attempts || 1;
-                      return (
-                        <div key={`alert-act-${sub.id}`} className="bg-rose-950/20 border-l-4 border-rose-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-500/10 pb-2">
-                            <div>
-                              <span className="text-xs font-extrabold text-rose-400 uppercase tracking-wide">
-                                ⚠️ Pagamento aprovado aguardando ativação
-                              </span>
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                O pagamento foi aprovado pelo Mercado Pago, mas o plano do usuário correspondente ainda não foi atualizado no Firestore.
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => handleVerifySubscription(sub.id)}
-                              className="px-3 py-1 bg-rose-500 hover:bg-rose-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
-                            >
-                              Reprocessar
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
-                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Usuário</span>
-                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
-                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Plano adquirido</span>
-                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Horário da Transação</span>
-                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <div className="md:col-span-2 text-slate-350">
-                              <span className="text-slate-500 font-bold">Erro de Ativação:</span> <span className="text-rose-400">{sub.errorMessage || 'Sem usuário vinculado ou erro de escrita'}</span>
-                            </div>
-                            <div className="text-slate-350">
-                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
-                              <span className="text-slate-300 font-mono text-[10px]">
-                                {attemptCount}x — {lastAttempt}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* 2. Reembolsos Confirmados Aguardando Reversão */}
-                    {pendingReversalRefunds.map((sub) => {
-                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
-                      const lastAttempt = sub.updatedAt 
-                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
-                        : dateStr;
-                      const attemptCount = sub.retryCount || sub.attempts || 1;
-                      return (
-                        <div key={`alert-rev-${sub.id}`} className="bg-amber-950/20 border-l-4 border-amber-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/10 pb-2">
-                            <div>
-                              <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wide">
-                                ⚠️ Reembolso confirmado aguardando reversão
-                              </span>
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                A compra foi estornada/reembolsada, mas o usuário correspondente ainda mantém acesso ao plano pago no Firestore.
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => handleVerifySubscription(sub.id)}
-                              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
-                            >
-                              Reverter agora
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
-                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Usuário</span>
-                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
-                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Plano a ser revogado</span>
-                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Horário do Reembolso</span>
-                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <div className="md:col-span-2 text-slate-350">
-                              <span className="text-slate-500 font-bold">Erro de Reversão:</span> <span className="text-amber-400">Usuário ainda ativo no plano {sub.plan}</span>
-                            </div>
-                            <div className="text-slate-350">
-                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
-                              <span className="text-slate-300 font-mono text-[10px]">
-                                {attemptCount}x — {lastAttempt}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Statistics Bento Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 
@@ -3252,7 +3223,11 @@ export default function AdminArea({
                       className="flex-1 bg-slate-950 px-4 py-3 rounded-xl border border-slate-850 text-slate-200 text-xs focus:ring-1 focus:ring-orange-500 outline-none"
                     />
                     <button
-                      onClick={() => handleManualVerifyPayment()}
+                      onClick={() => askConfirmation(
+                        "Confirmar Consulta de Pagamento",
+                        `Deseja realmente iniciar a verificação manual do pagamento ID "${manualPaymentId}" diretamente no Mercado Pago?`,
+                        () => handleManualVerifyPayment()
+                      )}
                       disabled={manualVerifying}
                       className="px-5 py-3 bg-orange-600 hover:bg-orange-500 text-slate-955 hover:text-slate-950 font-bold rounded-xl transition text-xs shrink-0 disabled:opacity-40 disabled:cursor-not-allowed select-none flex items-center justify-center gap-1.5 cursor-pointer"
                     >
@@ -3306,7 +3281,11 @@ export default function AdminArea({
                               <option value="premium_anual">SomDrive PREMIUM - Anual (R$ 299,90)</option>
                             </select>
                             <button
-                              onClick={() => handleManualVerifyPayment(selectedForcePlan)}
+                              onClick={() => askConfirmation(
+                                "Confirmar Ativação Forçada",
+                                `Deseja realmente ativar diretamente o plano "${selectedForcePlan.toUpperCase().replace('_', ' ')}" para este usuário? Isso criará um registro de faturamento ativo no sistema.`,
+                                () => handleManualVerifyPayment(selectedForcePlan)
+                              )}
                               disabled={manualVerifying}
                               className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold rounded-lg transition text-xs shrink-0 cursor-pointer select-none"
                             >
@@ -3331,6 +3310,148 @@ export default function AdminArea({
                   )}
                 </div>
               </div>
+
+              {/* Pendências de reembolso e ativação */}
+              {(pendingActivationPayments.length > 0 || pendingReversalRefunds.length > 0) && (
+                <div className="space-y-4 animate-fade-in p-5 bg-slate-950/20 border border-slate-850/60 rounded-2xl">
+                  <div className="flex items-center space-x-2 text-rose-500">
+                    <AlertTriangle className="h-5 w-5 font-bold animate-pulse text-rose-500 shrink-0" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-rose-500">Pendências de reembolso e ativação</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* 1. Pagamentos Aprovados Aguardando Ativação */}
+                    {pendingActivationPayments.map((sub) => {
+                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
+                      const lastAttempt = sub.updatedAt 
+                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
+                        : dateStr;
+                      const attemptCount = sub.retryCount || sub.attempts || 1;
+                      return (
+                        <div key={`alert-act-${sub.id}`} className="bg-rose-950/20 border-l-4 border-rose-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-500/10 pb-2">
+                            <div>
+                              <span className="text-xs font-extrabold text-rose-400 uppercase tracking-wide">
+                                ⚠️ Pagamento aprovado aguardando ativação
+                              </span>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                O pagamento foi aprovado pelo Mercado Pago, mas o plano do usuário correspondente ainda não foi atualizado no Firestore.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => askConfirmation(
+                                "Confirmar Reprocessamento",
+                                `Deseja realmente reprocessar o webhook de ativação para a assinatura ${sub.id}?`,
+                                () => handleVerifySubscription(sub.id)
+                              )}
+                              className="px-3 py-1 bg-rose-500 hover:bg-rose-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
+                            >
+                              Reprocessar
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
+                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Usuário</span>
+                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
+                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Plano adquirido</span>
+                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Horário da Transação</span>
+                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div className="md:col-span-2 text-slate-350">
+                              <span className="text-slate-500 font-bold">Erro de Ativação:</span> <span className="text-rose-400">{sub.errorMessage || 'Sem usuário vinculado ou erro de escrita'}</span>
+                            </div>
+                            <div className="text-slate-350">
+                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
+                              <span className="text-slate-300 font-mono text-[10px]">
+                                {attemptCount}x — {lastAttempt}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* 2. Reembolsos Confirmados Aguardando Reversão */}
+                    {pendingReversalRefunds.map((sub) => {
+                      const dateStr = sub.processedAt ? new Date(sub.processedAt).toLocaleString('pt-BR') : 'Não disponível';
+                      const lastAttempt = sub.updatedAt 
+                        ? (sub.updatedAt.seconds ? new Date(sub.updatedAt.seconds * 1000).toLocaleString('pt-BR') : new Date(sub.updatedAt).toLocaleString('pt-BR'))
+                        : dateStr;
+                      const attemptCount = sub.retryCount || sub.attempts || 1;
+                      return (
+                        <div key={`alert-rev-${sub.id}`} className="bg-amber-950/20 border-l-4 border-amber-500 bg-slate-900/40 p-5 rounded-2xl border border-slate-800 space-y-3 shadow-xl text-white">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/10 pb-2">
+                            <div>
+                              <span className="text-xs font-extrabold text-amber-400 uppercase tracking-wide">
+                                ⚠️ Reembolso confirmado aguardando reversão
+                              </span>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                A compra foi estornada/reembolsada, mas o usuário correspondente ainda mantém acesso ao plano pago no Firestore.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => askConfirmation(
+                                "Confirmar Reversão de Assinatura",
+                                `Deseja realmente reverter o plano e remover o acesso pago associado ao pagamento ${sub.paymentId || sub.id}?`,
+                                () => handleVerifySubscription(sub.id)
+                              )}
+                              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] rounded-lg transition shrink-0 uppercase tracking-wider cursor-pointer"
+                            >
+                              Reverter agora
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">ID do Pagamento</span>
+                              <span className="font-mono text-white text-[11px] select-all">{sub.paymentId || sub.id}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Usuário</span>
+                              <span className="text-white font-semibold block truncate" title={sub.email}>{sub.email || 'Não identificado'}</span>
+                              <span className="text-[9px] font-mono text-slate-400 select-all">{sub.userId || sub.uid}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Plano a ser revogado</span>
+                              <span className="inline-flex items-center text-[10px] uppercase font-bold text-amber-400">{sub.plan}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 block">Horário do Reembolso</span>
+                              <span className="text-white text-[11px] font-medium">{dateStr}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div className="md:col-span-2 text-slate-350">
+                              <span className="text-slate-500 font-bold">Erro de Reversão:</span> <span className="text-amber-400">Usuário ainda ativo no plano {sub.plan}</span>
+                            </div>
+                            <div className="text-slate-350">
+                              <span className="text-slate-500 font-bold block">Tentativas / Última tentativa</span>
+                              <span className="text-slate-300 font-mono text-[10px]">
+                                {attemptCount}x — {lastAttempt}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {loadingSubscriptions ? (
                 <div className="py-16 text-center text-slate-500 text-sm flex flex-col items-center justify-center space-y-2">
@@ -3405,7 +3526,11 @@ export default function AdminArea({
                               <td className="p-4 text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   <button
-                                    onClick={() => handleVerifySubscription(sub.id)}
+                                    onClick={() => askConfirmation(
+                                      "Confirmar Verificação de Assinatura",
+                                      `Deseja realmente sincronizar os dados da assinatura "${sub.id}" diretamente com a API do Mercado Pago para atualizar o faturamento no sistema?`,
+                                      () => handleVerifySubscription(sub.id)
+                                    )}
                                     disabled={verifyingId !== null}
                                     className="px-3 py-1.5 bg-orange-600/10 hover:bg-orange-600 border border-orange-500/15 hover:border-orange-500 text-orange-400 hover:text-slate-950 font-bold rounded-lg transition text-[11px] disabled:opacity-50 flex items-center gap-1 cursor-pointer select-none"
                                   >
@@ -3535,7 +3660,7 @@ export default function AdminArea({
                         <button
                           type="button"
                           onClick={() => setSelectedSub(null)}
-                          className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl transition"
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-755 text-slate-200 text-xs font-bold rounded-xl transition"
                         >
                           Cancelar
                         </button>
@@ -3547,6 +3672,44 @@ export default function AdminArea({
                         </button>
                       </div>
                     </form>
+                  </motion.div>
+                </div>
+              )}
+
+              {/* GLOBAL CONFIRMATION MODAL */}
+              {confirmModal && (
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-200 text-left font-sans"
+                  >
+                    <div className="flex items-center gap-3 text-amber-500 border-b border-slate-800 pb-3">
+                      <AlertTriangle className="h-6 w-6 text-amber-500 shrink-0" />
+                      <h4 className="font-bold text-base text-white">{confirmModal.title}</h4>
+                    </div>
+                    
+                    <p className="text-xs text-slate-350 leading-relaxed whitespace-pre-wrap font-sans">
+                      {confirmModal.message}
+                    </p>
+
+                    <div className="flex gap-3 justify-end pt-2 border-t border-slate-800/60">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmModal(null)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer select-none"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmModal.onConfirm}
+                        className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-slate-950 text-xs font-black rounded-xl transition uppercase tracking-wider cursor-pointer select-none"
+                      >
+                        Confirmar Ação
+                      </button>
+                    </div>
                   </motion.div>
                 </div>
               )}

@@ -591,6 +591,131 @@ export const dbService = {
     }
   },
 
+  // Async enforcer that pulls directly from Firestore to unblock/lock songs in full sync
+  async enforceTracksByPlanValidityAsync(userId: string, plan: string, musicLimit?: number) {
+    try {
+      console.log(`[enforceTracksByPlanValidityAsync] Enforcing limit for user ${userId}, plan: ${plan}, limit: ${musicLimit}`);
+      
+      let tracks: any[] = [];
+      const songsQuery = query(collection(db, 'songs'), where('ownerId', '==', userId));
+      const songsSnap = await getDocs(songsQuery).catch(() => null);
+      
+      if (songsSnap && !songsSnap.empty) {
+        tracks = songsSnap.docs.map(docSnap => {
+          const d = docSnap.data();
+          return {
+            trackId: docSnap.id || d.songId || d.trackId,
+            artistId: d.ownerId || d.artistId || userId,
+            title: d.title,
+            status: d.status || "active",
+            position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+            orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+          };
+        });
+      }
+
+      // Fallback legacy check
+      const legacyColRef = collection(db, 'artists', userId, 'musics');
+      const legacySnap = await getDocs(legacyColRef).catch(() => null);
+      if (legacySnap && !legacySnap.empty) {
+        legacySnap.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          const trackId = d.trackId || d.id || docSnap.id;
+          if (!tracks.some(t => t.trackId === trackId)) {
+            tracks.push({
+              trackId: trackId,
+              artistId: d.artistId || d.ownerId || userId,
+              title: d.title,
+              status: d.status || "active",
+              position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+              orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+              createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+            });
+          }
+        });
+      }
+
+      if (tracks.length === 0) {
+        console.log(`[enforceTracksByPlanValidityAsync] No songs found for user ${userId}`);
+        return;
+      }
+
+      const cleanPlan = plan || 'free';
+      const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+
+      // Enforce limits on active or locked_by_expired_plan tracks (do not touch inactive/soft-deleted ones)
+      const candidates = tracks.filter(t => t.status === 'active' || t.status === 'locked_by_expired_plan');
+
+      const sortedCandidates = [...candidates].sort((a, b) => {
+        const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
+        const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
+        if (posA !== posB) return posA - posB;
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+
+      const selectedTracks = sortedCandidates.slice(0, maxAllowed);
+
+      console.log(`[enforceTracksByPlanValidityAsync] Total candidates: ${candidates.length}, allowed: ${maxAllowed}, selected for active: ${selectedTracks.length}`);
+
+      const updatePromises = tracks.map(async (track) => {
+        if (track.status === 'active' || track.status === 'locked_by_expired_plan') {
+          const isSelected = selectedTracks.some(s => s.trackId === track.trackId);
+          const targetStatus = isSelected ? 'active' : 'locked_by_expired_plan';
+          
+          if (track.status !== targetStatus) {
+            console.log(`[enforceTracksByPlanValidityAsync] Updating track ${track.trackId} ("${track.title}") status: ${track.status} -> ${targetStatus}`);
+            const songDocRef = doc(db, 'songs', track.trackId);
+            await updateDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }).catch(() => null);
+            
+            const legacyDocRef = doc(db, 'artists', userId, 'musics', track.trackId);
+            await updateDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }).catch(() => null);
+
+            track.status = targetStatus;
+          }
+        }
+        return track;
+      });
+
+      await Promise.all(updatePromises);
+
+      // Sync user tracks in Admin's local storage LS_MUSICS to keep the active view updated
+      try {
+        const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+        const existingLsTracks: Music[] = musicsMap[userId] || [];
+        
+        const updatedLsTracks = existingLsTracks.map(lsTrack => {
+          const matchingTrack = tracks.find(t => t.trackId === lsTrack.trackId);
+          if (matchingTrack) {
+            return {
+              ...lsTrack,
+              status: matchingTrack.status,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return lsTrack;
+        });
+
+        musicsMap[userId] = updatedLsTracks;
+
+        const artists = this.getAllArtists();
+        const artist = artists[userId];
+        if (artist && artist.slug) {
+          musicsMap[artist.slug] = updatedLsTracks;
+        }
+
+        localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        console.log(`[enforceTracksByPlanValidityAsync] Successfully synchronized local storage cache for user ${userId}`);
+      } catch (err) {
+        console.error("[enforceTracksByPlanValidityAsync] Error syncing local storage cache:", err);
+      }
+    } catch (e) {
+      console.error("Error in enforceTracksByPlanValidityAsync:", e);
+    }
+  },
+
   // Active signed-in artist session state
   getCurrentUser(): Artist | null {
     const u = localStorage.getItem(LS_CURR_USER);
