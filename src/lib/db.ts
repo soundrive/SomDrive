@@ -554,8 +554,12 @@ export const dbService = {
             if (track.status !== targetStatus) {
               changed = true;
               const songDocRef = doc(db, 'songs', track.trackId);
-              updateDoc(songDocRef, { status: targetStatus }).catch(e => {
-                console.error("Error syncing track locked state to Firestore:", e);
+              setDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+                console.error("Error syncing track locked state to Firestore root collection:", e);
+              });
+              const legacyDocRef = doc(db, 'artists', artistId, 'musics', track.trackId);
+              setDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+                console.error("Error syncing track locked state to legacy subcollection:", e);
               });
               return { ...track, status: targetStatus, updatedAt: new Date().toISOString() };
             }
@@ -573,8 +577,12 @@ export const dbService = {
           if (track.status === 'locked_by_expired_plan') {
             changed = true;
             const songDocRef = doc(db, 'songs', track.trackId);
-            updateDoc(songDocRef, { status: 'active' }).catch(e => {
-              console.error("Error restoring track active state on Firestore:", e);
+            setDoc(songDocRef, { status: 'active', updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+              console.error("Error restoring track active state on Firestore root collection:", e);
+            });
+            const legacyDocRef = doc(db, 'artists', artistId, 'musics', track.trackId);
+            setDoc(legacyDocRef, { status: 'active', updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+              console.error("Error restoring track active state on legacy subcollection:", e);
             });
             return { ...track, status: 'active', updatedAt: new Date().toISOString() };
           }
@@ -597,44 +605,57 @@ export const dbService = {
       console.log(`[enforceTracksByPlanValidityAsync] Enforcing limit for user ${userId}, plan: ${plan}, limit: ${musicLimit}`);
       
       let tracks: any[] = [];
-      const songsQuery = query(collection(db, 'songs'), where('ownerId', '==', userId));
-      const songsSnap = await getDocs(songsQuery).catch(() => null);
-      
-      if (songsSnap && !songsSnap.empty) {
-        tracks = songsSnap.docs.map(docSnap => {
-          const d = docSnap.data();
-          return {
-            trackId: docSnap.id || d.songId || d.trackId,
-            artistId: d.ownerId || d.artistId || userId,
-            title: d.title,
-            status: d.status || "active",
-            position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
-            orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
-            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-          };
-        });
-      }
+      const songsQuery1 = query(collection(db, 'songs'), where('ownerId', '==', userId));
+      const songsSnap1 = await getDocs(songsQuery1).catch(() => null);
 
+      const songsQuery2 = query(collection(db, 'songs'), where('artistId', '==', userId));
+      const songsSnap2 = await getDocs(songsQuery2).catch(() => null);
+      
       // Fallback legacy check
       const legacyColRef = collection(db, 'artists', userId, 'musics');
       const legacySnap = await getDocs(legacyColRef).catch(() => null);
-      if (legacySnap && !legacySnap.empty) {
-        legacySnap.docs.forEach(docSnap => {
+
+      const mergedDocsMap = new Map<string, any>();
+
+      if (songsSnap1 && !songsSnap1.empty) {
+        songsSnap1.docs.forEach(docSnap => {
           const d = docSnap.data();
-          const trackId = d.trackId || d.id || docSnap.id;
-          if (!tracks.some(t => t.trackId === trackId)) {
-            tracks.push({
-              trackId: trackId,
-              artistId: d.artistId || d.ownerId || userId,
-              title: d.title,
-              status: d.status || "active",
-              position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
-              orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
-              createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-            });
+          const id = docSnap.id || d.songId || d.trackId;
+          mergedDocsMap.set(id, { ...d, id, trackId: id });
+        });
+      }
+
+      if (songsSnap2 && !songsSnap2.empty) {
+        songsSnap2.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = docSnap.id || d.songId || d.trackId;
+          if (!mergedDocsMap.has(id)) {
+            mergedDocsMap.set(id, { ...d, id, trackId: id });
           }
         });
       }
+
+      if (legacySnap && !legacySnap.empty) {
+        legacySnap.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = d.trackId || d.id || docSnap.id;
+          if (!mergedDocsMap.has(id)) {
+            mergedDocsMap.set(id, { ...d, id, trackId: id });
+          }
+        });
+      }
+
+      tracks = Array.from(mergedDocsMap.values()).map(d => {
+        return {
+          trackId: d.trackId || d.id || d.songId,
+          artistId: d.ownerId || d.artistId || userId,
+          title: d.title,
+          status: d.status || "active",
+          position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+          orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+        };
+      });
 
       if (tracks.length === 0) {
         console.log(`[enforceTracksByPlanValidityAsync] No songs found for user ${userId}`);
@@ -668,10 +689,14 @@ export const dbService = {
           if (track.status !== targetStatus) {
             console.log(`[enforceTracksByPlanValidityAsync] Updating track ${track.trackId} ("${track.title}") status: ${track.status} -> ${targetStatus}`);
             const songDocRef = doc(db, 'songs', track.trackId);
-            await updateDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }).catch(() => null);
+            await setDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch((err) => {
+              console.error("[enforceTracksByPlanValidityAsync] setDoc error on songs collection:", err);
+            });
             
             const legacyDocRef = doc(db, 'artists', userId, 'musics', track.trackId);
-            await updateDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }).catch(() => null);
+            await setDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch((err) => {
+              console.error("[enforceTracksByPlanValidityAsync] setDoc error on legacy musics collection:", err);
+            });
 
             track.status = targetStatus;
           }
@@ -1434,6 +1459,7 @@ export const dbService = {
         description: newTrack.description || '',
         audioFileId: newTrack.audioFileId || '',
         audioUrl: newTrack.audioUrl,
+        status: newTrack.status || 'active',
         storagePath: newTrack.storagePath || '',
         storageProvider: newTrack.storageProvider || 'cloudflare_r2',
         fileSize: newTrack.fileSize || 0,
@@ -1712,124 +1738,118 @@ export const dbService = {
           localStorage.setItem(LS_CURR_USER, JSON.stringify(formattedArtist));
         }
 
-        // Fetch songs from root 'songs' collection where ownerId == resolvedUserId
+        // Fetch songs from root 'songs' collection and legacy subcollection
         let fetchedTracks: Music[] = [];
-        const songsQuery = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
-        const songsSnap = await getDocs(songsQuery).catch(e => {
+        const songsQuery1 = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
+        const songsSnap1 = await getDocs(songsQuery1).catch(e => {
           handleFirestoreError(e, OperationType.GET, 'songs');
           throw e;
         });
 
-        if (songsSnap && !songsSnap.empty) {
-          fetchedTracks = songsSnap.docs.map(docSnap => {
+        const songsQuery2 = query(collection(db, 'songs'), where('artistId', '==', resolvedUserId));
+        const songsSnap2 = await getDocs(songsQuery2).catch(() => null);
+
+        // Fallback to legacy subcollection
+        const legacyColRef = collection(db, 'artists', resolvedUserId, 'musics');
+        const legacySnap = await getDocs(legacyColRef).catch(() => null);
+
+        const mergedDocsMap = new Map<string, any>();
+
+        if (songsSnap1 && !songsSnap1.empty) {
+          songsSnap1.docs.forEach(docSnap => {
             const d = docSnap.data();
-            return {
-              trackId: docSnap.id || d.songId || d.trackId,
-              artistId: d.ownerId || d.artistId || resolvedUserId,
-              title: d.title,
-              composer: d.composer || "",
-              partners: d.partners || "",
-              singer: d.performer || d.singer || "",
-              performer: d.performer || d.singer || "",
-              genre: d.genre || "",
-              description: d.description || "",
-              audioUrl: d.audioUrl,
-              coverUrl: d.coverUrl || "",
-              lyrics: d.lyrics || "",
-              playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-              plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-              status: d.status || "active",
-              storageProvider: d.storageProvider || "cloudflare_r2",
-              storagePath: d.storagePath || "",
-              fileSize: d.fileSize || 0,
-              mimeType: d.mimeType || "audio/mpeg",
-              originalFileName: d.originalFileName || "",
-              audioFileId: d.audioFileId || "",
-              position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
-              orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
-              createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-              updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString(),
-              repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
-              publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
-              isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
-              isPublic: d.isPublic !== undefined ? d.isPublic : true
-            };
+            const id = docSnap.id || d.songId || d.trackId;
+            mergedDocsMap.set(id, { ...d, id, trackId: id });
           });
-        } else {
-          // Fallback to legacy subcollection
-          const musicsColRef = collection(db, 'artists', resolvedUserId, 'musics');
-          const musicsSnap = await getDocs(musicsColRef).catch(e => {
-            handleFirestoreError(e, OperationType.GET, `artists/${resolvedUserId}/musics`);
-            throw e;
-          });
-          if (musicsSnap && !musicsSnap.empty) {
-            fetchedTracks = musicsSnap.docs.map(docSnap => {
-              const d = docSnap.data();
-              return {
-                trackId: d.trackId || d.id || docSnap.id,
-                artistId: d.artistId || d.ownerId || resolvedUserId,
-                title: d.title,
-                composer: d.composer || "",
-                partners: d.partners || "",
-                singer: d.singer || d.performer || "",
-                performer: d.performer || d.singer || "",
-                genre: d.genre || "",
-                description: d.description || "",
-                audioUrl: d.audioUrl,
-                coverUrl: d.coverUrl || "",
-                lyrics: d.lyrics || "",
-                playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-                plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-                status: d.status || "active",
-                storageProvider: d.storageProvider || "cloudflare_r2",
-                storagePath: d.storagePath || "",
-                fileSize: d.fileSize || 0,
-                mimeType: d.mimeType || "audio/mpeg",
-                originalFileName: d.originalFileName || "",
-                audioFileId: d.audioFileId || "",
-                position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
-                orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
-                createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString(),
-                repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
-                publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
-                isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
-                isPublic: d.isPublic !== undefined ? d.isPublic : true
-              };
-            });
-  
-            // Automatically migrate these tracks to the root "songs" collection for future correctness
-            for (const track of fetchedTracks) {
-              const songDocRef = doc(db, 'songs', track.trackId);
-              setDoc(songDocRef, {
-                songId: track.trackId,
-                ownerId: track.artistId,
-                title: track.title,
-                composer: track.composer || '',
-                partners: track.partners || '',
-                performer: track.performer || '',
-                genre: track.genre || '',
-                lyrics: track.lyrics || '',
-                description: track.description || '',
-                audioFileId: track.audioFileId || `migrated-${track.trackId}`,
-                audioUrl: track.audioUrl,
-                storagePath: track.storagePath || '',
-                storageProvider: track.storageProvider || 'cloudflare_r2',
-                fileSize: track.fileSize || 0,
-                mimeType: track.mimeType || 'audio/mpeg',
-                originalFileName: track.originalFileName || '',
-                plays: track.plays !== undefined ? track.plays : 0,
-                repertoireId: track.repertoireId !== undefined ? track.repertoireId : null,
-                publicationDestination: track.publicationDestination || 'general',
-                isActive: track.isActive !== undefined ? track.isActive : true,
-                isPublic: track.isPublic !== undefined ? track.isPublic : true,
-                createdAt: Timestamp.fromDate(new Date(track.createdAt)),
-                updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
-              }, { merge: true }).catch(err => {
-                console.error("Migration to songs collection failed: ", err);
-              });
+        }
+
+        if (songsSnap2 && !songsSnap2.empty) {
+          songsSnap2.docs.forEach(docSnap => {
+            const d = docSnap.data();
+            const id = docSnap.id || d.songId || d.trackId;
+            if (!mergedDocsMap.has(id)) {
+              mergedDocsMap.set(id, { ...d, id, trackId: id });
             }
-          }
+          });
+        }
+
+        if (legacySnap && !legacySnap.empty) {
+          legacySnap.docs.forEach(docSnap => {
+            const d = docSnap.data();
+            const id = d.trackId || d.id || docSnap.id;
+            if (!mergedDocsMap.has(id)) {
+              mergedDocsMap.set(id, { ...d, id, trackId: id });
+            }
+          });
+        }
+
+        fetchedTracks = Array.from(mergedDocsMap.values()).map(d => {
+          const trackId = d.trackId || d.id || d.songId;
+          const artistId = d.ownerId || d.artistId || resolvedUserId;
+          return {
+            trackId: trackId,
+            artistId: artistId,
+            title: d.title,
+            composer: d.composer || "",
+            partners: d.partners || "",
+            singer: d.performer || d.singer || "",
+            performer: d.performer || d.singer || "",
+            genre: d.genre || "",
+            description: d.description || "",
+            audioUrl: d.audioUrl,
+            coverUrl: d.coverUrl || "",
+            lyrics: d.lyrics || "",
+            playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+            plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+            status: d.status || "active",
+            storageProvider: d.storageProvider || "cloudflare_r2",
+            storagePath: d.storagePath || "",
+            fileSize: d.fileSize || 0,
+            mimeType: d.mimeType || "audio/mpeg",
+            originalFileName: d.originalFileName || "",
+            audioFileId: d.audioFileId || "",
+            position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+            orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+            updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString(),
+            repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
+            publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
+            isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
+            isPublic: d.isPublic !== undefined ? d.isPublic : true
+          };
+        });
+
+        // Automatically migrate/sync these tracks to the root "songs" collection for future correctness with status field
+        for (const track of fetchedTracks) {
+          const songDocRef = doc(db, 'songs', track.trackId);
+          setDoc(songDocRef, {
+            songId: track.trackId,
+            ownerId: track.artistId,
+            title: track.title,
+            composer: track.composer || '',
+            partners: track.partners || '',
+            performer: track.performer || '',
+            genre: track.genre || '',
+            lyrics: track.lyrics || '',
+            description: track.description || '',
+            audioFileId: track.audioFileId || `migrated-${track.trackId}`,
+            audioUrl: track.audioUrl,
+            status: track.status,
+            storagePath: track.storagePath || '',
+            storageProvider: track.storageProvider || 'cloudflare_r2',
+            fileSize: track.fileSize || 0,
+            mimeType: track.mimeType || 'audio/mpeg',
+            originalFileName: track.originalFileName || '',
+            plays: track.plays !== undefined ? track.plays : 0,
+            repertoireId: track.repertoireId !== undefined ? track.repertoireId : null,
+            publicationDestination: track.publicationDestination || 'general',
+            isActive: track.isActive !== undefined ? track.isActive : true,
+            isPublic: track.isPublic !== undefined ? track.isPublic : true,
+            createdAt: Timestamp.fromDate(new Date(track.createdAt)),
+            updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
+          }, { merge: true }).catch(err => {
+            console.error("Migration to songs collection failed: ", err);
+          });
         }
 
         // Cache tracks
