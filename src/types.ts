@@ -53,6 +53,8 @@ export interface Artist {
   subscriptionStartedAt?: FirestoreDateLike;
   subscriptionEndsAt?: FirestoreDateLike;
   planExpiresAt?: FirestoreDateLike;
+  planStatus?: string;
+  expirationTracksStatus?: string;
   mercadoPagoPaymentId?: string | null;
   mercadoPagoSubscriptionId?: string | null;
   isBlocked?: boolean;

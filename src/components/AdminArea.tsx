@@ -1048,11 +1048,15 @@ export default function AdminArea({
 
     const executeSave = async () => {
       try {
+        console.log(`[PLAN_RELEASE_DEBUG] Executando salvamento de edição de usuário ${selectedUser.userId}. Plano: ${selectedUser.plan}, Limite: ${finalLimit}`);
         const updatedFields: Partial<Artist> = {
           plan: selectedUser.plan,
           role: selectedUser.role || 'user',
           paymentStatus: selectedUser.paymentStatus || 'inactive',
           accessType: selectedUser.accessType || 'free',
+          // If upgraded to paid, let's make sure planStatus/subscriptionStatus are active!
+          planStatus: selectedUser.plan !== 'free' ? 'active' : 'expired',
+          subscriptionStatus: selectedUser.plan !== 'free' ? 'ativo' : 'cancelado',
           musicLimit: Number(finalLimit),
           trialEndsAt: selectedUser.trialEndsAt || null,
           manualAccessEndsAt: selectedUser.manualAccessEndsAt || null,
@@ -1068,12 +1072,16 @@ export default function AdminArea({
           instagram: selectedUser.instagram,
         };
 
+        console.log(`[PLAN_RELEASE_DEBUG] Campos preparados para salvamento:`, JSON.stringify(updatedFields));
         await dbService.updateUserDataFromAdmin(selectedUser.userId, updatedFields);
+        console.log(`[PLAN_RELEASE_DEBUG] Perfil salvo para ${selectedUser.userId}. Rodando reenquadramento...`);
         await dbService.enforceTracksByPlanValidityAsync(selectedUser.userId, updatedFields.plan || 'free', Number(updatedFields.musicLimit));
+        console.log(`[PLAN_RELEASE_DEBUG] Reenquadramento finalizado para ${selectedUser.userId}.`);
         triggerNotification("Alterações salvas com sucesso!");
         setSelectedUser(null);
         loadData();
-      } catch {
+      } catch (err) {
+        console.error(`[PLAN_RELEASE_DEBUG] Erro ao salvar alterações para ${selectedUser.userId}:`, err);
         triggerNotification("Erro ao salvar alterações.", true);
       }
     };
@@ -1122,6 +1130,7 @@ export default function AdminArea({
       `Deseja liberar o acesso ao plano ${manualPlan.toUpperCase()} com limite de ${manualLimit} músicas por ${manualDuration} dias para o usuário ${matchedUser.name}?\n\nIsso gerará um vencimento obrigatório em ${manualDuration} dias.`,
       async () => {
         try {
+          console.log(`[PLAN_RELEASE_DEBUG] Iniciando liberação manual para usuário ${matchedUser.userId}. Plano: ${manualPlan}, Limite: ${manualLimit}, Duração: ${manualDuration} dias.`);
           const now = new Date();
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + Number(manualDuration));
@@ -1130,6 +1139,8 @@ export default function AdminArea({
             plan: manualPlan,
             accessType: 'manual',
             paymentStatus: 'manual',
+            planStatus: 'active',
+            subscriptionStatus: 'ativo',
             musicLimit: Number(manualLimit),
             manualAccessEndsAt: expiresAt.toISOString(),
             subscriptionStartedAt: now.toISOString(),
@@ -1137,13 +1148,17 @@ export default function AdminArea({
             bio: manualNotes ? `${matchedUser.bio || ''} - Nota Admin: ${manualNotes}` : matchedUser.bio
           };
 
+          console.log(`[PLAN_RELEASE_DEBUG] Campos de atualização preparados:`, JSON.stringify(updatedFields));
           await dbService.updateUserDataFromAdmin(matchedUser.userId, updatedFields);
+          console.log(`[PLAN_RELEASE_DEBUG] Perfil atualizado no Firestore para ${matchedUser.userId}. Executando reenquadramento de faixas...`);
           await dbService.enforceTracksByPlanValidityAsync(matchedUser.userId, manualPlan, Number(manualLimit));
+          console.log(`[PLAN_RELEASE_DEBUG] Reenquadramento de faixas finalizado com sucesso para ${matchedUser.userId}.`);
           triggerNotification(`Acesso manual de ${manualDuration} dias liberado para ${matchedUser.name}!`);
           setManualEmail('');
           setManualNotes('');
           loadData();
-        } catch {
+        } catch (err) {
+          console.error(`[PLAN_RELEASE_DEBUG] Erro ao aplicar liberação manual para ${matchedUser.userId}:`, err);
           triggerNotification("Erro ao aplicar liberação manual.", true);
         }
       }

@@ -602,22 +602,32 @@ export const dbService = {
   // Async enforcer that pulls directly from Firestore to unblock/lock songs in full sync
   async enforceTracksByPlanValidityAsync(userId: string, plan: string, musicLimit?: number) {
     try {
-      console.log(`[enforceTracksByPlanValidityAsync] Enforcing limit for user ${userId}, plan: ${plan}, limit: ${musicLimit}`);
+      console.log(`[TRACK_RECONCILE_DEBUG] [enforceTracksByPlanValidityAsync] Iniciando reenquadramento para o usuário ${userId}. Plano: ${plan}, Limite fornecido: ${musicLimit}`);
       
       let tracks: any[] = [];
       const songsQuery1 = query(collection(db, 'songs'), where('ownerId', '==', userId));
-      const songsSnap1 = await getDocs(songsQuery1).catch(() => null);
+      const songsSnap1 = await getDocs(songsQuery1).catch((err) => {
+        console.error(`[TRACK_RECONCILE_DEBUG] Erro ao ler canções por ownerId:`, err);
+        return null;
+      });
 
       const songsQuery2 = query(collection(db, 'songs'), where('artistId', '==', userId));
-      const songsSnap2 = await getDocs(songsQuery2).catch(() => null);
+      const songsSnap2 = await getDocs(songsQuery2).catch((err) => {
+        console.error(`[TRACK_RECONCILE_DEBUG] Erro ao ler canções por artistId:`, err);
+        return null;
+      });
       
       // Fallback legacy check
       const legacyColRef = collection(db, 'artists', userId, 'musics');
-      const legacySnap = await getDocs(legacyColRef).catch(() => null);
+      const legacySnap = await getDocs(legacyColRef).catch((err) => {
+        console.error(`[TRACK_RECONCILE_DEBUG] Erro ao ler subcoleção legacy:`, err);
+        return null;
+      });
 
       const mergedDocsMap = new Map<string, any>();
 
       if (songsSnap1 && !songsSnap1.empty) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Encontradas ${songsSnap1.docs.length} canções na coleção raiz 'songs' (ownerId).`);
         songsSnap1.docs.forEach(docSnap => {
           const d = docSnap.data();
           const id = docSnap.id || d.songId || d.trackId;
@@ -626,6 +636,7 @@ export const dbService = {
       }
 
       if (songsSnap2 && !songsSnap2.empty) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Encontradas ${songsSnap2.docs.length} canções na coleção raiz 'songs' (artistId).`);
         songsSnap2.docs.forEach(docSnap => {
           const d = docSnap.data();
           const id = docSnap.id || d.songId || d.trackId;
@@ -636,6 +647,7 @@ export const dbService = {
       }
 
       if (legacySnap && !legacySnap.empty) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Encontradas ${legacySnap.docs.length} canções na subcoleção legacy 'artists/{id}/musics'.`);
         legacySnap.docs.forEach(docSnap => {
           const d = docSnap.data();
           const id = d.trackId || d.id || docSnap.id;
@@ -650,7 +662,7 @@ export const dbService = {
           trackId: d.trackId || d.id || d.songId,
           artistId: d.ownerId || d.artistId || userId,
           title: d.title,
-          status: d.status || "active",
+          status: d.status,
           position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
           orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
           createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
@@ -658,15 +670,24 @@ export const dbService = {
       });
 
       if (tracks.length === 0) {
-        console.log(`[enforceTracksByPlanValidityAsync] No songs found for user ${userId}`);
+        console.log(`[TRACK_RECONCILE_DEBUG] Nenhuma música encontrada para o usuário ${userId}`);
         return;
       }
 
       const cleanPlan = plan || 'free';
       const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
 
-      // Enforce limits on active or locked_by_expired_plan tracks (do not touch inactive/soft-deleted ones)
-      const candidates = tracks.filter(t => t.status === 'active' || t.status === 'locked_by_expired_plan');
+      // Enforce limits on active, locked, undefined, null or empty status (essentially all that are not deleted/inactive)
+      const candidates = tracks.filter(t => 
+        t.status === 'active' || 
+        t.status === 'locked_by_expired_plan' || 
+        t.status === 'undefined' || 
+        !t.status || 
+        t.status === 'null' ||
+        t.status === 'pending'
+      );
+
+      console.log(`[TRACK_RECONCILE_DEBUG] Total de músicas na base: ${tracks.length}. Candidatas qualificadas para limite: ${candidates.length}. Limite permitido para o plano: ${maxAllowed}`);
 
       const sortedCandidates = [...candidates].sort((a, b) => {
         const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
@@ -678,33 +699,36 @@ export const dbService = {
       });
 
       const selectedTracks = sortedCandidates.slice(0, maxAllowed);
-
-      console.log(`[enforceTracksByPlanValidityAsync] Total candidates: ${candidates.length}, allowed: ${maxAllowed}, selected for active: ${selectedTracks.length}`);
+      console.log(`[TRACK_RECONCILE_DEBUG] Faixas selecionadas para ficarem ATIVAS (${selectedTracks.length}):`, selectedTracks.map(s => `"${s.title}" (${s.trackId})`).join(", "));
 
       const updatePromises = tracks.map(async (track) => {
-        if (track.status === 'active' || track.status === 'locked_by_expired_plan') {
+        const isCandidate = candidates.some(c => c.trackId === track.trackId);
+        if (isCandidate) {
           const isSelected = selectedTracks.some(s => s.trackId === track.trackId);
           const targetStatus = isSelected ? 'active' : 'locked_by_expired_plan';
           
           if (track.status !== targetStatus) {
-            console.log(`[enforceTracksByPlanValidityAsync] Updating track ${track.trackId} ("${track.title}") status: ${track.status} -> ${targetStatus}`);
+            console.log(`[TRACK_RECONCILE_DEBUG] Atualizando faixa "${track.title}" (${track.trackId}): status anterior: ${track.status} -> novo status: ${targetStatus}`);
             const songDocRef = doc(db, 'songs', track.trackId);
             await setDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch((err) => {
-              console.error("[enforceTracksByPlanValidityAsync] setDoc error on songs collection:", err);
+              console.error(`[TRACK_RECONCILE_DEBUG] Erro ao gravar status no documento 'songs/${track.trackId}':`, err);
             });
             
             const legacyDocRef = doc(db, 'artists', userId, 'musics', track.trackId);
             await setDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch((err) => {
-              console.error("[enforceTracksByPlanValidityAsync] setDoc error on legacy musics collection:", err);
+              console.error(`[TRACK_RECONCILE_DEBUG] Erro ao gravar status no documento subcoleção legacy 'artists/${userId}/musics/${track.trackId}':`, err);
             });
 
             track.status = targetStatus;
+          } else {
+            console.log(`[TRACK_RECONCILE_DEBUG] Faixa "${track.title}" (${track.trackId}) já está no status correto: ${track.status}`);
           }
         }
         return track;
       });
 
       await Promise.all(updatePromises);
+      console.log(`[TRACK_RECONCILE_DEBUG] Sincronização no Firestore concluída.`);
 
       // Sync user tracks in Admin's local storage LS_MUSICS to keep the active view updated
       try {
@@ -732,12 +756,12 @@ export const dbService = {
         }
 
         localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
-        console.log(`[enforceTracksByPlanValidityAsync] Successfully synchronized local storage cache for user ${userId}`);
+        console.log(`[TRACK_RECONCILE_DEBUG] Sincronização com o cache local efetuada.`);
       } catch (err) {
-        console.error("[enforceTracksByPlanValidityAsync] Error syncing local storage cache:", err);
+        console.error("[TRACK_RECONCILE_DEBUG] Erro ao atualizar cache local:", err);
       }
     } catch (e) {
-      console.error("Error in enforceTracksByPlanValidityAsync:", e);
+      console.error("[TRACK_RECONCILE_DEBUG] Erro geral em enforceTracksByPlanValidityAsync:", e);
     }
   },
 
