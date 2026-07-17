@@ -1283,60 +1283,61 @@ export default function ArtistPublic({
     setTimeout(() => setCopiedLinkAlert(false), 2600);
   };
 
+  const formatWhatsAppUrl = (phone: string, text: string): string => {
+    let cleanNum = phone.replace(/\D/g, '');
+    if (!cleanNum) return '';
+    // Garantir DDI 55 quando necessário (se tiver 10 ou 11 dígitos, é um número brasileiro sem DDI)
+    if (cleanNum.length === 10 || cleanNum.length === 11) {
+      cleanNum = '55' + cleanNum;
+    }
+    return `https://wa.me/${cleanNum}?text=${encodeURIComponent(text)}`;
+  };
+
   const handleWhatsAppRedirectAndTrack = (buttonId: string, whatsappUrl: string) => {
     if (!artist) return;
     
-    // Prevent concurrent tracking for the same event
+    // Prevent concurrent redirection triggers
     if (ongoingWhatsAppClicksRef.current.has(buttonId)) {
-      window.open(whatsappUrl, '_blank');
       return;
     }
-
+    
     // Check 5-second duplicate click lock
     const key = `soundrive_last_wa_${artist.userId}_${buttonId}`;
     const lastClick = localStorage.getItem(key);
     const now = Date.now();
     if (lastClick && (now - parseInt(lastClick, 10)) < 5000) {
-      window.open(whatsappUrl, '_blank');
+      const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile) {
+        window.location.href = whatsappUrl;
+      } else {
+        const win = window.open(whatsappUrl, '_blank');
+        if (!win) window.location.href = whatsappUrl;
+      }
       return;
     }
 
-    // Open blank window immediately to prevent popup blocking
-    const newWindow = window.open('about:blank', '_blank');
-
     ongoingWhatsAppClicksRef.current.add(buttonId);
+    localStorage.setItem(key, now.toString());
 
-    let redirected = false;
-
-    const performRedirect = () => {
-      if (redirected) return;
-      redirected = true;
-      if (newWindow) {
-        newWindow.location.href = whatsappUrl;
-      } else {
-        window.open(whatsappUrl, '_blank');
-      }
-    };
-
-    // Timeout of 1.8 seconds: redirect anyway even if Firestore is slow
-    const redirectTimeout = setTimeout(() => {
-      performRedirect();
-    }, 1800);
-
+    // Trigger Firestore analytics view counter asynchronously in background without blocking the redirection thread
     dbService.incrementAnalyticsView(artist.userId, false, false)
-      .then(() => {
-        // Save the 5-second lock timestamp ONLY after successful Firestore persistence
-        localStorage.setItem(key, Date.now().toString());
-        performRedirect();
-      })
       .catch((err) => {
         console.error("Failed to increment WhatsApp click metrics in Firestore:", err);
-        performRedirect();
       })
       .finally(() => {
-        clearTimeout(redirectTimeout);
         ongoingWhatsAppClicksRef.current.delete(buttonId);
       });
+
+    // Synchronously redirect the user to guarantee 100% bypass of popup blockers on iOS & Android
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = whatsappUrl;
+    } else {
+      const win = window.open(whatsappUrl, '_blank');
+      if (!win) {
+        window.location.href = whatsappUrl;
+      }
+    }
   };
 
   const handleShareWhatsApp = () => {
@@ -1382,17 +1383,29 @@ export default function ArtistPublic({
   };
 
   const handleSpeakWithArtist = () => {
-    const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
+    const rawPhone = artist.whatsapp || artist.phone || '';
+    if (!rawPhone.replace(/\D/g, '')) {
+      triggerAlert("⚠️ Este artista não possui WhatsApp cadastrado.");
+      return;
+    }
     const greetingText = `Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`;
-    const whatsappUrl = `https://wa.me/${whatsappNum}?text=${encodeURIComponent(greetingText)}`;
-    handleWhatsAppRedirectAndTrack('speak', whatsappUrl);
+    const whatsappUrl = formatWhatsAppUrl(rawPhone, greetingText);
+    if (whatsappUrl) {
+      handleWhatsAppRedirectAndTrack('speak', whatsappUrl);
+    }
   };
 
   const handleContactForTrack = (track: Track) => {
-    const whatsappNum = artist.whatsapp?.replace(/\D/g, '') || "5562999999999";
+    const rawPhone = artist.whatsapp || artist.phone || '';
+    if (!rawPhone.replace(/\D/g, '')) {
+      triggerAlert("⚠️ Este artista não possui WhatsApp cadastrado.");
+      return;
+    }
     const greetingText = `Olá ${artist.name}, encontrei sua composição "${track.title}" no catálogo SomDrive e tenho alto interesse em gravá-la / ouvir a guia de áudio!`;
-    const whatsappUrl = `https://wa.me/${whatsappNum}?text=${encodeURIComponent(greetingText)}`;
-    handleWhatsAppRedirectAndTrack(`track_${track.trackId}`, whatsappUrl);
+    const whatsappUrl = formatWhatsAppUrl(rawPhone, greetingText);
+    if (whatsappUrl) {
+      handleWhatsAppRedirectAndTrack(`track_${track.trackId}`, whatsappUrl);
+    }
   };
 
   // Repertoire sharing logic
@@ -1513,10 +1526,12 @@ export default function ArtistPublic({
                 {!!(artist.whatsapp || artist.phone) && (
                   <button
                     onClick={() => {
-                      const cleanNum = (artist.whatsapp || artist.phone || '').replace(/\D/g, '');
-                      const greeting = encodeURIComponent(`Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`);
-                      const whatsappUrl = `https://wa.me/${cleanNum}?text=${greeting}`;
-                      handleWhatsAppRedirectAndTrack('repertoire_contact', whatsappUrl);
+                      const rawPhone = artist.whatsapp || artist.phone || '';
+                      const greeting = `Olá ${artist.name}, encontrei seu catálogo de composições no SomDrive e gostaria de conversar sobre contratação autorais e licenciamentos!`;
+                      const whatsappUrl = formatWhatsAppUrl(rawPhone, greeting);
+                      if (whatsappUrl) {
+                        handleWhatsAppRedirectAndTrack('repertoire_contact', whatsappUrl);
+                      }
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-md bg-[#1ed760]/10 text-[#1ed760] hover:bg-[#1ed760]/20 transition-all border border-[#1ed760]/15 cursor-pointer"
                   >

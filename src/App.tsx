@@ -25,9 +25,69 @@ const LoadingFallback = () => (
 );
 
 export default function App() {
-  // SPA Routing state sync with address bar
-  const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'dashboard' | 'public' | 'admin' | 'payment_return'>('landing');
-  const [routePayload, setRoutePayload] = useState<any>(null);
+  // SPA Routing state sync with address bar (initialized synchronously to avoid double mounts / chunk lags)
+  const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'dashboard' | 'public' | 'admin' | 'payment_return'>(() => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+    if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
+      return 'public';
+    } else if (path === '/pagamento/retorno' || path === '/pagamento/sucesso' || path === '/pagamento/pendente' || path === '/pagamento/erro') {
+      return 'payment_return';
+    } else if (path === '/dashboard') {
+      const u = dbService.getCurrentUser();
+      return u ? 'dashboard' : 'auth';
+    } else if (path === '/admin') {
+      const u = dbService.getCurrentUser();
+      const uEmail = u?.email?.toLowerCase().trim() || '';
+      const actsAsAdmin = u?.role === 'admin' || uEmail === 'videopremieroficial@gmail.com' || uEmail === 'sertanejopremier@gmail.com';
+      return actsAsAdmin ? 'admin' : 'landing';
+    }
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    if (hash.startsWith('#/artista/')) {
+      return 'public';
+    }
+    return 'landing';
+  });
+
+  const [routePayload, setRoutePayload] = useState<any>(() => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+    if (path.includes('/artista/') || path.includes('/artist/') || path.includes('/catalogo/') || path.startsWith('/s/')) {
+      let workingPath = path;
+      if (path.startsWith('/s/')) {
+        workingPath = path.replace(/^\/s\//, '/catalogo/');
+      }
+      const parts = workingPath.split('/');
+      const repIdx = parts.indexOf('repertorio');
+      if (repIdx > 0 && repIdx < parts.length - 1) {
+        const artistSlug = parts[repIdx - 1];
+        const repertoireId = parts[repIdx + 1];
+        if (artistSlug && repertoireId) {
+          return { id: artistSlug, repertoireId: repertoireId, autoCar: false };
+        }
+      }
+      const artistSlug = parts[parts.length - 1];
+      if (artistSlug) {
+        return { id: artistSlug, autoCar: false };
+      }
+    } else if (path === '/dashboard') {
+      const u = dbService.getCurrentUser();
+      if (!u) {
+        return { isRegister: false };
+      }
+    } else if (path === '/admin') {
+      const u = dbService.getCurrentUser();
+      const uEmail = u?.email?.toLowerCase().trim() || '';
+      const actsAsAdmin = u?.role === 'admin' || uEmail === 'videopremieroficial@gmail.com' || uEmail === 'sertanejopremier@gmail.com';
+      if (!actsAsAdmin) {
+        return { errorMsg: 'Acesso restrito ao administrador.' };
+      }
+    }
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    if (hash.startsWith('#/artista/')) {
+      const id = hash.replace('#/artista/', '');
+      return { id, autoCar: false };
+    }
+    return null;
+  });
   
   // Session state
   const [currentUser, setCurrentUser] = useState<Artist | null>(null);
