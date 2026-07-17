@@ -38,6 +38,7 @@ import {
 import { Artist, Music as Track, Analytics, Repertoire, getCleanComposer } from '../types';
 import { dbService, getSafeExpirationDate } from '../lib/db';
 import { BrandLogo } from './BrandLogo';
+import { renderFormattedLyrics } from './Player';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -1726,9 +1727,9 @@ export default function ArtistPublic({
                             Fechar ✕
                           </button>
                         </div>
-                        <p className="text-zinc-300 font-sans text-sm leading-relaxed whitespace-pre-wrap select-text">
-                          {track.lyrics}
-                        </p>
+                        <div className="text-left mt-2">
+                          {renderFormattedLyrics(track.lyrics, false)}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1888,9 +1889,9 @@ export default function ArtistPublic({
                 {/* Grid 2 Columns for main action pills */}
                 <div className="grid grid-cols-2 gap-2">
                   {/* Primary Highlighted Ouvir Button with radiant gradient filling */}
-                  {allTracks.length > 0 ? (
+                  {activeDisplayTracks.length > 0 ? (
                      <button 
-                      onClick={() => onSelectTrack(allTracks[0], allTracks)}
+                      onClick={() => onSelectTrack(activeDisplayTracks[0], activeDisplayTracks)}
                       className="w-full h-[34px] flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#10b981] to-[#05c46b] hover:brightness-110 text-zinc-950 rounded-lg text-[9px] font-mono font-extrabold tracking-widest transition-all cursor-pointer select-none active:scale-97 shadow-[0_2px_12px_rgba(16,185,129,0.25)]"
                     >
                       <Play className="w-3 h-3 fill-current stroke-none" />
@@ -2421,7 +2422,9 @@ export default function ArtistPublic({
                               [ fechar letra ]
                             </button>
                           </div>
-                          <p className="whitespace-pre-line text-zinc-300 text-xs leading-relaxed font-sans font-medium select-text">{track.lyrics}</p>
+                          <div className="text-left mt-2">
+                            {renderFormattedLyrics(track.lyrics, false)}
+                          </div>
                         </div>
                       )}
 

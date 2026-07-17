@@ -27,6 +27,53 @@ import {
 } from 'lucide-react';
 import { Music, getCleanComposer } from '../types';
 
+export function renderFormattedLyrics(lyrics: string, isCarMode: boolean = false) {
+  if (!lyrics) return null;
+  
+  // Normalize carriage returns and trim whitespace
+  const normalized = lyrics.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  
+  // Split into paragraphs (stanzas)
+  const paragraphs = normalized.split(/\n\s*\n/);
+  
+  return (
+    <div className={`space-y-6 ${isCarMode ? 'text-center' : 'text-left'} select-text w-full max-w-md mx-auto`}>
+      {paragraphs.map((para, pIdx) => {
+        const trimmedPara = para.trim();
+        const isHeader = trimmedPara.startsWith('[') && trimmedPara.endsWith(']');
+        
+        if (isHeader) {
+          return (
+            <p 
+              key={pIdx} 
+              className={`font-mono uppercase tracking-[0.15em] font-black select-none ${
+                isCarMode 
+                  ? 'text-[10px] sm:text-xs text-[#00b0ff] pt-4 pb-1' 
+                  : 'text-[10px] sm:text-xs text-[#10b981] pt-5 pb-1'
+              }`}
+            >
+              {trimmedPara}
+            </p>
+          );
+        }
+        
+        return (
+          <p 
+            key={pIdx} 
+            className={`whitespace-pre-wrap font-sans leading-relaxed text-zinc-300 hover:text-white transition-all cursor-default ${
+              isCarMode 
+                ? 'text-xs sm:text-sm font-extrabold tracking-wide' 
+                : 'text-sm sm:text-base font-medium tracking-normal'
+            }`}
+          >
+            {trimmedPara}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 // Premium Soundrive custom curly-ribbon wireframe brand logo (S) with emerald gradient
 const SLogoIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
   <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -738,23 +785,9 @@ export default function Player({
           {/* Core scrollable content */}
           <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-zinc-90 w-full">
             {carLyricsActive ? (
-              <div className="p-4 space-y-3.5 text-center font-sans tracking-wide">
+              <div className="p-4">
                 {currentTrack.lyrics ? (
-                  currentTrack.lyrics.split('\n').map((line, idx) => {
-                    const isHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
-                    if (isHeader) {
-                      return (
-                        <p key={idx} className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#00b0ff] font-extrabold pt-2 pb-0.5">
-                          {line}
-                        </p>
-                      );
-                    }
-                    return (
-                      <p key={idx} className="text-xs sm:text-sm font-extrabold text-zinc-300 hover:text-white leading-relaxed">
-                        {line}
-                      </p>
-                    );
-                  })
+                  renderFormattedLyrics(currentTrack.lyrics, true)
                 ) : (
                   <div className="space-y-2 py-6 flex flex-col items-center justify-center">
                     <p className="text-[#10b981] text-xs font-mono uppercase tracking-[0.15em] font-bold">[ SEM LETRA CADASTRADA ]</p>
@@ -1434,26 +1467,9 @@ export default function Player({
         <div className="relative flex-1 flex flex-col my-5 overflow-hidden z-10">
           <div className="absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-[#18181c] to-transparent pointer-events-none z-10"></div>
           
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 space-y-4 py-5 text-left scroll-smooth scrollbar-none">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 text-left scroll-smooth scrollbar-none">
             {currentTrack.lyrics ? (
-              currentTrack.lyrics.split('\n').map((line, idx) => {
-                const isSectionHeader = line.trim().startsWith('[') && line.trim().endsWith(']');
-                if (isSectionHeader) {
-                  return (
-                    <p key={idx} className="text-[10px] font-mono uppercase tracking-widest text-[#10b981] font-extrabold pt-3.5 pb-0.5 select-none">
-                      {line}
-                    </p>
-                  );
-                }
-                return (
-                  <p 
-                    key={idx} 
-                    className="text-base font-extrabold tracking-tight text-zinc-300 hover:text-white transition-all cursor-default leading-relaxed font-sans"
-                  >
-                    {line}
-                  </p>
-                );
-              })
+              renderFormattedLyrics(currentTrack.lyrics, false)
             ) : (
               <div className="space-y-3 py-16">
                 <BookOpen className="w-8 h-8 text-zinc-700 mx-auto animate-bounce" />

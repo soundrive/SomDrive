@@ -2687,7 +2687,7 @@ export default function Dashboard({
               return (
                 <div 
                   key={track.trackId}
-                  onClick={() => onSelectTrack(track, tracks)}
+                  onClick={() => onSelectTrack(track, generalSongs)}
                   className={`bg-gradient-to-r from-[#0a1122] via-[#0d162a] to-[#080d19] hover:from-[#0d1d3a] hover:to-[#0c162b] border rounded-2xl overflow-hidden shadow-2xl transition duration-300 cursor-pointer p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative ${
                     isCurrentlyPlaying ? 'ring-2 ring-orange-500 border-transparent' : 'border-slate-800/60'
                   }`}
@@ -2704,7 +2704,7 @@ export default function Dashboard({
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectTrack(track, tracks);
+                        onSelectTrack(track, generalSongs);
                       }}
                       className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform hover:scale-105 active:scale-95 ${
                         isCurrentlyPlaying && isPlaying 
