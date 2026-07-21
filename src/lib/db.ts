@@ -2425,7 +2425,7 @@ export const dbService = {
             type: data.type || 'repertoire',
             trackIds: data.trackIds || [],
             orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-            visibility: (visibilityVal === 'private') ? 'private' : 'public',
+            visibility: (visibilityVal === 'unlisted') ? 'unlisted' : (visibilityVal === 'private') ? 'private' : 'public',
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString()
           } as Repertoire;
@@ -2488,12 +2488,12 @@ export const dbService = {
 
   async getRepertoireBySlugOrId(ownerUid: string, slugOrId: string): Promise<Repertoire | null> {
     try {
-      // 1. Try slug query first (explicitly query 'public' visibility so public readers have read access via security rules)
+      // 1. Try slug query first (explicitly query 'public' and 'unlisted' visibilities so public readers have read access via security rules)
       const q = query(
         collection(db, 'repertoires'),
         where('ownerUid', '==', ownerUid),
         where('slug', '==', slugOrId),
-        where('visibility', '==', 'public')
+        where('visibility', 'in', ['public', 'unlisted'])
       );
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -2510,14 +2510,14 @@ export const dbService = {
           type: data.type || 'repertoire',
           trackIds: data.trackIds || [],
           orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-          visibility: visibilityVal,
+          visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? visibilityVal : 'public',
           createdAt: data.createdAt || new Date().toISOString(),
           updatedAt: data.updatedAt || new Date().toISOString()
         } as Repertoire;
       }
 
-      // 2. Fallback to direct document ID check ONLY if it is a structured ID (starts with rep_)
-      if (slugOrId.startsWith('rep_')) {
+      // 2. Fallback to direct document ID check
+      if (slugOrId.startsWith('rep_') || /^[A-Za-z0-9_-]{20,36}$/.test(slugOrId)) {
         const docRef = doc(db, 'repertoires', slugOrId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -2525,19 +2525,21 @@ export const dbService = {
           if (data.ownerUid === ownerUid) {
             let visibilityVal = data.visibility || 'public';
             if (visibilityVal === 'active') visibilityVal = 'public';
-            return {
-              id: docSnap.id,
-              ownerUid: data.ownerUid,
-              name: data.name,
-              slug: data.slug || '',
-              description: data.description || '',
-              type: data.type || 'repertoire',
-              trackIds: data.trackIds || [],
-              orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-              visibility: visibilityVal,
-              createdAt: data.createdAt || new Date().toISOString(),
-              updatedAt: data.updatedAt || new Date().toISOString()
-            } as Repertoire;
+            if (visibilityVal === 'public' || visibilityVal === 'unlisted') {
+              return {
+                id: docSnap.id,
+                ownerUid: data.ownerUid,
+                name: data.name,
+                slug: data.slug || '',
+                description: data.description || '',
+                type: data.type || 'repertoire',
+                trackIds: data.trackIds || [],
+                orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+                visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? visibilityVal : 'public',
+                createdAt: data.createdAt || new Date().toISOString(),
+                updatedAt: data.updatedAt || new Date().toISOString()
+              } as Repertoire;
+            }
           }
         }
       }
@@ -2566,7 +2568,7 @@ export const dbService = {
     }
 
     // Force strict normalized visibility values to fully match Firestore queries
-    const normalizedVisibility: "public" | "private" = (repertoire.visibility === 'private') ? 'private' : 'public';
+    const normalizedVisibility: "public" | "unlisted" | "private" = (repertoire.visibility === 'unlisted') ? 'unlisted' : (repertoire.visibility === 'private') ? 'private' : 'public';
 
     const savedRep: Repertoire = { 
       ...repertoire, 

@@ -446,7 +446,7 @@ export default function ArtistPublic({
   const repertoireNotFoundOrPrivate = isInitialLoadDone && !forceAllView && window.location.pathname.includes('/repertorio/') && (
     !selectedRepertoireId ||
     !currentRepertoire ||
-    currentRepertoire.visibility !== 'public' ||
+    (currentRepertoire.visibility !== 'public' && currentRepertoire.visibility !== 'unlisted') ||
     (currentRepertoire.ownerUid?.toString().trim().toLowerCase() !== artist?.userId?.toString().trim().toLowerCase())
   );
 
@@ -1015,10 +1015,14 @@ export default function ArtistPublic({
 
         if (isSharedPage) {
           // Shared repertoire focus: filter tracks strictly to this repertoire
-          const currentRepertoire = selectedRepertoireId ? repsList.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
+          let currentRepertoire = selectedRepertoireId ? repsList.find(r => r.id === selectedRepertoireId || (r.slug && r.slug.toString().trim().toLowerCase() === selectedRepertoireId.toString().trim().toLowerCase())) : null;
           
-          if (!currentRepertoire || currentRepertoire.visibility !== 'public') {
-            // Repertoire wasn't found or isn't public, return early cleanly rendering the empty/private state
+          if (!currentRepertoire && selectedRepertoireId) {
+            currentRepertoire = await dbService.getRepertoireBySlugOrId(resolvedUserId, selectedRepertoireId);
+          }
+
+          if (!currentRepertoire || (currentRepertoire.visibility !== 'public' && currentRepertoire.visibility !== 'unlisted')) {
+            // Repertoire wasn't found or isn't public/unlisted, return early cleanly rendering the empty/private state
             setRepertoires([]);
             setIsLoading(false);
             setIsInitialLoadDone(true);

@@ -432,7 +432,7 @@ export default function Dashboard({
 
   const [newRepName, setNewRepName] = useState('');
   const [newRepDesc, setNewRepDesc] = useState('');
-  const [newRepVisibility, setNewRepVisibility] = useState<'public' | 'private'>('public');
+  const [newRepVisibility, setNewRepVisibility] = useState<'public' | 'unlisted' | 'private'>('public');
   const [newRepType, setNewRepType] = useState<'repertoire' | 'playlist' | 'collection'>('repertoire');
   const [showCreateRep, setShowCreateRep] = useState(false);
   const [isSavingRepertoire, setIsSavingRepertoire] = useState(false);
@@ -2928,6 +2928,7 @@ export default function Dashboard({
                       const slugToUse = rep.slug || rep.id;
                       const shareUrl = `${window.location.origin}/s/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
                       const isPrivate = rep.visibility === 'private';
+                      const isUnlisted = rep.visibility === 'unlisted';
                       const isCopied = repCopiedId === rep.id;
                       const folderColor = getFolderColor(index);
 
@@ -2950,12 +2951,12 @@ export default function Dashboard({
                           {/* Soft inner glow matching the folder's theme */}
                           <div className={`absolute -top-10 -left-10 w-24 h-24 rounded-full bg-gradient-to-br from-${folderColor.name === 'verde_somdrive' ? 'emerald' : 'blue'}-500/5 to-transparent blur-2xl pointer-events-none`}></div>
 
-                          {/* A. CARD HEADER: Private/Public badge & options dropdown trigger */}
+                          {/* A. CARD HEADER: Private/Public/Unlisted badge & options dropdown trigger */}
                           <div className="flex items-center justify-between w-full relative z-10 pl-1">
                             <span className={`text-[8px] font-mono tracking-widest font-extrabold px-1.5 py-0.5 rounded border uppercase inline-block ${
-                              isPrivate ? 'bg-rose-950/30 border-rose-500/20 text-rose-400' : 'bg-emerald-950/30 border-emerald-500/20 text-[#1ed760]'
+                              isPrivate ? 'bg-rose-950/30 border-rose-500/20 text-rose-400' : isUnlisted ? 'bg-amber-950/30 border-amber-500/20 text-amber-400' : 'bg-emerald-950/30 border-emerald-500/20 text-[#1ed760]'
                             }`}>
-                              {isPrivate ? 'Privado' : 'Público'}
+                              {isPrivate ? 'Privado' : isUnlisted ? 'Privado por link' : 'Público'}
                             </span>
 
                             <div className="flex items-center gap-1.5 relative">
@@ -3012,7 +3013,7 @@ export default function Dashboard({
                                       className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
                                     >
                                       <Share2 className="w-3 h-3 text-slate-450" />
-                                      <span>Compartilhar</span>
+                                      <span>{isUnlisted ? (isCopied ? 'Copiado!' : 'Copiar link privado') : (isCopied ? 'Copiado!' : 'Compartilhar')}</span>
                                     </button>
                                     <div className="h-[1px] bg-slate-800/80 my-1"></div>
                                     <button
@@ -5228,11 +5229,12 @@ export default function Dashboard({
                 <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block">Visibilidade do Repertório</label>
                 <select 
                   value={newRepVisibility}
-                  onChange={(e) => setNewRepVisibility(e.target.value as 'public' | 'private')}
+                  onChange={(e) => setNewRepVisibility(e.target.value as 'public' | 'unlisted' | 'private')}
                   className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs focus:border-orange-500 outline-none text-white transition font-sans"
                 >
-                  <option value="public" className="bg-slate-950 text-white">Público (Aparece no catálogo de compartilhamentos)</option>
-                  <option value="private" className="bg-slate-950 text-white">Privado (Apenas você e quem tiver o link consegue ver)</option>
+                  <option value="public" className="bg-slate-950 text-white">Público (Aparece no perfil público e no catálogo geral)</option>
+                  <option value="unlisted" className="bg-slate-950 text-white">Privado por link (Oculto no perfil geral, acessível apenas por link direto)</option>
+                  <option value="private" className="bg-slate-950 text-white">Privado (Apenas uso pessoal no painel)</option>
                 </select>
               </div>
 
