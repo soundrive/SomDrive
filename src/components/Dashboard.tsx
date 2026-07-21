@@ -273,6 +273,7 @@ export default function Dashboard({
   const [newTrackStatus, setNewTrackStatus] = useState<'active' | 'inactive'>('active');
   const [editTrackStatus, setEditTrackStatus] = useState<'active' | 'inactive'>('active');
   const [editRepertoireId, setEditRepertoireId] = useState<string>('all_songs');
+  const [editSelectedRepertoireIds, setEditSelectedRepertoireIds] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   
   // File handlers for browser object url injection
@@ -1801,9 +1802,12 @@ export default function Dashboard({
     setEditLyrics(track.lyrics || '');
     setEditTrackStatus((track.status || 'active') as 'active' | 'inactive');
     
-    // Check which repertoire (if any) contains this trackId
-    const foundRep = dashboardRepertoires.find(r => r.trackIds && r.trackIds.includes(track.trackId));
-    setEditRepertoireId(foundRep ? foundRep.id : 'all_songs');
+    // Find ALL repertoires containing this track or matching track.repertoireId
+    const initialRepIds = dashboardRepertoires
+      .filter(r => (r.trackIds && r.trackIds.includes(track.trackId)) || r.id === track.repertoireId)
+      .map(r => r.id);
+    setEditSelectedRepertoireIds(initialRepIds);
+    setEditRepertoireId(initialRepIds.length > 0 ? initialRepIds[0] : 'all_songs');
 
     setFormError('');
     setShowEditForm(true);
@@ -1865,6 +1869,7 @@ export default function Dashboard({
       }
 
       setUploadProgress(85);
+      const primaryRepId = editSelectedRepertoireIds.length > 0 ? editSelectedRepertoireIds[0] : null;
       const updatedTrack = await dbService.updateMusic(profile.userId, editingTrack.trackId, {
         title: editTitle.trim(),
         composer: editComposer.trim(),
@@ -1875,8 +1880,8 @@ export default function Dashboard({
         description: editDesc.trim(),
         lyrics: editLyrics.trim(),
         status: editTrackStatus,
-        repertoireId: editRepertoireId === 'all_songs' ? null : editRepertoireId,
-        publicationDestination: editRepertoireId === 'all_songs' ? 'general' : 'repertoire',
+        repertoireId: primaryRepId,
+        publicationDestination: primaryRepId ? 'repertoire' : 'general',
         audioUrl: finalAudioUrl,
         storagePath: finalStoragePath,
         fileSize: finalFileSize,
@@ -1885,7 +1890,7 @@ export default function Dashboard({
       });
 
       setUploadProgress(90);
-      // Move track across repertoires
+      // Synchronize track across ALL user repertoires
       const allReps = await dbService.getRepertoires(profile.userId);
       for (const rep of allReps) {
         let changed = false;
@@ -1893,7 +1898,7 @@ export default function Dashboard({
         let nextOrderedTrackIds = [...(rep.orderedTrackIds || [])];
 
         const isCurrentlyInRep = nextTrackIds.includes(editingTrack.trackId);
-        const shouldBeInRep = rep.id === editRepertoireId;
+        const shouldBeInRep = editSelectedRepertoireIds.includes(rep.id);
 
         if (isCurrentlyInRep && !shouldBeInRep) {
           nextTrackIds = nextTrackIds.filter(id => id !== editingTrack.trackId);
@@ -3010,10 +3015,10 @@ export default function Dashboard({
                                         setRepCopiedId(rep.id);
                                         setTimeout(() => setRepCopiedId(null), 2000);
                                       }}
-                                      className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
+                                      className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2 cursor-pointer"
                                     >
                                       <Share2 className="w-3 h-3 text-slate-450" />
-                                      <span>{isUnlisted ? (isCopied ? 'Copiado!' : 'Copiar link privado') : (isCopied ? 'Copiado!' : 'Compartilhar')}</span>
+                                      <span>{isUnlisted || isPrivate ? (isCopied ? 'Copiado!' : 'Copiar link privado') : (isCopied ? 'Copiado!' : 'Compartilhar')}</span>
                                     </button>
                                     <div className="h-[1px] bg-slate-800/80 my-1"></div>
                                     <button
@@ -4599,21 +4604,55 @@ export default function Dashboard({
                 </div>
               </div>
 
-              {/* Destination Repertoire selecting */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase">Destino da Música (Mover para Repertório)</label>
-                <select
-                  value={editRepertoireId}
-                  onChange={(e) => setEditRepertoireId(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:border-orange-500 outline-none text-white transition animate-none cursor-pointer"
-                >
-                  <option value="all_songs">Todas as músicas (Lista Geral Pública)</option>
-                  {dashboardRepertoires.map((rep) => (
-                    <option key={rep.id} value={rep.id}>
-                      📁 {rep.name}
-                    </option>
-                  ))}
-                </select>
+              {/* Destination Repertoire selecting (Multi-repertoire support) */}
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase block">
+                  Pastas / Repertórios Onde Esta Música Aparece
+                </label>
+                {dashboardRepertoires.length === 0 ? (
+                  <div className="p-3 text-center rounded-xl bg-slate-950 border border-slate-800">
+                    <p className="text-xs text-slate-400 font-sans">Você ainda não criou nenhum repertório. A música será mantida na lista geral do seu perfil.</p>
+                  </div>
+                ) : (
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <span className="text-[9.5px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block mb-1">
+                      Marque as pastas onde você quer que esta música apareça (pode escolher mais de uma):
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                      {dashboardRepertoires.map((rep) => {
+                        const isChecked = editSelectedRepertoireIds.includes(rep.id);
+                        return (
+                          <label
+                            key={rep.id}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`flex items-center justify-between gap-2 text-xs py-2 px-2.5 rounded-lg border cursor-pointer select-none transition ${
+                              isChecked
+                                ? 'bg-[#0f172a] border-orange-500/60 text-white'
+                                : 'bg-slate-900 border-slate-850 text-slate-400 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <Folders className={`w-3.5 h-3.5 shrink-0 ${isChecked ? 'text-orange-400' : 'text-slate-500'}`} />
+                              <span className="truncate font-sans font-medium">{rep.name}</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setEditSelectedRepertoireIds(prev => prev.filter(id => id !== rep.id));
+                                } else {
+                                  setEditSelectedRepertoireIds(prev => [...prev, rep.id]);
+                                }
+                              }}
+                              className="accent-orange-500 shrink-0 cursor-pointer"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Description bio */}
@@ -5320,13 +5359,29 @@ export default function Dashboard({
                           </p>
                         )}
                       </div>
-                      <button 
-                        type="button" 
-                        onClick={() => setViewingRepertoireTracks(null)}
-                        className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const slugToUse = viewingRepertoireTracks.slug || viewingRepertoireTracks.id;
+                            const shareUrl = `${window.location.origin}/s/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
+                            navigator.clipboard.writeText(shareUrl);
+                            setToastMessage?.("Link da pasta copiado!");
+                          }}
+                          className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-mono font-black text-[11px] uppercase rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                          title="Copiar link direto para divulgar esta pasta"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span>Copiar link</span>
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setViewingRepertoireTracks(null)}
+                          className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Stats summary grid */}

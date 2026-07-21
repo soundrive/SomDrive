@@ -2488,12 +2488,11 @@ export const dbService = {
 
   async getRepertoireBySlugOrId(ownerUid: string, slugOrId: string): Promise<Repertoire | null> {
     try {
-      // 1. Try slug query first (explicitly query 'public' and 'unlisted' visibilities so public readers have read access via security rules)
+      // 1. Try slug query first
       const q = query(
         collection(db, 'repertoires'),
         where('ownerUid', '==', ownerUid),
-        where('slug', '==', slugOrId),
-        where('visibility', 'in', ['public', 'unlisted'])
+        where('slug', '==', slugOrId)
       );
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -2525,21 +2524,19 @@ export const dbService = {
           if (data.ownerUid === ownerUid) {
             let visibilityVal = data.visibility || 'public';
             if (visibilityVal === 'active') visibilityVal = 'public';
-            if (visibilityVal === 'public' || visibilityVal === 'unlisted') {
-              return {
-                id: docSnap.id,
-                ownerUid: data.ownerUid,
-                name: data.name,
-                slug: data.slug || '',
-                description: data.description || '',
-                type: data.type || 'repertoire',
-                trackIds: data.trackIds || [],
-                orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-                visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? visibilityVal : 'public',
-                createdAt: data.createdAt || new Date().toISOString(),
-                updatedAt: data.updatedAt || new Date().toISOString()
-              } as Repertoire;
-            }
+            return {
+              id: docSnap.id,
+              ownerUid: data.ownerUid,
+              name: data.name,
+              slug: data.slug || '',
+              description: data.description || '',
+              type: data.type || 'repertoire',
+              trackIds: data.trackIds || [],
+              orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+              visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? visibilityVal : 'public',
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt || new Date().toISOString()
+            } as Repertoire;
           }
         }
       }

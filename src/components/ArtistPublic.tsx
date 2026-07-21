@@ -1021,8 +1021,8 @@ export default function ArtistPublic({
             currentRepertoire = await dbService.getRepertoireBySlugOrId(resolvedUserId, selectedRepertoireId);
           }
 
-          if (!currentRepertoire || (currentRepertoire.visibility !== 'public' && currentRepertoire.visibility !== 'unlisted')) {
-            // Repertoire wasn't found or isn't public/unlisted, return early cleanly rendering the empty/private state
+          if (!currentRepertoire || (currentRepertoire.visibility as string) === 'draft') {
+            // Repertoire wasn't found or is draft, return early cleanly rendering the empty state
             setRepertoires([]);
             setIsLoading(false);
             setIsInitialLoadDone(true);
