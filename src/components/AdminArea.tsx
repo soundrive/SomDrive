@@ -1918,9 +1918,13 @@ export default function AdminArea({
 
                 // Determinar tipo de acesso
                 let accessType = 'Gratuito (Free)';
-                if (selectedUser.manualAccessEndsAt) {
+                if (selectedUser.accessType === 'manual') {
+                  accessType = selectedUser.manualAccessEndsAt 
+                    ? `Manual / Cortesia (Até ${formatDateBR(parseValToISO(selectedUser.manualAccessEndsAt))})` 
+                    : 'Manual / Cortesia (Sem Vencimento ✨)';
+                } else if (selectedUser.manualAccessEndsAt) {
                   accessType = 'Manual / Cortesia';
-                } else if (selectedUser.mercadoPagoSubscriptionId || selectedUser.mercadoPagoPaymentId) {
+                } else if (selectedUser.mercadoPagoSubscriptionId || selectedUser.mercadoPagoPaymentId || selectedUser.accessType === 'mercadopago') {
                   accessType = 'Assinante Mercado Pago';
                 } else if (selectedUser.plan !== 'free') {
                   accessType = 'Outro / Cortesia';
@@ -1930,7 +1934,7 @@ export default function AdminArea({
                 const hasExcessSongs = userSongs.length > userPlanLimit;
                 
                 // Verificar se plano expirou (se manualAccessEndsAt no passado)
-                const isExpired = selectedUser.manualAccessEndsAt && new Date(selectedUser.manualAccessEndsAt).getTime() < Date.now();
+                const isExpired = selectedUser.accessType === 'manual' && selectedUser.manualAccessEndsAt && new Date(parseValToISO(selectedUser.manualAccessEndsAt)).getTime() < Date.now();
 
                 return (
                   <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-850 space-y-4">
@@ -2004,7 +2008,7 @@ export default function AdminArea({
                         <ul className="list-disc list-inside space-y-0.5 text-[11px] pl-1">
                           {isExpired && (
                             <li>
-                              O acesso manual expirou em <span className="font-mono font-bold">{new Date(selectedUser.manualAccessEndsAt!).toLocaleString('pt-BR')}</span>. O usuário foi revertido para o plano Free.
+                              O acesso manual expirou em <span className="font-mono font-bold">{new Date(parseValToISO(selectedUser.manualAccessEndsAt)).toLocaleString('pt-BR')}</span>. O usuário foi revertido para o plano Free.
                             </li>
                           )}
                           {hasExcessSongs && (
@@ -2021,199 +2025,293 @@ export default function AdminArea({
 
               <form onSubmit={handleSaveUserEdit} className="space-y-6">
                 
-                <h4 className="text-xs font-bold tracking-wider text-slate-400 uppercase">Informações Gerais</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Nome do Artista</label>
-                    <input
-                      type="text"
-                      value={selectedUser.name || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Cidade</label>
-                    <input
-                      type="text"
-                      value={selectedUser.city || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, city: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Estado</label>
-                    <input
-                      type="text"
-                      value={selectedUser.state || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, state: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                      placeholder="Ex: GO"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">WhatsApp de Contato</label>
-                    <input
-                      type="text"
-                      value={selectedUser.whatsapp || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, whatsapp: e.target.value, phone: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Instagram (@)</label>
-                    <input
-                      type="text"
-                      value={selectedUser.instagram || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, instagram: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Nível de Permissão (Role)</label>
-                    <select
-                      value={selectedUser.role || 'user'}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value as any })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    >
-                      <option value="user">User (Comum)</option>
-                      <option value="admin">Admin (Administrador Geral)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <h4 className="text-xs font-bold tracking-wider text-slate-400 uppercase pt-4">Plano e Faturamento</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Plano Atual</label>
-                    <select
-                      value={selectedUser.plan}
-                      onChange={(e) => {
-                        const nextPlan = e.target.value as 'free' | 'essencial' | 'pro' | 'premium';
-                        const standardLimit = nextPlan === 'free' ? 3 : (nextPlan === 'essencial' ? 10 : (nextPlan === 'pro' ? 15 : 50));
-                        setSelectedUser({
-                          ...selectedUser,
-                          plan: nextPlan,
-                          musicLimit: standardLimit
-                        });
-                      }}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    >
-                      <option value="free">Free (Grátis)</option>
-                      <option value="essencial">Essencial (Básico)</option>
-                      <option value="pro">Pro (Intermediário)</option>
-                      <option value="premium">Premium (Completo)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de Acesso</label>
-                    <select
-                      value={selectedUser.accessType || 'free'}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, accessType: e.target.value as any })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    >
-                      <option value="free">Free</option>
-                      <option value="trial">Trial (Teste Grátis)</option>
-                      <option value="manual">Manual (Liberado pelo Admin)</option>
-                      <option value="mercadopago">MercadoPago (Processo de Vendas)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Status de Pagamento (Mercado Pago / Manual)</label>
-                    <select
-                      value={selectedUser.paymentStatus || 'inactive'}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, paymentStatus: e.target.value as any })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500"
-                    >
-                      <option value="inactive">Inactive (Inativo)</option>
-                      <option value="active">Active (Ativo)</option>
-                      <option value="pending">Pending (Pendente)</option>
-                      <option value="cancelled">Cancelled (Cancelado)</option>
-                      <option value="manual">Manual (Aprovado Manual)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Limite Manual de Músicas</label>
-                    <input
-                      type="number"
-                      value={selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : 3}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, musicLimit: Number(e.target.value) })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500 font-mono"
-                    />
+                {/* 1. DADOS CADASTRAIS DO USUÁRIO */}
+                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                  <h4 className="text-xs font-bold tracking-wider text-slate-300 uppercase flex items-center">
+                    <User className="h-4 w-4 mr-1.5 text-orange-500" />
+                    Dados Cadastrais do Usuário
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Nome do Artista</label>
+                      <input
+                        type="text"
+                        value={selectedUser.name || ''}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">E-mail do Usuário</label>
+                      <input
+                        type="text"
+                        disabled
+                        value={selectedUser.email || ''}
+                        className="w-full bg-slate-900/50 border border-slate-800/80 px-3.5 py-2.5 rounded-xl text-sm text-slate-400 cursor-not-allowed font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Cidade</label>
+                      <input
+                        type="text"
+                        value={selectedUser.city || ''}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, city: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Estado</label>
+                      <input
+                        type="text"
+                        value={selectedUser.state || ''}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, state: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500"
+                        placeholder="Ex: GO"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">WhatsApp de Contato</label>
+                      <input
+                        type="text"
+                        value={selectedUser.whatsapp || ''}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, whatsapp: e.target.value, phone: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Instagram (@)</label>
+                      <input
+                        type="text"
+                        value={selectedUser.instagram || ''}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, instagram: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Nível de Permissão (Role)</label>
+                      <select
+                        value={selectedUser.role || 'user'}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value as any })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500"
+                      >
+                        <option value="user">User (Comum)</option>
+                        <option value="admin">Admin (Administrador Geral)</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
-                <h4 className="text-xs font-bold tracking-wider text-slate-400 uppercase pt-4">Datas da Assinatura / Testes</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Término do Teste Grátis (Trial Ends At)</label>
-                    <input
-                      type="datetime-local"
-                      value={selectedUser.trialEndsAt ? selectedUser.trialEndsAt.substring(0, 16) : ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, trialEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500 font-mono text-slate-300"
-                    />
+                {/* 2. PLANO MANUAL / CORTESIA */}
+                <div className="bg-slate-950 p-5 rounded-2xl border border-orange-500/20 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold tracking-wider text-orange-400 uppercase flex items-center">
+                      <Sparkles className="h-4 w-4 mr-1.5 text-orange-500" />
+                      Plano Manual / Cortesia
+                    </h4>
+                    <span className="text-[10px] font-semibold bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2.5 py-0.5 rounded-full">
+                      Liberação Simples pelo Admin
+                    </span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Término do Acesso Manual (Manual Access Ends At)</label>
-                    <input
-                      type="datetime-local"
-                      value={selectedUser.manualAccessEndsAt ? selectedUser.manualAccessEndsAt.substring(0, 16) : ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, manualAccessEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500 font-mono text-slate-300"
-                    />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Plano Escolhido</label>
+                      <select
+                        value={selectedUser.plan || 'free'}
+                        onChange={(e) => {
+                          const nextPlan = e.target.value as 'free' | 'essencial' | 'pro' | 'premium';
+                          const standardLimit = nextPlan === 'free' ? 3 : (nextPlan === 'essencial' ? 10 : (nextPlan === 'pro' ? 15 : 50));
+                          
+                          setSelectedUser({
+                            ...selectedUser,
+                            plan: nextPlan,
+                            musicLimit: standardLimit,
+                            accessType: nextPlan === 'free' ? 'free' : 'manual',
+                            paymentStatus: nextPlan === 'free' ? 'inactive' : 'manual'
+                          });
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500 font-medium"
+                      >
+                        <option value="free">Free (Grátis - 3 músicas)</option>
+                        <option value="essencial">Essencial (Básico - 10 músicas)</option>
+                        <option value="pro">Pro (Intermediário - 15 músicas)</option>
+                        <option value="premium">Premium (Completo - 50 músicas)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 mb-1">Limite de Músicas no Catálogo</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : (selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50)))}
+                        onChange={(e) => setSelectedUser({ ...selectedUser, musicLimit: Number(e.target.value) })}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500 font-mono"
+                        placeholder="Ex: 20"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">Altere para qualquer número desejado (ex: 20 músicas).</span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Início da Assinatura (Subscription Started At)</label>
-                    <input
-                      type="datetime-local"
-                      value={selectedUser.subscriptionStartedAt ? selectedUser.subscriptionStartedAt.substring(0, 16) : ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, subscriptionStartedAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500 font-mono text-slate-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Término da Assinatura (Subscription Ends At)</label>
-                    <input
-                      type="datetime-local"
-                      value={selectedUser.subscriptionEndsAt ? selectedUser.subscriptionEndsAt.substring(0, 16) : ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, subscriptionEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-sm outline-none text-slate-250 focus:border-orange-500 font-mono text-slate-300"
-                    />
+
+                  {/* Opções de Vencimento do Plano Manual */}
+                  <div className="pt-2 space-y-3">
+                    <label className="block text-xs font-medium text-slate-400">Vencimento do Acesso Manual</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUser({ ...selectedUser, manualAccessEndsAt: null, accessType: selectedUser.plan !== 'free' ? 'manual' : 'free' })}
+                        className={`p-3.5 rounded-xl border text-left transition flex items-center space-x-3 ${!selectedUser.manualAccessEndsAt ? 'bg-orange-500/10 border-orange-500/50 text-orange-300' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+                      >
+                        <div className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${!selectedUser.manualAccessEndsAt ? 'border-orange-500 bg-orange-500' : 'border-slate-600'}`}>
+                          {!selectedUser.manualAccessEndsAt && <div className="h-1.5 w-1.5 rounded-full bg-slate-950" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-white">Sem Vencimento ✨</div>
+                          <div className="text-[10px] opacity-80 text-slate-400">Acesso permanente e cortesia sem expiração</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedUser.manualAccessEndsAt) {
+                            const nextMonth = new Date();
+                            nextMonth.setDate(nextMonth.getDate() + 30);
+                            setSelectedUser({ ...selectedUser, manualAccessEndsAt: nextMonth.toISOString(), accessType: selectedUser.plan !== 'free' ? 'manual' : 'free' });
+                          }
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition flex items-center space-x-3 ${selectedUser.manualAccessEndsAt ? 'bg-orange-500/10 border-orange-500/50 text-orange-300' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+                      >
+                        <div className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${selectedUser.manualAccessEndsAt ? 'border-orange-500 bg-orange-500' : 'border-slate-600'}`}>
+                          {selectedUser.manualAccessEndsAt && <div className="h-1.5 w-1.5 rounded-full bg-slate-950" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-white">Com Data de Vencimento 📅</div>
+                          <div className="text-[10px] opacity-80 text-slate-400">Acesso temporário com data e hora limite</div>
+                        </div>
+                      </button>
+                    </div>
+
+                    {selectedUser.manualAccessEndsAt && (
+                      <div className="mt-3 p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5">
+                        <label className="block text-xs font-medium text-slate-300">Data e Hora do Vencimento Manual</label>
+                        <input
+                          type="datetime-local"
+                          value={selectedUser.manualAccessEndsAt ? parseValToISO(selectedUser.manualAccessEndsAt).substring(0, 16) : ''}
+                          onChange={(e) => setSelectedUser({ ...selectedUser, manualAccessEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                          className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-xs outline-none text-slate-200 focus:border-orange-500 font-mono"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <h4 className="text-xs font-bold tracking-wider text-slate-400 uppercase pt-4">Mercado Pago (Campos preparados para API)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">ID do Pagamento MercadoPago (Payment ID)</label>
-                    <input
-                      type="text"
-                      value={selectedUser.mercadoPagoPaymentId || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, mercadoPagoPaymentId: e.target.value || null })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-xs outline-none text-slate-250 focus:border-orange-500 font-mono"
-                      placeholder="Ex: mp-pay-736294"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">ID da Assinatura MercadoPago (Subscription ID)</label>
-                    <input
-                      type="text"
-                      value={selectedUser.mercadoPagoSubscriptionId || ''}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, mercadoPagoSubscriptionId: e.target.value || null })}
-                      className="w-full bg-slate-950 border border-slate-850 px-3 py-2 rounded-xl text-xs outline-none text-slate-250 focus:border-orange-500 font-mono"
-                      placeholder="Ex: pre_sub_927364"
-                    />
-                  </div>
+                {/* 3. DADOS MERCADO PAGO - TÉCNICO / TIPO DE ACESSO AVANÇADO */}
+                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-850 space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTechnicalDocs(!showTechnicalDocs)}
+                    className="w-full flex items-center justify-between text-left text-xs font-bold text-slate-400 hover:text-slate-200 uppercase tracking-wider"
+                  >
+                    <span className="flex items-center">
+                      <CreditCard className="h-4 w-4 mr-1.5 text-slate-500" />
+                      Dados Mercado Pago (Histórico Técnico)
+                    </span>
+                    <span className="text-[11px] text-orange-500 underline font-normal">
+                      {showTechnicalDocs ? 'Ocultar Detalhes Avançados' : 'Mostrar Detalhes Avançados'}
+                    </span>
+                  </button>
+
+                  {showTechnicalDocs && (
+                    <div className="space-y-4 pt-2 border-t border-slate-850">
+                      <p className="text-[11px] text-slate-500">
+                        Estes campos são preenchidos e gerenciados automaticamente pelas integrações com o Mercado Pago. Os dados não serão apagados ou perdidos ao conceder um plano manual.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Tipo de Acesso (Access Type)</label>
+                          <select
+                            value={selectedUser.accessType || 'free'}
+                            onChange={(e) => setSelectedUser({ ...selectedUser, accessType: e.target.value as any })}
+                            className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs outline-none text-slate-300 focus:border-orange-500"
+                          >
+                            <option value="free">Free</option>
+                            <option value="trial">Trial (Teste Grátis)</option>
+                            <option value="manual">Manual (Liberado pelo Admin)</option>
+                            <option value="mercadopago">MercadoPago (Cobrança Recorrente)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Status de Pagamento (Payment Status)</label>
+                          <select
+                            value={selectedUser.paymentStatus || 'inactive'}
+                            onChange={(e) => setSelectedUser({ ...selectedUser, paymentStatus: e.target.value as any })}
+                            className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs outline-none text-slate-300 focus:border-orange-500"
+                          >
+                            <option value="inactive">Inactive (Inativo)</option>
+                            <option value="active">Active (Ativo)</option>
+                            <option value="pending">Pending (Pendente)</option>
+                            <option value="cancelled">Cancelled (Cancelado)</option>
+                            <option value="manual">Manual (Aprovado Manual)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Payment ID MercadoPago</label>
+                          <input
+                            type="text"
+                            value={selectedUser.mercadoPagoPaymentId || ''}
+                            onChange={(e) => setSelectedUser({ ...selectedUser, mercadoPagoPaymentId: e.target.value || null })}
+                            className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs outline-none text-slate-300 font-mono"
+                            placeholder="Ex: mp-pay-736294"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Subscription ID MercadoPago</label>
+                          <input
+                            type="text"
+                            value={selectedUser.mercadoPagoSubscriptionId || ''}
+                            onChange={(e) => setSelectedUser({ ...selectedUser, mercadoPagoSubscriptionId: e.target.value || null })}
+                            className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs outline-none text-slate-300 font-mono"
+                            placeholder="Ex: pre_sub_927364"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Início da Assinatura</label>
+                          <input
+                            type="datetime-local"
+                            value={selectedUser.subscriptionStartedAt ? parseValToISO(selectedUser.subscriptionStartedAt).substring(0, 16) : ''}
+                            onChange={(e) => setSelectedUser({ ...selectedUser, subscriptionStartedAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                            className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs outline-none text-slate-300 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Término da Assinatura Mercado Pago</label>
+                          <input
+                            type="datetime-local"
+                            value={selectedUser.subscriptionEndsAt ? parseValToISO(selectedUser.subscriptionEndsAt).substring(0, 16) : ''}
+                            onChange={(e) => setSelectedUser({ ...selectedUser, subscriptionEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                            className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs outline-none text-slate-300 font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
+                {/* 4. BLOQUEIO E SEGURANÇA */}
                 <div className="flex items-center space-x-3.5 bg-slate-950 p-4 border border-slate-850 rounded-2xl">
                   <input
                     type="checkbox"
                     id="edit-isblocked"
                     checked={selectedUser.isBlocked || false}
                     onChange={(e) => setSelectedUser({ ...selectedUser, isBlocked: e.target.checked })}
-                    className="h-4 w-4 bg-slate-950 text-orange-500"
+                    className="h-4 w-4 bg-slate-900 border-slate-800 text-orange-500 rounded"
                   />
                   <label htmlFor="edit-isblocked" className="text-xs font-semibold text-red-400 hover:text-red-300 cursor-pointer">
                     Bloquear conta do usuário de imediato (Impede login no aplicativo)
@@ -2224,7 +2322,7 @@ export default function AdminArea({
                   <button
                     type="button"
                     onClick={() => setSelectedUser(null)}
-                    className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 font-medium rounded-2xl text-xs outline-none transition text-slate-350"
+                    className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 font-medium rounded-2xl text-xs outline-none transition text-slate-300"
                   >
                     Voltar
                   </button>

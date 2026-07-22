@@ -2509,7 +2509,7 @@ export const dbService = {
           type: data.type || 'repertoire',
           trackIds: data.trackIds || [],
           orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-          visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? visibilityVal : 'public',
+          visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? 'unlisted' : 'public',
           createdAt: data.createdAt || new Date().toISOString(),
           updatedAt: data.updatedAt || new Date().toISOString()
         } as Repertoire;
@@ -2533,7 +2533,7 @@ export const dbService = {
               type: data.type || 'repertoire',
               trackIds: data.trackIds || [],
               orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-              visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? visibilityVal : 'public',
+              visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? 'unlisted' : 'public',
               createdAt: data.createdAt || new Date().toISOString(),
               updatedAt: data.updatedAt || new Date().toISOString()
             } as Repertoire;

@@ -580,7 +580,8 @@ export default function Dashboard({
   const [newRepertoireName, setNewRepertoireName] = useState('');
   const [newRepertoireDesc, setNewRepertoireDesc] = useState('');
   const [newRepertoireType, setNewRepertoireType] = useState<'repertoire' | 'playlist' | 'collection' | 'project'>('repertoire');
-  const [newRepertoireVisibility, setNewRepertoireVisibility] = useState<'public' | 'private'>('public');
+  const [newRepertoireVisibility, setNewRepertoireVisibility] = useState<'public' | 'unlisted' | 'private'>('unlisted');
+  const [showNewFolderInUpload, setShowNewFolderInUpload] = useState(false);
   const [trackSpecificOrganization, setTrackSpecificOrganization] = useState<Record<string, { option: 'all_songs' | 'existing' | 'new'; selectedRepIds?: string[]; newRepName?: string }>>({});
 
   // Direct Repertoire Quick Association modal states
@@ -1249,8 +1250,9 @@ export default function Dashboard({
 
     try {
       // Helper function to create repertoire dynamically
-      const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'public' | 'private', initialTrackIds: string[] = []) => {
+      const createNewRepertoireInFirestore = async (name: string, desc: string, type: 'repertoire' | 'playlist' | 'collection' | 'project', visibility: 'public' | 'unlisted' | 'private', initialTrackIds: string[] = []) => {
         const repId = `rep_${Date.now().toString(36) + Math.random().toString(36).substring(2, 7)}`;
+        const normalizedVis = (visibility === 'public') ? 'public' : 'unlisted';
         const newRep: Repertoire = {
           id: repId,
           ownerUid: profile.userId,
@@ -1259,7 +1261,7 @@ export default function Dashboard({
           type: type,
           trackIds: initialTrackIds,
           orderedTrackIds: initialTrackIds,
-          visibility: (visibility as string) === 'active' ? 'public' : visibility,
+          visibility: normalizedVis,
           createdAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(newRep);
@@ -1268,7 +1270,7 @@ export default function Dashboard({
 
       // 1. Create main batch repertoire if needed
       let batchNewRepId = "";
-      if (organizationOption === 'new_repertoire' && newRepertoireName.trim()) {
+      if (newRepertoireName.trim()) {
         batchNewRepId = await createNewRepertoireInFirestore(
           newRepertoireName,
           newRepertoireDesc,
@@ -1359,16 +1361,10 @@ export default function Dashboard({
             ? title.trim() 
             : file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").trim();
 
-          // Decide target repertoires
-          let targetRepIds: string[] = [];
-          if (organizationOption === 'all_songs') {
-            targetRepIds = [];
-          } else if (organizationOption === 'existing_repertoire') {
-            targetRepIds = selectedRepertoireIds;
-          } else if (organizationOption === 'new_repertoire') {
-            if (batchNewRepId) {
-              targetRepIds = [batchNewRepId];
-            }
+          // Decide target repertoires (combines any selected existing repertoires and/or newly created repertoire)
+          let targetRepIds: string[] = [...selectedRepertoireIds];
+          if (batchNewRepId && !targetRepIds.includes(batchNewRepId)) {
+            targetRepIds.push(batchNewRepId);
           } else if (organizationOption === 'each_separately') {
             const spec = trackSpecificOrganization[file.name] || { option: 'all_songs' };
             if (spec.option === 'existing') {
@@ -1435,11 +1431,9 @@ export default function Dashboard({
         let calculatedAudioFileId = `file-ext-${Math.floor(Math.random() * 89999) + 10000}`;
 
         // Link with selected repertoires directly if configured
-        let targetRepIds: string[] = [];
-        if (organizationOption === 'existing_repertoire') {
-          targetRepIds = selectedRepertoireIds;
-        } else if (organizationOption === 'new_repertoire' && batchNewRepId) {
-          targetRepIds = [batchNewRepId];
+        let targetRepIds: string[] = [...selectedRepertoireIds];
+        if (batchNewRepId && !targetRepIds.includes(batchNewRepId)) {
+          targetRepIds.push(batchNewRepId);
         }
 
         const finalRepId = targetRepIds.length > 0 ? targetRepIds[0] : null;
@@ -1953,12 +1947,13 @@ export default function Dashboard({
 
     setIsSavingRepertoire(true);
     try {
+      const saveVisibility = (newRepVisibility === 'public') ? 'public' : 'unlisted';
       if (editingRepertoire) {
         const updatedRep: Repertoire = {
           ...editingRepertoire,
           name: newRepName.trim(),
           description: newRepDesc.trim(),
-          visibility: newRepVisibility,
+          visibility: saveVisibility,
           updatedAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(updatedRep);
@@ -1974,7 +1969,7 @@ export default function Dashboard({
           type: 'repertoire',
           trackIds: [],
           orderedTrackIds: [],
-          visibility: newRepVisibility,
+          visibility: saveVisibility,
           createdAt: new Date().toISOString()
         };
         await dbService.saveRepertoire(newRep);
@@ -2959,9 +2954,9 @@ export default function Dashboard({
                           {/* A. CARD HEADER: Private/Public/Unlisted badge & options dropdown trigger */}
                           <div className="flex items-center justify-between w-full relative z-10 pl-1">
                             <span className={`text-[8px] font-mono tracking-widest font-extrabold px-1.5 py-0.5 rounded border uppercase inline-block ${
-                              isPrivate ? 'bg-rose-950/30 border-rose-500/20 text-rose-400' : isUnlisted ? 'bg-amber-950/30 border-amber-500/20 text-amber-400' : 'bg-emerald-950/30 border-emerald-500/20 text-[#1ed760]'
+                              isPrivate || isUnlisted ? 'bg-amber-950/30 border-amber-500/20 text-amber-400' : 'bg-emerald-950/30 border-emerald-500/20 text-[#1ed760]'
                             }`}>
-                              {isPrivate ? 'Privado' : isUnlisted ? 'Privado por link' : 'Público'}
+                              {isPrivate || isUnlisted ? 'Privado por link' : 'Público'}
                             </span>
 
                             <div className="flex items-center gap-1.5 relative">
@@ -2998,17 +2993,16 @@ export default function Dashboard({
                                         setEditingRepertoire(rep);
                                         setNewRepName(rep.name);
                                         setNewRepDesc(rep.description || '');
-                                        setNewRepVisibility(rep.visibility === 'active' ? 'public' : (rep.visibility || 'public') as any);
+                                        setNewRepVisibility((rep.visibility === 'public' || rep.visibility === 'active') ? 'public' : 'unlisted');
                                         setShowCreateRep(true);
                                       }}
-                                      className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2"
+                                      className="w-full px-3 py-2 text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-2 cursor-pointer"
                                     >
                                       <Pencil className="w-3 h-3 text-slate-450" />
                                       <span>Editar Pasta</span>
                                     </button>
                                     <button
                                       type="button"
-                                      disabled={isPrivate}
                                       onClick={() => {
                                         setOpenMenuRepId(null);
                                         navigator.clipboard.writeText(shareUrl);
@@ -3929,7 +3923,7 @@ export default function Dashboard({
                 </div>
               )}
 
-              {/* STAGE 4: MUSIC ORGANIZATION OPTIONS (THE INTENT AND DECISION OF SAVE DESTINY) */}
+              {/* STAGE 4: MUSIC ORGANIZATION OPTIONS */}
               {uploadStep === 4 && (
                 <div className="space-y-4 animate-fadeIn text-left">
                   <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-2xl mb-2">
@@ -3938,145 +3932,155 @@ export default function Dashboard({
                   </div>
 
                   <div className="space-y-3">
-                    {/* Option 1: Save only on All Songs (General Catalog) */}
-                    <div 
-                      onClick={() => setOrganizationOption('all_songs')}
-                      className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
-                        organizationOption === 'all_songs' 
-                          ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
-                          : 'bg-slate-950/50 border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <Folders className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'all_songs' ? 'text-orange-400' : 'text-slate-500'}`} />
+                    {/* Option 1: General catalog checkbox */}
+                    <label className="p-4 bg-slate-950/60 border border-slate-800 hover:border-orange-500/40 rounded-2xl flex items-start gap-3.5 cursor-pointer transition select-none">
+                      <input 
+                        type="checkbox"
+                        checked={organizationOption === 'all_songs' || selectedRepertoireIds.length === 0}
+                        onChange={(e) => {
+                          if (e.target.checked && selectedRepertoireIds.length === 0) {
+                            setOrganizationOption('all_songs');
+                          }
+                        }}
+                        className="accent-orange-500 w-4 h-4 mt-0.5"
+                      />
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide">Salvar como Música Avulsa (Não entra em nenhuma pasta/repertório)</h4>
-                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Sua música será arquivada e listada no catálogo principal, mas não fará parte de nenhum repertório ou pasta.</p>
+                        <h4 className="text-xs font-bold uppercase tracking-wide text-white">Manter também em músicas avulsas / acervo geral</h4>
+                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Sua música será listada no catálogo principal e acervo geral do seu perfil público.</p>
                       </div>
-                    </div>
+                    </label>
 
-                    {/* Option 2: Add to existing repertoire */}
-                    <div 
-                      onClick={() => {
-                        if (dashboardRepertoires.length === 0) {
-                          setFormError('Você ainda não possui nenhum repertório cadastrado. Selecione outra opção ou crie um novo abaixo.');
-                        } else {
-                          setFormError('');
-                          setOrganizationOption('existing_repertoire');
-                        }
-                      }}
-                      className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
-                        organizationOption === 'existing_repertoire' 
-                          ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
-                          : 'bg-slate-950/50 border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <ListChecks className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'existing_repertoire' ? 'text-orange-400' : 'text-slate-500'}`} />
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide">Escolher uma Pasta/Repertório existente</h4>
-                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Associe estas gravações diretamente em um repertório existente.</p>
-                        
-                        {organizationOption === 'existing_repertoire' && dashboardRepertoires.length > 0 && (
-                          <div className="mt-4 bg-slate-950/80 p-3 rounded-xl border border-slate-850 space-y-2" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[9px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block mb-1">Selecione uma ou mais pastas:</span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                              {dashboardRepertoires.map(rep => {
-                                const isChecked = selectedRepertoireIds.includes(rep.id);
-                                return (
-                                  <label key={rep.id} className="flex items-center gap-2 text-xs py-1 px-1.5 bg-slate-900 border border-slate-850 rounded-lg hover:border-zinc-700 cursor-pointer select-none">
-                                    <input 
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => {
-                                        if (isChecked) {
-                                          setSelectedRepertoireIds(prev => prev.filter(id => id !== rep.id));
-                                        } else {
-                                          setSelectedRepertoireIds(prev => [...prev, rep.id]);
+                    {/* Option 2: Existing folders list with checkboxes */}
+                    {dashboardRepertoires.length > 0 && (
+                      <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl space-y-2.5 text-left">
+                        <span className="text-[10px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block">
+                          Selecione uma ou mais pastas para organizar esta música:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+                          {dashboardRepertoires.map(rep => {
+                            const isChecked = selectedRepertoireIds.includes(rep.id);
+                            const isUnlisted = rep.visibility === 'unlisted' || rep.visibility === 'private';
+                            return (
+                              <label key={rep.id} className={`flex items-center justify-between text-xs py-2 px-3 rounded-xl border cursor-pointer select-none transition ${isChecked ? 'bg-orange-500/10 border-orange-500/60 text-white' : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'}`}>
+                                <div className="flex items-center gap-2.5 truncate">
+                                  <input 
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        const updated = selectedRepertoireIds.filter(id => id !== rep.id);
+                                        setSelectedRepertoireIds(updated);
+                                        if (updated.length === 0 && !newRepertoireName.trim()) {
+                                          setOrganizationOption('all_songs');
                                         }
-                                      }}
-                                      className="accent-orange-500"
-                                    />
-                                    <span className="truncate">{rep.name}</span>
-                                  </label>
-                                );
-                              })}
+                                      } else {
+                                        setSelectedRepertoireIds(prev => [...prev, rep.id]);
+                                        setOrganizationOption('existing_repertoire');
+                                      }
+                                    }}
+                                    className="accent-orange-500 w-3.5 h-3.5"
+                                  />
+                                  <span className="truncate font-medium">{rep.name}</span>
+                                </div>
+                                <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${isUnlisted ? 'bg-amber-950/40 border-amber-500/30 text-amber-400' : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'}`}>
+                                  {isUnlisted ? 'Privado por link' : 'Público'}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Option 3: Inline + Criar nova pasta button & fields */}
+                    <div className="pt-1 text-left">
+                      {!showNewFolderInUpload ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNewFolderInUpload(true);
+                            setOrganizationOption('new_repertoire');
+                            if (!newRepertoireVisibility) setNewRepertoireVisibility('unlisted');
+                          }}
+                          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-orange-500/40 rounded-xl text-xs font-mono font-bold uppercase text-orange-400 hover:text-orange-300 transition flex items-center gap-2 cursor-pointer select-none"
+                        >
+                          <FolderPlus className="w-4 h-4" />
+                          <span>+ Criar nova pasta</span>
+                        </button>
+                      ) : (
+                        <div className="p-4 bg-slate-950/90 border border-orange-500/40 rounded-2xl space-y-3">
+                          <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                            <span className="text-[10px] font-mono tracking-wider font-extrabold text-orange-400 uppercase flex items-center gap-1.5">
+                              <FolderPlus className="w-4 h-4 text-orange-400" /> Criar e Vincular Nova Pasta
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowNewFolderInUpload(false);
+                                setNewRepertoireName('');
+                                if (selectedRepertoireIds.length === 0) {
+                                  setOrganizationOption('all_songs');
+                                }
+                              }}
+                              className="text-[10px] font-mono uppercase text-slate-400 hover:text-white cursor-pointer"
+                            >
+                              [Cancelar nova pasta]
+                            </button>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-mono text-zinc-400 uppercase">Nome da Pasta *</label>
+                              <input 
+                                type="text"
+                                placeholder="Ex: Trabalho Sertanejo Romântico"
+                                value={newRepertoireName}
+                                onChange={(e) => setNewRepertoireName(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-mono text-zinc-400 uppercase">Descrição Curta</label>
+                              <input 
+                                type="text"
+                                placeholder="Ex: Músicas para audição com produtores."
+                                value={newRepertoireDesc}
+                                onChange={(e) => setNewRepertoireDesc(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-mono text-zinc-400 uppercase">Classificação</label>
+                                <select
+                                  value={newRepertoireType}
+                                  onChange={(e: any) => setNewRepertoireType(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
+                                >
+                                  <option value="repertoire">Repertório</option>
+                                  <option value="playlist">Seleção</option>
+                                  <option value="collection">Pasta Particular</option>
+                                  <option value="project">Projeto</option>
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-mono text-zinc-400 uppercase">Privacidade</label>
+                                <select
+                                  value={newRepertoireVisibility}
+                                  onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
+                                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
+                                >
+                                  <option value="unlisted">Privado por link (Oculto no perfil geral, acessível por link direto)</option>
+                                  <option value="public">Público (Visível no perfil)</option>
+                                </select>
+                              </div>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Option 3: Create new Repertoire */}
-                    <div 
-                      onClick={() => setOrganizationOption('new_repertoire')}
-                      className={`p-4 border border-slate-850 hover:border-orange-500/45 rounded-2xl cursor-pointer transition flex items-start gap-3.5 select-none ${
-                        organizationOption === 'new_repertoire' 
-                          ? 'bg-[#0f172a] border-orange-500/60 shadow-[0_0_15px_rgba(249,115,22,0.04)] text-white' 
-                          : 'bg-slate-950/50 border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <FolderPlus className={`w-5 h-5 shrink-0 mt-0.5 ${organizationOption === 'new_repertoire' ? 'text-orange-400' : 'text-slate-500'}`} />
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide">Criar uma nova Pasta/Repertório</h4>
-                        <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed mt-1">Cria simultaneamente um novo repertório público ou privado e associa a música a ele.</p>
-
-                        {organizationOption === 'new_repertoire' && (
-                          <div className="mt-4 bg-slate-950/80 p-4 rounded-xl border border-slate-850 space-y-4 text-left" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[9px] font-mono tracking-wider font-extrabold text-orange-400 uppercase block">Dados do Novo Repertório:</span>
-                            
-                            <div className="space-y-3">
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-mono text-zinc-400 uppercase">Nome do Repertório *</label>
-                                <input 
-                                  type="text"
-                                  placeholder="Ex: Trabalho Sertanejo Romântico"
-                                  value={newRepertoireName}
-                                  onChange={(e) => setNewRepertoireName(e.target.value)}
-                                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
-                                />
-                              </div>
-
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-mono text-zinc-400 uppercase">Descrição Curta</label>
-                                <input 
-                                  type="text"
-                                  placeholder="Ex: Repertório oficial de trabalho enviado para produtores da Som Livre."
-                                  value={newRepertoireDesc}
-                                  onChange={(e) => setNewRepertoireDesc(e.target.value)}
-                                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg focus:border-orange-500 outline-none text-white font-sans"
-                                />
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <label className="text-[9px] font-mono text-zinc-400 uppercase">Classificação</label>
-                                  <select
-                                    value={newRepertoireType}
-                                    onChange={(e: any) => setNewRepertoireType(e.target.value)}
-                                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
-                                  >
-                                    <option value="repertoire">Repertório</option>
-                                    <option value="playlist">Seleção</option>
-                                    <option value="collection">Pasta Particular</option>
-                                    <option value="project">Projeto</option>
-                                  </select>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="text-[9px] font-mono text-zinc-400 uppercase">Privacidade</label>
-                                  <select
-                                    value={newRepertoireVisibility}
-                                    onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
-                                    className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg outline-none text-zinc-350 font-sans focus:border-orange-500"
-                                  >
-                                    <option value="public">Público (Visível no Link)</option>
-                                    <option value="private">Privado (Invisível no Link Geral)</option>
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -4084,17 +4088,15 @@ export default function Dashboard({
                     <button 
                       type="button" 
                       onClick={() => setUploadStep(3)}
-                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition"
+                      className="px-4 py-2 bg-slate-950 hover:bg-slate-850 rounded-xl text-xs font-mono font-bold uppercase text-slate-400 transition cursor-pointer"
                     >
                       Voltar
                     </button>
                     <button 
                       type="button"
                       onClick={() => {
-                        if (organizationOption === 'new_repertoire' && !newRepertoireName.trim()) {
-                          setFormError('Por favor, defina um nome para o novo de repertório.');
-                        } else if (organizationOption === 'existing_repertoire' && selectedRepertoireIds.length === 0) {
-                          setFormError('Por favor, selecione pelo menos uma pasta/repertório na lista.');
+                        if (showNewFolderInUpload && !newRepertoireName.trim()) {
+                          setFormError('Por favor, defina um nome para a nova pasta ou cancele a criação.');
                         } else {
                           setFormError('');
                           setUploadStep(5);
@@ -5372,7 +5374,7 @@ export default function Dashboard({
                           title="Copiar link direto para divulgar esta pasta"
                         >
                           <Share2 className="w-3.5 h-3.5" />
-                          <span>Copiar link</span>
+                          <span>{viewingRepertoireTracks.visibility === 'unlisted' || viewingRepertoireTracks.visibility === 'private' ? 'Copiar link privado' : 'Copiar link'}</span>
                         </button>
                         <button 
                           type="button" 

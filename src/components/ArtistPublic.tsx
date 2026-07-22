@@ -446,7 +446,7 @@ export default function ArtistPublic({
   const repertoireNotFoundOrPrivate = isInitialLoadDone && !forceAllView && window.location.pathname.includes('/repertorio/') && (
     !selectedRepertoireId ||
     !currentRepertoire ||
-    (currentRepertoire.visibility !== 'public' && currentRepertoire.visibility !== 'unlisted') ||
+    (currentRepertoire.visibility !== 'public' && currentRepertoire.visibility !== 'unlisted' && currentRepertoire.visibility !== 'private') ||
     (currentRepertoire.ownerUid?.toString().trim().toLowerCase() !== artist?.userId?.toString().trim().toLowerCase())
   );
 
@@ -1037,7 +1037,8 @@ export default function ArtistPublic({
           setRepertoires([currentRepertoire]);
 
           const allowedTrackIds = currentRepertoire.orderedTrackIds || currentRepertoire.trackIds || [];
-          const filteredTracks = visibleSongs.filter(track => {
+          const filteredTracks = rawSongs.filter(track => {
+            if (track.status === 'inactive' || track.status === 'locked_by_expired_plan') return false;
             return allowedTrackIds.includes(track.trackId) || track.repertoireId === currentRepertoire.id;
           });
 
