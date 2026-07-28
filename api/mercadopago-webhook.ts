@@ -343,6 +343,113 @@ function resolvePlanDetails(planCode: string, preapprovalPlanId: string, descrip
   return { plan, musicLimit, billingCycle, durationDays };
 }
 
+// Server-side track status reconciliation against active plan limit
+export async function reconcileTracksForUserServer(uid: string, plan: string, musicLimit?: number) {
+  if (!uid) return;
+  try {
+    const dbAdmin = getDb();
+    const cleanPlan = (plan || 'free').toLowerCase();
+    const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+
+    console.log(`[SERVER_RECONCILE] Reconciling tracks for user ${uid}. Plan: ${cleanPlan}, Limit: ${maxAllowed}`);
+
+    // Query root 'songs' collection by ownerId and artistId
+    const songsSnap1 = await dbAdmin.collection('songs').where('ownerId', '==', uid).get().catch(() => null);
+    const songsSnap2 = await dbAdmin.collection('songs').where('artistId', '==', uid).get().catch(() => null);
+    const legacySnap = await dbAdmin.collection('artists').doc(uid).collection('musics').get().catch(() => null);
+
+    const mergedDocsMap = new Map<string, any>();
+
+    if (songsSnap1 && !songsSnap1.empty) {
+      songsSnap1.docs.forEach(docSnap => {
+        const d = docSnap.data();
+        const id = docSnap.id || d.songId || d.trackId;
+        mergedDocsMap.set(id, { ...d, id, trackId: id });
+      });
+    }
+
+    if (songsSnap2 && !songsSnap2.empty) {
+      songsSnap2.docs.forEach(docSnap => {
+        const d = docSnap.data();
+        const id = docSnap.id || d.songId || d.trackId;
+        if (!mergedDocsMap.has(id)) {
+          mergedDocsMap.set(id, { ...d, id, trackId: id });
+        }
+      });
+    }
+
+    if (legacySnap && !legacySnap.empty) {
+      legacySnap.docs.forEach(docSnap => {
+        const d = docSnap.data();
+        const id = d.trackId || d.id || docSnap.id;
+        if (!mergedDocsMap.has(id)) {
+          mergedDocsMap.set(id, { ...d, id, trackId: id });
+        }
+      });
+    }
+
+    const allTracks = Array.from(mergedDocsMap.values()).map(d => ({
+      trackId: d.trackId || d.id || d.songId,
+      title: d.title || 'Música',
+      status: d.status,
+      position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+      orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+      createdAt: d.createdAt ? (typeof d.createdAt.toDate === 'function' ? d.createdAt.toDate().toISOString() : String(d.createdAt)) : new Date().toISOString()
+    }));
+
+    if (allTracks.length === 0) {
+      console.log(`[SERVER_RECONCILE] No tracks found for user ${uid}`);
+      return;
+    }
+
+    // Include all candidate tracks that are not deleted
+    const candidates = allTracks.filter(t => t.status !== 'deleted' && t.status !== 'permanently_deleted');
+
+    // Sort candidates by position/orderIndex, then createdAt
+    const sortedCandidates = [...candidates].sort((a, b) => {
+      const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
+      const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
+      if (posA !== posB) return posA - posB;
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      return timeA - timeB;
+    });
+
+    const selectedTracks = sortedCandidates.slice(0, maxAllowed);
+    const selectedIds = new Set(selectedTracks.map(s => s.trackId));
+
+    const nowIso = new Date().toISOString();
+    const batch = dbAdmin.batch();
+    let changeCount = 0;
+
+    for (const track of candidates) {
+      const isSelected = selectedIds.has(track.trackId);
+      const targetStatus = isSelected ? 'active' : 'locked_by_expired_plan';
+
+      if (track.status !== targetStatus) {
+        console.log(`[SERVER_RECONCILE] Updating track "${track.title}" (${track.trackId}): ${track.status} -> ${targetStatus}`);
+
+        const songRef = dbAdmin.collection('songs').doc(track.trackId);
+        batch.set(songRef, { status: targetStatus, updatedAt: nowIso }, { merge: true });
+
+        const legacyRef = dbAdmin.collection('artists').doc(uid).collection('musics').doc(track.trackId);
+        batch.set(legacyRef, { status: targetStatus, updatedAt: nowIso }, { merge: true });
+
+        changeCount++;
+      }
+    }
+
+    if (changeCount > 0) {
+      await batch.commit();
+      console.log(`[SERVER_RECONCILE] Committed ${changeCount} track status updates for user ${uid}`);
+    } else {
+      console.log(`[SERVER_RECONCILE] All tracks already in correct status for user ${uid}`);
+    }
+  } catch (err) {
+    console.error(`[SERVER_RECONCILE] Error reconciling tracks for user ${uid}:`, err);
+  }
+}
+
 // Secure double sync target synchronizer
 async function syncUserAndArtistPlans(uid: string, updatePayload: any) {
   const dbInstanceLocal = getDb();
@@ -401,6 +508,8 @@ async function syncUserAndArtistPlans(uid: string, updatePayload: any) {
 
   await dbInstanceLocal.collection("users").doc(uid).set(fieldsToSync, { merge: true });
   await dbInstanceLocal.collection("artists").doc(uid).set(fieldsToSync, { merge: true });
+
+  await reconcileTracksForUserServer(uid, updatePayload.plan, updatePayload.musicLimit);
 }
 
 // Revert plans to FREE sync helper
@@ -425,6 +534,8 @@ export async function syncUserAndArtistRefund(uid: string, reconciliationData?: 
 
   await dbInstanceLocal.collection("users").doc(uid).set(updatePayload, { merge: true });
   await dbInstanceLocal.collection("artists").doc(uid).set(updatePayload, { merge: true });
+
+  await reconcileTracksForUserServer(uid, "free", 3);
 }
 
 // CORE FUNCTION: PROCESS SINGLE PAYMENT ID

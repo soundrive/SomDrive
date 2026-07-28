@@ -27,9 +27,11 @@ import {
   Megaphone,
   Database
 } from 'lucide-react';
-import { Artist, ShareCardSettings } from '../types';
+import { Artist, ShareCardSettings, RecommendedToolConfig } from '../types';
 import AnnouncementsManager from './admin/AnnouncementsManager';
-import { dbService } from '../lib/db';
+import { dbService, DEFAULT_RECOMMENDED_TOOL } from '../lib/db';
+import { RecommendedToolCard } from './RecommendedToolCard';
+
 import { motion } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -278,6 +280,60 @@ export default function AdminArea({
     };
     reader.readAsDataURL(file);
   };
+
+  // Recommended Tool states
+  const [recommendedTool, setRecommendedTool] = useState<RecommendedToolConfig>(DEFAULT_RECOMMENDED_TOOL);
+  const [isSavingRecommendedTool, setIsSavingRecommendedTool] = useState(false);
+  const [recommendedToolMsg, setRecommendedToolMsg] = useState('');
+  const [recommendedToolError, setRecommendedToolError] = useState('');
+  const recommendedToolFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleToolImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setRecommendedToolError('');
+
+    if (file.size > 600 * 1024) {
+      setRecommendedToolError("A imagem excede o limite recomendado de 600 KB para salvamento direto no banco de dados.");
+      return;
+    }
+
+    const acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+    if (!acceptedTypes.includes(file.type)) {
+      setRecommendedToolError("Formato de imagem inválido. Use PNG, JPG, SVG, WEBP ou GIF.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      if (base64String) {
+        setRecommendedTool(prev => ({ ...prev, imageUrl: base64String }));
+      }
+    };
+    reader.onerror = () => {
+      setRecommendedToolError("Erro ao ler o arquivo de imagem do computador.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveRecommendedTool = async () => {
+    setIsSavingRecommendedTool(true);
+    setRecommendedToolMsg('');
+    setRecommendedToolError('');
+    try {
+      await dbService.updateRecommendedToolSettings(recommendedTool, currentUser.email || 'admin');
+      setRecommendedToolMsg('Configurações da Ferramenta Recomendada salvas com sucesso!');
+      setTimeout(() => setRecommendedToolMsg(''), 4500);
+    } catch (e: any) {
+      console.error("Erro ao salvar ferramenta recomendada:", e);
+      setRecommendedToolError('Erro ao salvar as configurações. Tente novamente.');
+    } finally {
+      setIsSavingRecommendedTool(false);
+    }
+  };
+
 
   const loadShareCardSettings = async () => {
     try {
@@ -966,7 +1022,11 @@ export default function AdminArea({
     if (activeTab === 'settings') {
       loadIntegrationStatus();
       loadShareCardSettings();
+      dbService.getRecommendedToolSettings()
+        .then(cfg => { if (cfg) setRecommendedTool(cfg); })
+        .catch(err => console.error("Error loading recommended tool settings in admin:", err));
     }
+
   }, [activeTab]);
 
   const handleSavePaymentSettings = async (e: React.FormEvent) => {
@@ -3165,8 +3225,279 @@ export default function AdminArea({
                 </div>
               </div>
 
+              {/* FERRAMENTA RECOMENDADA CARD CONFIGURATION */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-cyan-400" />
+                    Card "Ferramenta Recomendada" no Dashboard
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Configure o banner/card exibido no painel dos compositores para divulgar ferramentas parceiras ou serviços recomendados (ex: Multiconverte).
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-850 space-y-5">
+                  {/* Active Toggle Switch */}
+                  <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <label className="text-xs text-slate-200 font-bold block">Status do Card no Dashboard</label>
+                      <span className="text-[10px] text-slate-500 block">Ative para exibir o card no painel do compositor ou desative para ocultá-lo.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRecommendedTool(prev => ({ ...prev, active: !prev.active }))}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${recommendedTool.active ? 'bg-cyan-500' : 'bg-slate-800'}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-slate-950 shadow ring-0 transition duration-200 ease-in-out ${recommendedTool.active ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  {/* Form fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Title */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-300">Título Principal</label>
+                      <input
+                        type="text"
+                        value={recommendedTool.title}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, title: e.target.value }))}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none"
+                        placeholder="Ex: Multiconverte — Conversor de Áudio MP3"
+                      />
+                    </div>
+
+                    {/* Subtitle */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-300">Subtítulo / Categoria</label>
+                      <input
+                        type="text"
+                        value={recommendedTool.subtitle}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, subtitle: e.target.value }))}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none"
+                        placeholder="Ex: Ferramenta Externa Recomendada pelo SomDrive"
+                      />
+                    </div>
+
+                    {/* Button Text */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-300">Texto do Botão de Ação</label>
+                      <input
+                        type="text"
+                        value={recommendedTool.buttonText}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, buttonText: e.target.value }))}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none"
+                        placeholder="Ex: Acessar Multiconverte"
+                      />
+                    </div>
+
+                    {/* External Link */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-300">Link de Redirecionamento (URL Externa)</label>
+                      <input
+                        type="url"
+                        value={recommendedTool.linkUrl}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, linkUrl: e.target.value }))}
+                        className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none font-mono"
+                        placeholder="https://www.multiconverte.com.br/"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-300">Descrição do Card</label>
+                    <textarea
+                      rows={3}
+                      value={recommendedTool.description}
+                      onChange={(e) => setRecommendedTool(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none resize-none"
+                      placeholder="Descrição detalhada para orientar o compositor..."
+                    />
+                  </div>
+
+                  {/* Image / Logo Upload Section */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-300">Logotipo / Ícone da Ferramenta</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={recommendedTool.imageUrl}
+                          onChange={(e) => setRecommendedTool(prev => ({ ...prev, imageUrl: e.target.value }))}
+                          className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl text-xs text-white focus:border-cyan-500 outline-none font-mono"
+                          placeholder="Cole a URL da imagem ou envie um arquivo do PC"
+                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            ref={recommendedToolFileInputRef}
+                            onChange={handleToolImageFileChange}
+                            accept="image/*"
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => recommendedToolFileInputRef.current?.click()}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-lg transition cursor-pointer select-none"
+                          >
+                            Upload do Computador
+                          </button>
+                          {recommendedTool.imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setRecommendedTool(prev => ({ ...prev, imageUrl: '' }))}
+                              className="px-3 py-1.5 bg-red-950/40 text-red-400 hover:bg-red-900/40 text-xs font-semibold rounded-lg transition cursor-pointer select-none"
+                            >
+                              Remover Logo
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Image Preview Box */}
+                      <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center min-h-[70px]">
+                        {recommendedTool.imageUrl ? (
+                          <img src={recommendedTool.imageUrl} alt="Preview Logo" className="max-h-12 object-contain" />
+                        ) : (
+                          <span className="text-xs text-slate-500 italic">Nenhuma logo enviada (usará ícone padrão)</span>
+                        )}
+                      </div>
+                    </div>
+                    {recommendedToolError && (
+                      <p className="text-xs text-red-400 font-medium mt-1">{recommendedToolError}</p>
+                    )}
+                  </div>
+
+                  {/* Customization Options: Logo Size, Card Style, Button Color, Button Size */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-slate-900/80 rounded-2xl border border-slate-800">
+                    {/* Logo Size */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 block">Tamanho da Logo</label>
+                      <select
+                        value={recommendedTool.logoSize || 'large'}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, logoSize: e.target.value as any }))}
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:border-cyan-500 outline-none cursor-pointer"
+                      >
+                        <option value="small">Pequena (Compacta)</option>
+                        <option value="medium">Média (Médio Destaque)</option>
+                        <option value="large">Grande (Padrão Recomendado)</option>
+                        <option value="featured">Destaque Máximo (Gigante)</option>
+                      </select>
+                    </div>
+
+                    {/* Card Style */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 block">Estilo / Fundo do Card</label>
+                      <select
+                        value={recommendedTool.cardStyle || 'purple_gradient'}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, cardStyle: e.target.value as any }))}
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:border-purple-500 outline-none cursor-pointer"
+                      >
+                        <option value="purple_gradient">Roxo / Gradiente Multiconverte (Destaque Exclusivo)</option>
+                        <option value="blue_gradient">Azul Destaque</option>
+                        <option value="emerald_gradient">Verde Esmeralda</option>
+                        <option value="dark_premium">Escuro Premium</option>
+                      </select>
+                    </div>
+
+                    {/* Button Color */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 block">Cor do Botão</label>
+                      <select
+                        value={recommendedTool.buttonColor || 'purple'}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, buttonColor: e.target.value as any }))}
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:border-purple-500 outline-none cursor-pointer"
+                      >
+                        <option value="purple">Roxo / Índigo Destaque</option>
+                        <option value="cyan">Ciano / Azul Bright</option>
+                        <option value="emerald">Verde Esmeralda</option>
+                        <option value="amber">Laranja / Âmbar</option>
+                        <option value="blue">Azul Intenso</option>
+                      </select>
+                    </div>
+
+                    {/* Button Size */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 block">Tamanho do Botão</label>
+                      <select
+                        value={recommendedTool.buttonSize || 'large'}
+                        onChange={(e) => setRecommendedTool(prev => ({ ...prev, buttonSize: e.target.value as any }))}
+                        className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:border-cyan-500 outline-none cursor-pointer"
+                      >
+                        <option value="normal">Normal</option>
+                        <option value="large">Grande (Chamar Atenção)</option>
+                        <option value="featured">Destaque Máximo (Gigante)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Open in New Tab Toggle */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="openInNewTabCheck"
+                      checked={recommendedTool.openInNewTab !== false}
+                      onChange={(e) => setRecommendedTool(prev => ({ ...prev, openInNewTab: e.target.checked }))}
+                      className="rounded bg-slate-900 border-slate-800 text-cyan-500 focus:ring-0 cursor-pointer"
+                    />
+                    <label htmlFor="openInNewTabCheck" className="text-xs text-slate-300 cursor-pointer select-none">
+                      Abrir link em uma nova aba do navegador (target="_blank")
+                    </label>
+                  </div>
+
+                  {/* LIVE PREVIEW BOX */}
+                  <div className="space-y-2 pt-2 border-t border-slate-850">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                        Prévia ao Vivo do Card (Como aparecerá no Dashboard)
+                      </label>
+                      <span className="text-[10px] text-slate-500 italic">Atualizado em tempo real</span>
+                    </div>
+                    <div className="p-3 bg-slate-950 border border-purple-500/20 rounded-2xl">
+                      <RecommendedToolCard config={recommendedTool} isPreview={true} />
+                    </div>
+                  </div>
+
+                  {/* Actions & Feedback */}
+                  <div className="flex items-center gap-3 pt-2 border-t border-slate-850">
+                    <button
+                      type="button"
+                      onClick={handleSaveRecommendedTool}
+                      disabled={isSavingRecommendedTool}
+                      className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-bold transition rounded-xl text-xs flex items-center gap-2 uppercase tracking-wider cursor-pointer shadow-md shadow-cyan-950/20"
+                    >
+                      {isSavingRecommendedTool ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" /> Salvar Ferramenta Recomendada
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecommendedTool(DEFAULT_RECOMMENDED_TOOL)}
+                      className="px-4 py-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-300 rounded-xl transition text-xs select-none cursor-pointer"
+                    >
+                      Restaurar Padrão Multiconverte
+                    </button>
+                  </div>
+
+                  {recommendedToolMsg && (
+                    <div className="p-3 bg-emerald-950/40 border border-emerald-900/30 text-xs text-emerald-400 rounded-xl animate-fade-in font-medium">
+                      ✓ {recommendedToolMsg}
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
           )}
+
 
           {/* TAB: ANNOUNCEMENTS & AUDITIONS MANAGER */}
           {activeTab === 'announcements' && (

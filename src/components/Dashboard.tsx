@@ -199,8 +199,9 @@ const getCategoryIcon = (index: number, color: string) => {
   }
 };
 
-import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire } from '../types';
-import { dbService, getSafeExpirationDate } from '../lib/db';
+import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire, RecommendedToolConfig } from '../types';
+import { dbService, getSafeExpirationDate, DEFAULT_RECOMMENDED_TOOL } from '../lib/db';
+import { RecommendedToolCard } from './RecommendedToolCard';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc, Timestamp } from 'firebase/firestore';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
@@ -225,6 +226,8 @@ export default function Dashboard({
   isPlaying = false
 }: DashboardProps) {
   const [profile, setProfile] = useState<Artist>(currentUser);
+  const [recommendedTool, setRecommendedTool] = useState<RecommendedToolConfig>(DEFAULT_RECOMMENDED_TOOL);
+
   const [tracks, setTracks] = useState<Track[]>([]);
   const generalSongs = tracks.filter(t => !t.repertoireId);
   const [analytics, setAnalytics] = useState<Analytics>({ artistId: currentUser.userId, viewsCount: 0, whatsappClicks: 0 });
@@ -321,6 +324,15 @@ export default function Dashboard({
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  useEffect(() => {
+    dbService.getRecommendedToolSettings()
+      .then(cfg => {
+        if (cfg) setRecommendedTool(cfg);
+      })
+      .catch(err => console.error("Error loading recommended tool settings:", err));
+  }, []);
+
 
   useEffect(() => {
     if (!currentUser?.userId) return;
@@ -2248,32 +2260,11 @@ export default function Dashboard({
           </div>
         )}
 
-        {/* Card Conversor de Áudio Grátis */}
-        <div className="p-4 bg-gradient-to-r from-slate-900/95 via-cyan-950/20 to-slate-900/95 border border-cyan-500/20 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg backdrop-blur-sm hover:border-cyan-500/40 transition duration-300">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 bg-cyan-950/60 border border-cyan-500/20 text-cyan-400 rounded-xl shrink-0 mt-0.5">
-              <Music className="w-5 h-5 text-cyan-400" />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-sm md:text-base font-heading font-black uppercase text-white flex items-center gap-1.5 flex-wrap">
-                Conversor de Áudio Grátis
-                <span className="px-1.5 py-0.5 bg-cyan-950/40 text-cyan-400 text-[8px] font-mono font-bold tracking-wider rounded border border-cyan-400/20 uppercase">Ferramenta</span>
-              </h4>
-              <p className="text-slate-300 text-xs md:text-sm leading-relaxed max-w-3xl">
-                Deixe sua música mais leve antes de enviar ao SomDrive. Converta para MP3 96 kbps e ajude o áudio a tocar melhor no celular e no carro.
-              </p>
-            </div>
-          </div>
-          <a
-            href="https://conversor.somdrive.com.br"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 rounded-xl text-xs font-heading font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition hover:from-cyan-400 hover:to-blue-400 hover:scale-102 shrink-0 self-start md:self-center shadow-md shadow-cyan-500/10"
-          >
-            Converter áudio agora
-            <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
-          </a>
-        </div>
+        {/* Card Ferramenta Recomendada (Dinamico via Admin) */}
+        {recommendedTool && recommendedTool.active && (
+          <RecommendedToolCard config={recommendedTool} />
+        )}
+
 
         {/* METRICS Bento Block */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">

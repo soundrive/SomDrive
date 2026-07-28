@@ -458,17 +458,21 @@ export default function Player({
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Store unmemoized parent callbacks in refs to prevent useEffect triggers on every parent render
+  // Store unmemoized parent callbacks and current states in refs to prevent useEffect triggers on every parent render
   const onPlayPauseRef = useRef(onPlayPause);
   const onNextRef = useRef(onNext);
   const onPrevRef = useRef(onPrev);
   const isRepeatRef = useRef(isRepeat);
+  const trackListRef = useRef(trackList);
+  const currentTrackRef = useRef(currentTrack);
 
   useEffect(() => {
     onPlayPauseRef.current = onPlayPause;
     onNextRef.current = onNext;
     onPrevRef.current = onPrev;
     isRepeatRef.current = isRepeat;
+    trackListRef.current = trackList;
+    currentTrackRef.current = currentTrack;
   });
 
   // Synchronize loop/repeat property on the audio element dynamically
@@ -505,13 +509,43 @@ export default function Player({
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration || 0);
     const onEnded = () => {
+      const audio = audioRef.current;
+      const currentList = trackListRef.current || [];
+      const currentT = currentTrackRef.current;
+
+      // 1. If repeat button is enabled: restart current track
       if (isRepeatRef.current) {
-        audio.currentTime = 0;
-        audio.play().catch((err) => {
-          console.warn("Loop playback fallback failed:", err);
-        });
-      } else {
+        if (audio) {
+          audio.currentTime = 0;
+          audio.play().catch((err) => {
+            console.warn("Loop playback fallback failed:", err);
+          });
+        }
+        setCurrentTime(0);
+        return;
+      }
+
+      // Find index of current track in trackList
+      const currentIndex = (currentT && currentList.length > 0)
+        ? currentList.findIndex(t => t.trackId === currentT.trackId)
+        : -1;
+
+      // Check if there is a next track in the queue (i.e. not at the end of the queue)
+      const hasNextTrack = currentIndex !== -1 && currentIndex < currentList.length - 1;
+
+      if (hasNextTrack) {
+        // 2. Repeat disabled & next track exists: play next track normally
         onNextRef.current();
+      } else {
+        // 3. Repeat disabled & NO next track in queue (end of queue OR single track):
+        // Automatically restart current track so the player never stops
+        if (audio) {
+          audio.currentTime = 0;
+          audio.play().catch((err) => {
+            console.warn("Replay current track on end of queue failed:", err);
+          });
+        }
+        setCurrentTime(0);
       }
     };
 

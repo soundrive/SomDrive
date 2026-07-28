@@ -1,4 +1,20 @@
-import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project, Announcement, AnnouncementType, FirestoreDateLike } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, RecommendedToolConfig, Repertoire, Project, Announcement, AnnouncementType, FirestoreDateLike } from '../types';
+
+export const DEFAULT_RECOMMENDED_TOOL: RecommendedToolConfig = {
+  active: true,
+  title: "Multiconverte",
+  subtitle: "Converta suas músicas para MP3 antes de enviar ao SomDrive.",
+  description: "O SomDrive testou músicas convertidas em MP3 112 kbps e percebeu que esse formato mantém boa qualidade, com arquivo mais leve para ouvir no celular e no carro.",
+  buttonText: "Acessar Multiconverte",
+  linkUrl: "https://www.multiconverte.com.br/",
+  imageUrl: "",
+  openInNewTab: true,
+  logoSize: "large",
+  cardStyle: "purple_gradient",
+  buttonColor: "purple",
+  buttonSize: "large"
+};
+
 
 // Strict in-memory shadowing to replace browser persistent storage for core user/folder/music data
 const MEMORY_KV_STORE: Record<string, string> = {};
@@ -677,14 +693,10 @@ export const dbService = {
       const cleanPlan = plan || 'free';
       const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
 
-      // Enforce limits on active, locked, undefined, null or empty status (essentially all that are not deleted/inactive)
+      // Enforce limits on all non-deleted tracks (active, locked_by_expired_plan, inactive, blocked, etc.)
       const candidates = tracks.filter(t => 
-        t.status === 'active' || 
-        t.status === 'locked_by_expired_plan' || 
-        t.status === 'undefined' || 
-        !t.status || 
-        t.status === 'null' ||
-        t.status === 'pending'
+        t.status !== 'deleted' && 
+        t.status !== 'permanently_deleted'
       );
 
       console.log(`[TRACK_RECONCILE_DEBUG] Total de músicas na base: ${tracks.length}. Candidatas qualificadas para limite: ${candidates.length}. Limite permitido para o plano: ${maxAllowed}`);
@@ -1907,6 +1919,10 @@ export const dbService = {
           setDoc(analyticsRef, localAn, { merge: true }).catch(() => {});
         }
 
+        // Reconcile track status for current plan validity
+        this.enforceTracksByPlanValidity(formattedArtist);
+        void this.enforceTracksByPlanValidityAsync(resolvedUserId, formattedArtist.plan, formattedArtist.musicLimit);
+
         return true;
       }
 
@@ -2379,6 +2395,55 @@ export const dbService = {
       throw e;
     }
   },
+
+  async getRecommendedToolSettings(): Promise<RecommendedToolConfig> {
+    try {
+      const docRef = doc(db, 'settings', 'recommendedTool');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          active: typeof data.active === 'boolean' ? data.active : true,
+          title: data.title || DEFAULT_RECOMMENDED_TOOL.title,
+          subtitle: data.subtitle || DEFAULT_RECOMMENDED_TOOL.subtitle,
+          description: data.description || DEFAULT_RECOMMENDED_TOOL.description,
+          buttonText: data.buttonText || DEFAULT_RECOMMENDED_TOOL.buttonText,
+          linkUrl: data.linkUrl || DEFAULT_RECOMMENDED_TOOL.linkUrl,
+          imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : '',
+          openInNewTab: typeof data.openInNewTab === 'boolean' ? data.openInNewTab : true,
+          logoSize: data.logoSize || DEFAULT_RECOMMENDED_TOOL.logoSize,
+          cardStyle: data.cardStyle || DEFAULT_RECOMMENDED_TOOL.cardStyle,
+          buttonColor: data.buttonColor || DEFAULT_RECOMMENDED_TOOL.buttonColor,
+          buttonSize: data.buttonSize || DEFAULT_RECOMMENDED_TOOL.buttonSize,
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy
+        };
+      }
+      return DEFAULT_RECOMMENDED_TOOL;
+    } catch (e) {
+      console.error("Error fetching recommended tool settings:", e);
+      return DEFAULT_RECOMMENDED_TOOL;
+    }
+  },
+
+  async updateRecommendedToolSettings(settings: Partial<RecommendedToolConfig>, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'recommendedTool');
+      const dataToSave = {
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/recommendedTool');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating recommended tool settings:", e);
+      throw e;
+    }
+  },
+
 
   // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
   async getRepertoires(ownerUid: string, onlyPublic?: boolean): Promise<Repertoire[]> {

@@ -172,6 +172,9 @@ export default function App() {
             const checked = dbService.checkAndRevertExpiredAccess(formatted);
             dbService.setCurrentUser(checked);
             setCurrentUser(checked);
+
+            // Reconcile track status async to unlock/lock tracks according to current active plan limit
+            void dbService.enforceTracksByPlanValidityAsync(fireUser.uid, checked.plan || 'free', Number(checked.musicLimit || 3));
           }
         }, (error) => {
           console.error("Real-time profile subscription error:", error);
@@ -392,8 +395,19 @@ export default function App() {
     if (trackList.length === 0 || !currentTrack) return;
     const currentIndex = trackList.findIndex(t => t.trackId === currentTrack.trackId);
     const nextIndex = (currentIndex + 1) % trackList.length;
-    setCurrentTrack(trackList[nextIndex]);
-    setIsPlaying(true);
+    const nextTrack = trackList[nextIndex];
+
+    if (nextTrack.trackId === currentTrack.trackId) {
+      const audio = document.querySelector('audio');
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      }
+      setIsPlaying(true);
+    } else {
+      setCurrentTrack(nextTrack);
+      setIsPlaying(true);
+    }
   };
 
   const handlePrev = () => {
@@ -403,8 +417,19 @@ export default function App() {
     if (prevIndex < 0) {
       prevIndex = trackList.length - 1;
     }
-    setCurrentTrack(trackList[prevIndex]);
-    setIsPlaying(true);
+    const prevTrack = trackList[prevIndex];
+
+    if (prevTrack.trackId === currentTrack.trackId) {
+      const audio = document.querySelector('audio');
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      }
+      setIsPlaying(true);
+    } else {
+      setCurrentTrack(prevTrack);
+      setIsPlaying(true);
+    }
   };
 
   return (

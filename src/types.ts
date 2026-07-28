@@ -215,6 +215,24 @@ export interface Announcement {
   createdBy: string;
 }
 
+export interface RecommendedToolConfig {
+  active: boolean;
+  title: string;
+  subtitle: string;
+  description: string;
+  buttonText: string;
+  linkUrl: string;
+  imageUrl?: string;
+  openInNewTab?: boolean;
+  logoSize?: 'small' | 'medium' | 'large' | 'featured';
+  cardStyle?: 'purple_gradient' | 'blue_gradient' | 'dark_premium' | 'emerald_gradient';
+  buttonColor?: 'purple' | 'cyan' | 'emerald' | 'amber' | 'blue';
+  buttonSize?: 'normal' | 'large' | 'featured';
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+
 export function getCleanComposer(
   track?: { composer?: string; artistName?: string; singer?: string; genre?: string },
   catalogArtistName?: string
