@@ -303,7 +303,6 @@ export default function Player({
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isMobileExpanded, setIsMobileExpanded] = useState(true);
-  const [failedOptimizedTracks, setFailedOptimizedTracks] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!isAdminView) {
@@ -492,10 +491,6 @@ export default function Player({
     }
 
     const audio = audioRef.current;
-    
-    // Resolve targeted audio URL to play based on optimization
-    const hasOptimized = false; // Forced to false to guarantee player only plays the primary audioUrl
-    const tryOptimized = false;
     const targetUrl = currentTrack.audioUrl;
 
     // Check if source changed
@@ -551,13 +546,6 @@ export default function Player({
 
     const onError = (e: Event) => {
       console.warn("Audio element error triggered:", audio.error);
-      if (tryOptimized) {
-        console.log("Optimized audio failed to load. Falling back to original URL:", currentTrack.audioUrl);
-        setFailedOptimizedTracks(prev => ({
-          ...prev,
-          [currentTrack.trackId]: true
-        }));
-      }
     };
 
     audio.addEventListener('timeupdate', updateTime);
@@ -583,7 +571,7 @@ export default function Player({
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [currentTrack, isPlaying, failedOptimizedTracks, isDataSaver]);
+  }, [currentTrack, isPlaying, isDataSaver]);
 
   // Handle play/pause, volume, mute toggling
   useEffect(() => {

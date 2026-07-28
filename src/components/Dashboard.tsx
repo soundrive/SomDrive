@@ -2865,7 +2865,7 @@ export default function Dashboard({
               <h3 className="font-heading font-black text-xl uppercase tracking-tight text-white flex items-center gap-2">
                 <Folders className="w-5 h-5 text-orange-400" /> Meus Repertórios / Pastas
               </h3>
-              <p className="text-slate-405 text-xs mt-0.5 font-medium">Crie, gerencie e compartilhe pastas de músicas específicas com seus parceiros.</p>
+              <p className="text-slate-405 text-xs mt-0.5 font-medium">Crie pastas para organizar suas músicas por cantor, projeto ou estilo. Pastas públicas aparecem no seu catálogo. Pastas privadas por link ficam ocultas do perfil, mas podem ser enviadas diretamente para quem você escolher.</p>
             </div>
 
             <button
@@ -4445,9 +4445,14 @@ export default function Dashboard({
                             onChange={(e: any) => setNewRepertoireVisibility(e.target.value)}
                             className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-850 rounded-lg outline-none text-zinc-350 focus:border-orange-500"
                           >
-                            <option value="public">Público (Visível no Link)</option>
-                            <option value="private">Privado (Link Oculto/Privado)</option>
+                            <option value="public">Público (Visível no perfil)</option>
+                            <option value="unlisted">Privado por link (Oculto no perfil geral, acessível por link direto)</option>
                           </select>
+                          <p className="text-[10px] text-slate-400 font-sans">
+                            {newRepertoireVisibility === 'public' 
+                              ? 'Aparece no seu catálogo público.' 
+                              : 'Não aparece no catálogo público, mas você pode copiar o link e enviar para alguém ouvir.'}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -5266,8 +5271,12 @@ export default function Dashboard({
                 >
                   <option value="public" className="bg-slate-950 text-white">Público (Aparece no perfil público e no catálogo geral)</option>
                   <option value="unlisted" className="bg-slate-950 text-white">Privado por link (Oculto no perfil geral, acessível apenas por link direto)</option>
-                  <option value="private" className="bg-slate-950 text-white">Privado (Apenas uso pessoal no painel)</option>
                 </select>
+                <p className="text-[11px] text-slate-400 font-sans">
+                  {newRepVisibility === 'public' 
+                    ? 'Aparece no seu catálogo público.' 
+                    : 'Não aparece no catálogo público, mas você pode copiar o link e enviar para alguém ouvir.'}
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">

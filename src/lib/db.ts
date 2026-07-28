@@ -2490,7 +2490,7 @@ export const dbService = {
             type: data.type || 'repertoire',
             trackIds: data.trackIds || [],
             orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
-            visibility: (visibilityVal === 'unlisted') ? 'unlisted' : (visibilityVal === 'private') ? 'private' : 'public',
+            visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? 'unlisted' : 'public',
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt || new Date().toISOString()
           } as Repertoire;
@@ -2630,7 +2630,7 @@ export const dbService = {
     }
 
     // Force strict normalized visibility values to fully match Firestore queries
-    const normalizedVisibility: "public" | "unlisted" | "private" = (repertoire.visibility === 'unlisted') ? 'unlisted' : (repertoire.visibility === 'private') ? 'private' : 'public';
+    const normalizedVisibility: "public" | "unlisted" = (repertoire.visibility === 'public') ? 'public' : 'unlisted';
 
     const savedRep: Repertoire = { 
       ...repertoire, 
