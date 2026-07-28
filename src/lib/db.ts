@@ -1,4 +1,6 @@
-import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, RecommendedToolConfig, Repertoire, Project, Announcement, AnnouncementType, FirestoreDateLike } from '../types';
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, RecommendedToolConfig, Repertoire, Project, Announcement, AnnouncementType, FirestoreDateLike, FREE_MUSIC_LIMIT } from '../types';
+
+export { FREE_MUSIC_LIMIT };
 
 export const DEFAULT_RECOMMENDED_TOOL: RecommendedToolConfig = {
   active: true,
@@ -325,7 +327,7 @@ export const dbService = {
 
     const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
     const cleanPlan = (rawPlan === 'essencial' || rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'essencial' | 'pro' | 'premium';
-    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+    const limit = cleanPlan === 'free' ? FREE_MUSIC_LIMIT : (d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
     const isMainAdmin = (d.email || '').toLowerCase().trim() === 'videopremieroficial@gmail.com' || (d.email || '').toLowerCase().trim() === 'sertanejopremier@gmail.com';
     const role = isMainAdmin ? 'admin' : (d.role || 'user');
 
@@ -389,7 +391,7 @@ export const dbService = {
   getNormalizedUserData(artist: Artist, songsCount = 0) {
     const planRaw = (artist.plan || 'free').toLowerCase();
     const plan = planRaw === 'essencial' || planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
-    const defaultLimit = plan === 'free' ? 3 : (plan === 'essencial' ? 10 : (plan === 'pro' ? 15 : 50));
+    const defaultLimit = plan === 'free' ? FREE_MUSIC_LIMIT : (plan === 'essencial' ? 10 : (plan === 'pro' ? 15 : 50));
     const emailLower = (artist.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
 
@@ -422,7 +424,7 @@ export const dbService = {
       plan: plan,
       paymentStatus: artist.paymentStatus || (plan !== 'free' ? 'manual' : 'inactive'),
       accessType: artist.accessType || (plan !== 'free' ? 'trial' : 'free'),
-      musicLimit: artist.musicLimit !== undefined ? artist.musicLimit : defaultLimit,
+      musicLimit: plan === 'free' ? FREE_MUSIC_LIMIT : (artist.musicLimit !== undefined ? artist.musicLimit : defaultLimit),
       songsCount: songsCount,
       userType: artist.userType || 'Artista',
       mainGenre: artist.mainGenre || artist.genre || '',
@@ -461,7 +463,7 @@ export const dbService = {
       if (endsAt) {
         if (endsAt < now) {
           updated.plan = 'free';
-          updated.musicLimit = 3;
+          updated.musicLimit = FREE_MUSIC_LIMIT;
           updated.paymentStatus = 'inactive';
           updated.accessType = 'free';
           updated.updatedAt = now.toISOString();
@@ -542,7 +544,7 @@ export const dbService = {
         // 1. Recover from selectedTracks
         preferredIds.forEach(pId => {
           const found = candidates.find(t => t.trackId === pId);
-          if (found && selectedTracks.length < 3) {
+          if (found && selectedTracks.length < FREE_MUSIC_LIMIT) {
             selectedTracks.push(found);
           }
         });
@@ -558,7 +560,7 @@ export const dbService = {
         });
 
         sortedCandidates.forEach(cand => {
-          if (selectedTracks.length < 3 && !selectedTracks.some(s => s.trackId === cand.trackId)) {
+          if (selectedTracks.length < FREE_MUSIC_LIMIT && !selectedTracks.some(s => s.trackId === cand.trackId)) {
             selectedTracks.push(cand);
           }
         });
@@ -691,7 +693,14 @@ export const dbService = {
       }
 
       const cleanPlan = plan || 'free';
-      const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+      const maxAllowed = cleanPlan === 'free' ? FREE_MUSIC_LIMIT : (musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+
+      if (cleanPlan === 'free') {
+        const userRef = doc(db, 'users', userId);
+        setDoc(userRef, { plan: 'free', musicLimit: FREE_MUSIC_LIMIT, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+        const artistRef = doc(db, 'artists', userId);
+        setDoc(artistRef, { plan: 'free', musicLimit: FREE_MUSIC_LIMIT, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
 
       // Enforce limits on all non-deleted tracks (active, locked_by_expired_plan, inactive, blocked, etc.)
       const candidates = tracks.filter(t => 
@@ -882,7 +891,7 @@ export const dbService = {
   },
 
   async registerUserInFirestore(uid: string, data: Partial<Artist>): Promise<Artist> {
-    const defaultLimit = 3; // free limit
+    const defaultLimit = FREE_MUSIC_LIMIT; // free limit
     const nowISO = new Date().toISOString();
     const emailLower = (data.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
@@ -948,7 +957,7 @@ export const dbService = {
         instagram: newProfile.instagram,
         role: role,
         plan: "free",
-        musicLimit: 3,
+        musicLimit: FREE_MUSIC_LIMIT,
         songsCount: 0,
         totalPlays: 0,
         totalViews: 0,
@@ -995,19 +1004,35 @@ export const dbService = {
         return clean;
       };
 
+      const safeTimestamp = (val: any) => {
+        if (!val) return null;
+        if (val instanceof Timestamp) return val;
+        try {
+          const d = val instanceof Date ? val : new Date(val);
+          return Number.isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+        } catch {
+          return null;
+        }
+      };
+
       const artistsPayload = cleanObjectPayload({
         ...saved,
-        createdAt: Timestamp.fromDate(new Date(saved.createdAt))
+        createdAt: safeTimestamp(saved.createdAt) || Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        trialEndsAt: safeTimestamp(saved.trialEndsAt),
+        manualAccessEndsAt: safeTimestamp(saved.manualAccessEndsAt),
+        subscriptionStartedAt: safeTimestamp(saved.subscriptionStartedAt),
+        subscriptionEndsAt: safeTimestamp(saved.subscriptionEndsAt),
       });
 
       const usersPayload = cleanObjectPayload({
         ...normalizedUser,
-        createdAt: Timestamp.fromDate(new Date(normalizedUser.createdAt)),
-        updatedAt: Timestamp.fromDate(new Date(normalizedUser.updatedAt)),
-        trialEndsAt: normalizedUser.trialEndsAt ? Timestamp.fromDate(new Date(normalizedUser.trialEndsAt)) : null,
-        manualAccessEndsAt: normalizedUser.manualAccessEndsAt ? Timestamp.fromDate(new Date(normalizedUser.manualAccessEndsAt)) : null,
-        subscriptionStartedAt: normalizedUser.subscriptionStartedAt ? Timestamp.fromDate(new Date(normalizedUser.subscriptionStartedAt)) : null,
-        subscriptionEndsAt: normalizedUser.subscriptionEndsAt ? Timestamp.fromDate(new Date(normalizedUser.subscriptionEndsAt)) : null,
+        createdAt: safeTimestamp(normalizedUser.createdAt) || Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        trialEndsAt: safeTimestamp(normalizedUser.trialEndsAt),
+        manualAccessEndsAt: safeTimestamp(normalizedUser.manualAccessEndsAt),
+        subscriptionStartedAt: safeTimestamp(normalizedUser.subscriptionStartedAt),
+        subscriptionEndsAt: safeTimestamp(normalizedUser.subscriptionEndsAt),
       });
 
       // Async write to 'artists' collection

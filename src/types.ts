@@ -2,6 +2,8 @@
  * Types modeling the "Meu Pen Drive Digital" application state
  */
 
+export const FREE_MUSIC_LIMIT = 1;
+
 export type FirestoreDateLike =
   | string
   | Date

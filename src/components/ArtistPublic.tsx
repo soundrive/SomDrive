@@ -35,7 +35,7 @@ import {
   Code,
   ShieldAlert
 } from 'lucide-react';
-import { Artist, Music as Track, Analytics, Repertoire, getCleanComposer } from '../types';
+import { Artist, Music as Track, Analytics, Repertoire, getCleanComposer, FREE_MUSIC_LIMIT } from '../types';
 import { dbService, getSafeExpirationDate } from '../lib/db';
 import { BrandLogo } from './BrandLogo';
 import { renderFormattedLyrics } from './Player';
@@ -62,7 +62,7 @@ export function getPublicVisibleTracks(rawSongs: Track[], artist: Artist): Track
   const artistId = artist.userId || '';
   const slug = artist.slug || '';
   const plan = artist.plan || 'free';
-  const musicLimit = artist.musicLimit !== undefined ? Number(artist.musicLimit) : 3;
+  const musicLimit = artist.musicLimit !== undefined ? Number(artist.musicLimit) : FREE_MUSIC_LIMIT;
 
   // 1. Determine if the plan is expired
   const expirationDate = getSafeExpirationDate(artist);
@@ -71,7 +71,7 @@ export function getPublicVisibleTracks(rawSongs: Track[], artist: Artist): Track
 
   // 2. Determine the effective plan and dynamic limit
   const effectivePlan = isExpired ? 'free' : plan;
-  const dynamicLimit = effectivePlan === 'free' ? 3 : (effectivePlan === 'essencial' ? 10 : (effectivePlan === 'pro' ? 15 : 50));
+  const dynamicLimit = effectivePlan === 'free' ? FREE_MUSIC_LIMIT : (effectivePlan === 'essencial' ? 10 : (effectivePlan === 'pro' ? 15 : 50));
 
   // 3. Filter raw songs
   // Filter out any songs with status === 'inactive' or status === 'locked_by_expired_plan' (since they are officially locked by db)
@@ -1037,10 +1037,16 @@ export default function ArtistPublic({
           setRepertoires([currentRepertoire]);
 
           const allowedTrackIds = currentRepertoire.orderedTrackIds || currentRepertoire.trackIds || [];
-          const filteredTracks = rawSongs.filter(track => {
-            if (track.status === 'inactive' || track.status === 'locked_by_expired_plan') return false;
+          const rawFilteredTracks = rawSongs.filter(track => {
+            if (track.status === 'inactive' || track.status === 'locked_by_expired_plan' || track.status === 'blocked') return false;
             return allowedTrackIds.includes(track.trackId) || track.repertoireId === currentRepertoire.id;
           });
+
+          const isExpired = getSafeExpirationDate(resolvedArtist) ? getSafeExpirationDate(resolvedArtist)! < new Date() : false;
+          const effectivePlan = isExpired ? 'free' : (resolvedArtist?.plan || 'free');
+          const repLimit = effectivePlan === 'free' ? FREE_MUSIC_LIMIT : (effectivePlan === 'essencial' ? 10 : (effectivePlan === 'pro' ? 15 : 50));
+
+          const filteredTracks = rawFilteredTracks.slice(0, repLimit);
 
           // Sort by the orderedTrackIds list
           const sortedTracks = filteredTracks.sort((a, b) => {

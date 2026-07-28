@@ -5,6 +5,8 @@ import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue, FieldPath, Firestore, DocumentReference, Transaction, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { getSafeExpirationDate, isAccessExpired, UserAccessData, TrackData } from '../../src/server/expiration-utils';
 
+export const FREE_MUSIC_LIMIT = 1;
+
 // Interfaces for Vercel req/res typing
 export interface CustomRequest {
   method: string;
@@ -205,7 +207,7 @@ export async function repairUserTracks(
 
     for (let i = 0; i < sortedTracks.length; i++) {
       const track = sortedTracks[i];
-      const shouldBeActive = i < 3;
+      const shouldBeActive = i < FREE_MUSIC_LIMIT;
       const targetStatus = shouldBeActive ? "active" : "locked_by_expired_plan";
 
       if (track.status !== targetStatus) {
@@ -392,7 +394,7 @@ export async function processExpirationsInternal(
           const downgradePayload = {
             uid: userData.userId,
             plan: "free",
-            musicLimit: 3,
+            musicLimit: FREE_MUSIC_LIMIT,
             accessType: "free",
             planStatus: "expired",
             subscriptionStatus: "expired",

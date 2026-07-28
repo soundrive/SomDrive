@@ -127,7 +127,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
       price: 'Grátis',
       badge: 'Grátis',
       features: [
-        { name: '★ Até 3 músicas cadastradas', highlight: true },
+        { name: '★ 1 música cadastrada grátis', highlight: true },
         { name: 'Envio de músicas em MP3' },
         { name: 'Acervo musical' },
         { name: 'Catálogo privado por link' },

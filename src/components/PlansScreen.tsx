@@ -17,7 +17,7 @@ import {
   AlertCircle,
   HelpCircle
 } from 'lucide-react';
-import { Artist } from '../types';
+import { Artist, FREE_MUSIC_LIMIT } from '../types';
 import { dbService } from '../lib/db';
 import { PLANS_CONFIG } from '../lib/plansConfig';
 
@@ -64,11 +64,11 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
       name: 'SomDrive Free',
       description: 'Comece seu catálogo gratuitamente.',
       price: 0,
-      limitTracks: 3,
+      limitTracks: FREE_MUSIC_LIMIT,
       limitSize: 20,
       badge: 'Grátis',
       features: [
-        { name: '★ Até 3 músicas cadastradas', included: true, highlight: true },
+        { name: '★ 1 música cadastrada grátis', included: true, highlight: true },
         { name: 'Envio de músicas em MP3', included: true },
         { name: 'Acervo musical', included: true },
         { name: 'Catálogo privado por link', included: true },
@@ -204,12 +204,14 @@ export default function PlansScreen({ currentUser, onClose, onRefreshProfile }: 
   };
 
   const handleDowngradeToFree = () => {
-    if (confirm("Deseja realmente voltar para o Plano Grátis? Seus limites de catálogo de 3 músicas serão aplicados novamente.")) {
+    if (confirm("Deseja realmente voltar para o Plano Grátis? Seu limite de catálogo de 1 música será aplicado novamente.")) {
       const updated = dbService.updateArtistProfile(profile.userId, { 
         plan: 'free',
+        musicLimit: FREE_MUSIC_LIMIT,
         subscriptionDate: undefined,
         subscriptionStatus: undefined
       });
+      dbService.enforceTracksByPlanValidityAsync(profile.userId, 'free', FREE_MUSIC_LIMIT);
       setProfile(updated);
       if (onRefreshProfile) onRefreshProfile();
       alert("Seu plano foi alterado para Free com sucesso.");

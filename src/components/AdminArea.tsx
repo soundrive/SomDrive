@@ -27,7 +27,7 @@ import {
   Megaphone,
   Database
 } from 'lucide-react';
-import { Artist, ShareCardSettings, RecommendedToolConfig } from '../types';
+import { Artist, ShareCardSettings, RecommendedToolConfig, FREE_MUSIC_LIMIT } from '../types';
 import AnnouncementsManager from './admin/AnnouncementsManager';
 import { dbService, DEFAULT_RECOMMENDED_TOOL } from '../lib/db';
 import { RecommendedToolCard } from './RecommendedToolCard';
@@ -765,7 +765,7 @@ export default function AdminArea({
       // Users close to limit
       const usersNearLimit: { userId: string; name: string; plan: string; songsCount: number; limit: number; percentage: number }[] = [];
       currentUsers.forEach(u => {
-        const limit = u.musicLimit !== undefined ? u.musicLimit : (u.plan === 'free' ? 3 : (u.plan === 'essencial' ? 10 : (u.plan === 'pro' ? 15 : 50)));
+        const limit = u.musicLimit !== undefined ? u.musicLimit : (u.plan === 'free' ? FREE_MUSIC_LIMIT : (u.plan === 'essencial' ? 10 : (u.plan === 'pro' ? 15 : 50)));
         const songsCount = userSpaceMap[u.userId]?.songsCount || 0;
         const percentage = limit > 0 ? (songsCount / limit) * 100 : 0;
         if (percentage >= 80) {
@@ -1094,8 +1094,10 @@ export default function AdminArea({
 
     const originalUser = users.find(u => u.userId === selectedUser.userId);
     let finalLimit = selectedUser.musicLimit;
-    if (finalLimit === undefined) {
-      finalLimit = selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50));
+    if (selectedUser.plan === 'free') {
+      finalLimit = FREE_MUSIC_LIMIT;
+    } else if (finalLimit === undefined) {
+      finalLimit = selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50);
     }
 
     const hasPlanChanged = originalUser && originalUser.plan !== selectedUser.plan;
@@ -1111,9 +1113,9 @@ export default function AdminArea({
         const updatedFields: Partial<Artist> = {
           plan: selectedUser.plan,
           role: selectedUser.role || 'user',
-          paymentStatus: selectedUser.paymentStatus || 'inactive',
-          accessType: selectedUser.accessType || 'free',
-          // If upgraded to paid, let's make sure planStatus/subscriptionStatus are active!
+          paymentStatus: selectedUser.paymentStatus || (selectedUser.plan !== 'free' ? 'manual' : 'inactive'),
+          accessType: selectedUser.accessType || (selectedUser.plan !== 'free' ? 'manual' : 'free'),
+          // If upgraded to paid, make sure planStatus/subscriptionStatus are active
           planStatus: selectedUser.plan !== 'free' ? 'active' : 'expired',
           subscriptionStatus: selectedUser.plan !== 'free' ? 'ativo' : 'cancelado',
           musicLimit: Number(finalLimit),
@@ -1125,9 +1127,11 @@ export default function AdminArea({
           mercadoPagoSubscriptionId: selectedUser.mercadoPagoSubscriptionId || null,
           isBlocked: selectedUser.isBlocked || false,
           name: selectedUser.name,
+          artistName: selectedUser.name || selectedUser.artistName,
           city: selectedUser.city,
           state: selectedUser.state,
           whatsapp: selectedUser.whatsapp,
+          phone: selectedUser.whatsapp || selectedUser.phone,
           instagram: selectedUser.instagram,
         };
 
@@ -1138,7 +1142,7 @@ export default function AdminArea({
         console.log(`[PLAN_RELEASE_DEBUG] Reenquadramento finalizado para ${selectedUser.userId}.`);
         triggerNotification("Alterações salvas com sucesso!");
         setSelectedUser(null);
-        loadData();
+        await loadData();
       } catch (err) {
         console.error(`[PLAN_RELEASE_DEBUG] Erro ao salvar alterações para ${selectedUser.userId}:`, err);
         triggerNotification("Erro ao salvar alterações.", true);
@@ -1151,7 +1155,7 @@ export default function AdminArea({
         changesList.push(`- Plano: "${originalUser.plan?.toUpperCase() || 'FREE'}" ➔ "${selectedUser.plan?.toUpperCase()}"`);
       }
       if (hasLimitChanged) {
-        changesList.push(`- Limite de Músicas: ${originalUser.musicLimit || 3} ➔ ${finalLimit}`);
+        changesList.push(`- Limite de Músicas: ${originalUser.musicLimit || FREE_MUSIC_LIMIT} ➔ ${finalLimit}`);
       }
       if (hasStatusChanged) {
         changesList.push(`- Tipo de Acesso: "${originalUser.accessType?.toUpperCase() || 'FREE'}" ➔ "${selectedUser.accessType?.toUpperCase()}"`);
@@ -1850,7 +1854,7 @@ export default function AdminArea({
                         {filteredUsers.map((user, idx) => {
                           const isBlocked = user.isBlocked || false;
                           const songsCount = dbService.getArtistMusics(user.userId).length;
-                          const limit = user.musicLimit !== undefined ? user.musicLimit : (user.plan === 'free' ? 3 : (user.plan === 'essencial' ? 10 : (user.plan === 'pro' ? 15 : 50)));
+                          const limit = user.musicLimit !== undefined ? user.musicLimit : (user.plan === 'free' ? FREE_MUSIC_LIMIT : (user.plan === 'essencial' ? 10 : (user.plan === 'pro' ? 15 : 50)));
                           
                           return (
                             <tr key={user.userId || `user-row-${idx}`} className="hover:bg-slate-850/30 transition">
@@ -1949,7 +1953,7 @@ export default function AdminArea({
               {(() => {
                 const userSongs = dbService.getArtistMusics(selectedUser.userId) || [];
                 const userSpaceUsedBytes = userSongs.reduce((acc, song) => acc + Number(song.fileSize || 0), 0);
-                const userPlanLimit = selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : (selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50)));
+                const userPlanLimit = selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : (selectedUser.plan === 'free' ? FREE_MUSIC_LIMIT : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50)));
                 const userPercentageSongsUsed = userPlanLimit > 0 ? (userSongs.length / userPlanLimit) * 100 : 0;
 
                 // Encontrar maior música
@@ -2180,7 +2184,7 @@ export default function AdminArea({
                         value={selectedUser.plan || 'free'}
                         onChange={(e) => {
                           const nextPlan = e.target.value as 'free' | 'essencial' | 'pro' | 'premium';
-                          const standardLimit = nextPlan === 'free' ? 3 : (nextPlan === 'essencial' ? 10 : (nextPlan === 'pro' ? 15 : 50));
+                          const standardLimit = nextPlan === 'free' ? FREE_MUSIC_LIMIT : (nextPlan === 'essencial' ? 10 : (nextPlan === 'pro' ? 15 : 50));
                           
                           setSelectedUser({
                             ...selectedUser,
@@ -2192,7 +2196,7 @@ export default function AdminArea({
                         }}
                         className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500 font-medium"
                       >
-                        <option value="free">Free (Grátis - 3 músicas)</option>
+                        <option value="free">Free (Grátis - 1 música)</option>
                         <option value="essencial">Essencial (Básico - 10 músicas)</option>
                         <option value="pro">Pro (Intermediário - 15 músicas)</option>
                         <option value="premium">Premium (Completo - 50 músicas)</option>
@@ -2204,7 +2208,7 @@ export default function AdminArea({
                       <input
                         type="number"
                         min="1"
-                        value={selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : (selectedUser.plan === 'free' ? 3 : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50)))}
+                        value={selectedUser.musicLimit !== undefined ? selectedUser.musicLimit : (selectedUser.plan === 'free' ? FREE_MUSIC_LIMIT : (selectedUser.plan === 'essencial' ? 10 : (selectedUser.plan === 'pro' ? 15 : 50)))}
                         onChange={(e) => setSelectedUser({ ...selectedUser, musicLimit: Number(e.target.value) })}
                         className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm outline-none text-slate-200 focus:border-orange-500 font-mono"
                         placeholder="Ex: 20"
@@ -2562,7 +2566,7 @@ export default function AdminArea({
                       <Info className="h-3 w-3 mr-1" /> Nota Importante
                     </h4>
                     <p className="text-[10px] text-slate-400 leading-relaxed">
-                      Ao término do teste grátis criado, o sistema de segurança reverterá o usuário automaticamente para o plano Free, limitando seu catálogo a 3 faixas musicais.
+                      Ao término do teste grátis criado, o sistema de segurança reverterá o usuário automaticamente para o plano Free, limitando seu catálogo a 1 faixa musical.
                     </p>
                   </div>
 
@@ -4238,7 +4242,7 @@ export default function AdminArea({
                             <option value="essencial">Essencial (10 músicas)</option>
                             <option value="pro">Pro (15 músicas)</option>
                             <option value="premium">Premium (50 músicas)</option>
-                            <option value="free">Free (3 músicas)</option>
+                            <option value="free">Free (1 música)</option>
                           </select>
                         </div>
 
@@ -4290,49 +4294,50 @@ export default function AdminArea({
                 </div>
               )}
 
-              {/* GLOBAL CONFIRMATION MODAL */}
-              {confirmModal && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                  <motion.div
-                    initial={{ scale: 0.95, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.95, opacity: 0 }}
-                    className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-200 text-left font-sans"
-                  >
-                    <div className="flex items-center gap-3 text-amber-500 border-b border-slate-800 pb-3">
-                      <AlertTriangle className="h-6 w-6 text-amber-500 shrink-0" />
-                      <h4 className="font-bold text-base text-white">{confirmModal.title}</h4>
-                    </div>
-                    
-                    <p className="text-xs text-slate-350 leading-relaxed whitespace-pre-wrap font-sans">
-                      {confirmModal.message}
-                    </p>
-
-                    <div className="flex gap-3 justify-end pt-2 border-t border-slate-800/60">
-                      <button
-                        type="button"
-                        onClick={() => setConfirmModal(null)}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer select-none"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={confirmModal.onConfirm}
-                        className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-slate-950 text-xs font-black rounded-xl transition uppercase tracking-wider cursor-pointer select-none"
-                      >
-                        Confirmar Ação
-                      </button>
-                    </div>
-                  </motion.div>
-                </div>
-              )}
             </div>
           )}
 
         </div>
 
       </main>
+
+      {/* GLOBAL CONFIRMATION MODAL */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 text-slate-200 text-left font-sans"
+          >
+            <div className="flex items-center gap-3 text-amber-500 border-b border-slate-800 pb-3">
+              <AlertTriangle className="h-6 w-6 text-amber-500 shrink-0" />
+              <h4 className="font-bold text-base text-white">{confirmModal.title}</h4>
+            </div>
+            
+            <p className="text-xs text-slate-350 leading-relaxed whitespace-pre-wrap font-sans">
+              {confirmModal.message}
+            </p>
+
+            <div className="flex gap-3 justify-end pt-2 border-t border-slate-800/60">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer select-none"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmModal.onConfirm}
+                className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 text-slate-950 text-xs font-black rounded-xl transition uppercase tracking-wider cursor-pointer select-none"
+              >
+                Confirmar Ação
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
     </div>
   );

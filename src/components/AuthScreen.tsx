@@ -15,7 +15,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { Artist } from '../types';
+import { Artist, FREE_MUSIC_LIMIT } from '../types';
 import { dbService } from '../lib/db';
 import { 
   createUserWithEmailAndPassword, 
@@ -258,7 +258,7 @@ export default function AuthScreen({
             plan: userData.plan || 'free',
             paymentStatus: userData.paymentStatus || 'inactive',
             accessType: userData.accessType || 'free',
-            musicLimit: userData.musicLimit || 3,
+            musicLimit: userData.musicLimit || FREE_MUSIC_LIMIT,
             songsCount: userData.songsCount || 0,
             createdAt: userData.createdAt instanceof Timestamp ? userData.createdAt.toDate().toISOString() : userData.createdAt || new Date().toISOString(),
             updatedAt: userData.updatedAt instanceof Timestamp ? userData.updatedAt.toDate().toISOString() : userData.updatedAt || new Date().toISOString(),
@@ -348,7 +348,7 @@ export default function AuthScreen({
           plan: userData.plan || 'free',
           paymentStatus: userData.paymentStatus || 'inactive',
           accessType: userData.accessType || 'free',
-          musicLimit: userData.musicLimit || 3,
+          musicLimit: userData.musicLimit || FREE_MUSIC_LIMIT,
           songsCount: userData.songsCount || 0,
           createdAt: userData.createdAt instanceof Timestamp ? userData.createdAt.toDate().toISOString() : userData.createdAt || new Date().toISOString(),
           updatedAt: userData.updatedAt instanceof Timestamp ? userData.updatedAt.toDate().toISOString() : userData.updatedAt || new Date().toISOString(),

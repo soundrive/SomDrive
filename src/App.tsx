@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { dbService } from './lib/db';
-import { Artist, Music as Track } from './types';
+import { Artist, Music as Track, FREE_MUSIC_LIMIT } from './types';
 import ArtistPublic from './components/ArtistPublic';
 import Player from './components/Player';
 import { ShieldAlert } from 'lucide-react';
@@ -174,7 +174,7 @@ export default function App() {
             setCurrentUser(checked);
 
             // Reconcile track status async to unlock/lock tracks according to current active plan limit
-            void dbService.enforceTracksByPlanValidityAsync(fireUser.uid, checked.plan || 'free', Number(checked.musicLimit || 3));
+            void dbService.enforceTracksByPlanValidityAsync(fireUser.uid, checked.plan || 'free', Number(checked.musicLimit || FREE_MUSIC_LIMIT));
           }
         }, (error) => {
           console.error("Real-time profile subscription error:", error);

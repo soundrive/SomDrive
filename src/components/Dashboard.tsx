@@ -199,7 +199,7 @@ const getCategoryIcon = (index: number, color: string) => {
   }
 };
 
-import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire, RecommendedToolConfig } from '../types';
+import { Artist, Music as Track, Analytics, ShareCardSettings, Repertoire, RecommendedToolConfig, FREE_MUSIC_LIMIT } from '../types';
 import { dbService, getSafeExpirationDate, DEFAULT_RECOMMENDED_TOOL } from '../lib/db';
 import { RecommendedToolCard } from './RecommendedToolCard';
 import { db } from '../lib/firebase';
@@ -766,8 +766,8 @@ export default function Dashboard({
     if (nextPreferred.includes(trackId)) {
       nextPreferred = nextPreferred.filter(id => id !== trackId);
     } else {
-      if (nextPreferred.length >= 3) {
-        setToastMessage("Você pode selecionar no máximo 3 músicas.");
+      if (nextPreferred.length >= FREE_MUSIC_LIMIT) {
+        setToastMessage(`Você pode selecionar no máximo ${FREE_MUSIC_LIMIT} música.`);
         setTimeout(() => setToastMessage(null), 3000);
         return;
       }
@@ -939,10 +939,11 @@ export default function Dashboard({
 
   const getPlanTracksLimit = (plan: string) => {
     const pLower = (plan || 'free').toLowerCase();
+    if (pLower === 'free') return FREE_MUSIC_LIMIT;
     if (pLower === 'essencial') return 10;
     if (pLower === 'pro') return 15;
     if (pLower === 'premium') return 50;
-    return profile.musicLimit || 3;
+    return FREE_MUSIC_LIMIT;
   };
   const limitCount = getPlanTracksLimit(profile.plan);
 
@@ -2152,10 +2153,10 @@ export default function Dashboard({
               {warning.showSelector && (
                 <div className="bg-slate-950/60 rounded-2xl border border-slate-900/80 p-4 space-y-3 text-left">
                   <p className="text-[10px] uppercase font-mono tracking-wider text-orange-400 font-bold">
-                    Suas 3 Músicas Ativas Escolhidas ({profile.preferredFreeTracks?.length || 0}/3)
+                    Sua Música Ativa Escolhida ({profile.preferredFreeTracks?.length || 0}/{FREE_MUSIC_LIMIT})
                   </p>
                   <p className="text-[10px] text-slate-400 font-sans leading-normal">
-                    Selecione abaixo as 3 músicas que você deseja que fiquem ativas e disponíveis no seu plano Free caso não renove. As não selecionadas ficarão guardadas de forma segura por até 30 dias.
+                    Selecione abaixo a música que você deseja que fique ativa e disponível no seu plano Free caso não renove. As não selecionadas ficarão guardadas de forma segura por até 30 dias.
                   </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -2270,23 +2271,41 @@ export default function Dashboard({
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
           
           {/* Metric 1: Tracks count */}
-          <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
-            <div className="space-y-1 sm:space-y-2">
-              <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Músicas</p>
-              <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight">
-                {tracks.length} <span className="text-slate-500 text-xs md:text-sm font-normal">/ {limitCount}</span>
-              </h4>
-              <div className="w-16 sm:w-24 h-1 bg-slate-850 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-orange-500 rounded-full" 
-                  style={{ width: `${Math.min(100, (tracks.length / limitCount) * 100)}%` }}
-                ></div>
+          {(() => {
+            const activeTracksCount = tracks.filter(t => (t.status || 'active') === 'active').length;
+            const lockedTracksCount = tracks.filter(t => t.status === 'locked_by_expired_plan' || t.status === 'blocked' || t.status === 'inactive').length;
+            const isFreePlan = (profile.plan || 'free').toLowerCase() === 'free';
+
+            return (
+              <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col justify-between shadow-lg gap-2">
+                <div className="flex items-center justify-between w-full">
+                  <div className="space-y-1 sm:space-y-2">
+                    <p className="text-[9px] md:text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">Músicas</p>
+                    <h4 className="text-xl sm:text-2xl md:text-3xl font-heading font-black tracking-tight">
+                      {activeTracksCount} <span className="text-slate-500 text-xs md:text-sm font-normal">/ {limitCount}</span>
+                    </h4>
+                  </div>
+                  <div className="p-2 md:p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-lg md:rounded-xl self-start sm:self-center">
+                    <Music className="w-4 h-4 md:w-6 md:h-6" />
+                  </div>
+                </div>
+
+                <div className="space-y-1 w-full mt-1">
+                  <div className="w-full h-1 bg-slate-850 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-orange-500 rounded-full" 
+                      style={{ width: `${Math.min(100, (activeTracksCount / limitCount) * 100)}%` }}
+                    ></div>
+                  </div>
+                  {lockedTracksCount > 0 && (
+                    <p className="text-[10px] text-amber-400 font-mono font-bold mt-1">
+                      {lockedTracksCount} {lockedTracksCount === 1 ? 'música bloqueada' : 'músicas bloqueadas'} {isFreePlan ? 'pelo limite do plano Free' : 'pelo plano'}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="p-2 md:p-3 bg-orange-950/40 border border-orange-500/20 text-orange-400 rounded-lg md:rounded-xl self-start sm:self-center">
-              <Music className="w-4 h-4 md:w-6 md:h-6" />
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Metric 2: Plays global */}
           <div className="bg-slate-900 border border-slate-850 p-3 md:p-6 rounded-xl md:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between shadow-lg gap-2">
@@ -2349,13 +2368,13 @@ export default function Dashboard({
           <div className="space-y-1">
             <h4 className="font-heading font-black text-lg text-orange-400 uppercase tracking-wide flex items-center gap-1.5 group-hover:text-amber-300 transition">
               <Sparkles className="w-5 h-5 text-orange-400 animate-pulse" /> 
-              {profile.plan === 'free' && 'Você está no SomDrive Free (3 Músicas)'}
+              {profile.plan === 'free' && 'Você está no SomDrive Free (1 Música)'}
               {profile.plan === 'essencial' && 'Você está no SomDrive Essencial (10 Músicas)'}
               {profile.plan === 'pro' && 'Você está no SomDrive Pro (15 Músicas)'}
               {profile.plan === 'premium' && 'Você está no SomDrive Premium (50 Músicas)'}
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-              {profile.plan === 'free' && 'Sua conta gratuita permite até 3 músicas em seu catálogo privado. Faça upgrade para expandir seu limite para até 50 faixas.'}
+              {profile.plan === 'free' && 'Sua conta gratuita permite 1 música em seu catálogo. Faça upgrade para expandir seu limite para até 50 faixas.'}
               {profile.plan === 'essencial' && 'Seu plano Essencial está ativo! Agora você pode cadastrar e compartilhar até 10 músicas em seu catálogo.'}
               {profile.plan === 'pro' && 'Seu plano Pro está ativo! Agora você pode cadastrar e compartilhar até 15 músicas em MP3 de alta conversão.'}
               {profile.plan === 'premium' && 'Seu plano Premium está ativo! Aproveite o limite expandido de até 50 músicas cadastradas em seu portfólio.'}
@@ -2915,7 +2934,11 @@ export default function Dashboard({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {combinedRepertoires.map((rep, index) => {
-                      const repTracksCount = rep.trackIds?.length || 0;
+                      const repSongs = tracks.filter(t => t.repertoireId === rep.id || (rep.trackIds && rep.trackIds.includes(t.trackId)));
+                      const activeRepSongs = repSongs.filter(t => (t.status || 'active') === 'active');
+                      const totalRepCount = repSongs.length;
+                      const activeRepCount = activeRepSongs.length;
+
                       const slugToUse = rep.slug || rep.id;
                       const shareUrl = `${window.location.origin}/s/${profile.slug || profile.userId}/repertorio/${slugToUse}`;
                       const isPrivate = rep.visibility === 'private';
@@ -2923,13 +2946,12 @@ export default function Dashboard({
                       const isCopied = repCopiedId === rep.id;
                       const folderColor = getFolderColor(index);
 
-                      // Play all songs helper
+                      // Play all songs helper (plays active songs only)
                       const handlePlayAll = () => {
-                        const repSongs = tracks.filter(t => t.repertoireId === rep.id || (rep.trackIds && rep.trackIds.includes(t.trackId)));
-                        if (repSongs.length > 0) {
-                          onSelectTrack(repSongs[0], repSongs);
+                        if (activeRepSongs.length > 0) {
+                          onSelectTrack(activeRepSongs[0], activeRepSongs);
                         } else {
-                          alert('Esta pasta não possui músicas para reproduzir.');
+                          alert('Esta pasta não possui músicas ativas para reproduzir.');
                         }
                       };
 
@@ -3062,13 +3084,17 @@ export default function Dashboard({
                             </h4>
                             
                             <span className="text-[10px] sm:text-[11px] font-sans font-medium text-slate-400 block">
-                              {repTracksCount} {repTracksCount === 1 ? 'música' : 'músicas'}
+                              {activeRepCount === totalRepCount ? (
+                                `${totalRepCount} ${totalRepCount === 1 ? 'música' : 'músicas'}`
+                              ) : (
+                                `${totalRepCount} ${totalRepCount === 1 ? 'música' : 'músicas'} (${activeRepCount} ativa)`
+                              )}
                             </span>
                           </div>
 
                           {/* D. CARD FOOTER ACTIONS: Clean Play & Chevron Navigation row */}
                           <div className="flex items-center justify-between w-full pt-2.5 mt-2.5 border-t border-slate-800/60 relative z-10 select-none px-1">
-                            {repTracksCount > 0 ? (
+                            {activeRepCount > 0 ? (
                               <button
                                 type="button"
                                 onClick={(e) => {

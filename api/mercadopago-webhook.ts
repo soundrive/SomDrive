@@ -5,6 +5,8 @@ import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 
+export const FREE_MUSIC_LIMIT = 1;
+
 // Initialize Firebase Admin securely and lazily
 let dbInstance: any = null;
 
@@ -349,7 +351,7 @@ export async function reconcileTracksForUserServer(uid: string, plan: string, mu
   try {
     const dbAdmin = getDb();
     const cleanPlan = (plan || 'free').toLowerCase();
-    const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+    const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? FREE_MUSIC_LIMIT : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
 
     console.log(`[SERVER_RECONCILE] Reconciling tracks for user ${uid}. Plan: ${cleanPlan}, Limit: ${maxAllowed}`);
 
@@ -517,7 +519,7 @@ export async function syncUserAndArtistRefund(uid: string, reconciliationData?: 
   const dbInstanceLocal = getDb();
   const updatePayload: any = {
     plan: "free",
-    musicLimit: 3,
+    musicLimit: FREE_MUSIC_LIMIT,
     subscriptionStatus: "refunded",
     planStatus: "refunded",
     paymentStatus: "refunded",
@@ -535,7 +537,7 @@ export async function syncUserAndArtistRefund(uid: string, reconciliationData?: 
   await dbInstanceLocal.collection("users").doc(uid).set(updatePayload, { merge: true });
   await dbInstanceLocal.collection("artists").doc(uid).set(updatePayload, { merge: true });
 
-  await reconcileTracksForUserServer(uid, "free", 3);
+  await reconcileTracksForUserServer(uid, "free", FREE_MUSIC_LIMIT);
 }
 
 // CORE FUNCTION: PROCESS SINGLE PAYMENT ID
@@ -781,8 +783,8 @@ export async function processSinglePayment(paymentId: string, merchantOrderId = 
     officialUserDocumentPath: resolvedUid ? `artists/${resolvedUid}` : "none",
     previousPlan: "unknown",
     newPlan: planActivated ? finalPlan.toLowerCase() : (isRefundOrReversal && resolvedUid ? "free" : "none"),
-    previousLimit: 3,
-    newLimit: planActivated ? musicLimit : 3,
+    previousLimit: FREE_MUSIC_LIMIT,
+    newLimit: planActivated ? musicLimit : FREE_MUSIC_LIMIT,
     subscriptionEndsAt: planActivated ? (new Date(Date.now() + durationDays * 24 * 3600 * 1000)).toISOString() : null,
     transactionSaved: true,
     dashboardSourcePath: resolvedUid ? `artists/${resolvedUid}` : "none",
@@ -1351,7 +1353,7 @@ export default async function handler(req: any, res: any) {
         email: "test_webhook_automated@somdrive.com.br",
         artistName: "Test Webhook User",
         plan: "free",
-        musicLimit: 3,
+        musicLimit: FREE_MUSIC_LIMIT,
         updatedAt: FieldValue.serverTimestamp()
       };
       
