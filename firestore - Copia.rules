@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safe Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Core Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == 'ixGC8uOIGBPmOo08b7jr8Fxh4oq2' ||
+        request.auth.token.email == 'videopremieroficial@gmail.com' ||
+        request.auth.token.email == 'sertanejopremier@gmail.com'
+      );
+    }
+
+    // --- Users Collection Rules ---
+    match /users/{userId} {
+      allow create: if isOwner(userId);
+      allow read, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- Artist Profiles Rules ---
+    match /artists/{userId} {
+      allow get: if true; // Public profiles are read by fans
+      allow list: if true; // To find and browse artists
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+      
+      // Musics (nested sub-collection)
+      match /musics/{trackId} {
+        allow get, list: if true; // Public listens to music
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId) || isAdmin() || (
+          // Allow viewers to increment playsCount/plays safely
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playsCount', 'plays', 'updatedAt'])
+        );
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      // Analytics for each Artist (nested sub-collection)
+      match /analytics/metrics {
+        allow get, list: if true; // Read analytics
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId) || isAdmin() || (
+          // Allow viewers to increment viewsCount or whatsappClicks one by one safely without decreasing
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount', 'whatsappClicks'])
+        );
+      }
+    }
+
+    // --- Audio Files Collection Rules (Deduplicated audio repository) ---
+    match /audioFiles/{audioFileId} {
+      allow get, list: if isSignedIn(); // Logged in users can check existing audioFiles by hash
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isSignedIn() && (
+        // Only allow incrementing usageCount, nothing else
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usageCount'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Songs Collection Rules (The compositions) ---
+    match /songs/{songId} {
+      allow get, list: if true; // Public listings can read and stream
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if (isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin())) || (
+        // Allow viewers/listeners to increment plays and playsCount safely without auth
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plays', 'playsCount', 'updatedAt'])
+      );
+      allow delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+    }
+
+    // --- Settings Collection Rules (For payment links and system configuration) ---
+    match /settings/{settingId} {
+      allow read: if true; // Public users can fetch active payment urls to subscribe
+      allow write: if isAdmin(); // Only admins can configure payment settings
+    }
+
+    // --- Mercado Pago Subscriptions Log (Admin Only) ---
+    match /mp_subscriptions/{subId} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- Repertoires Collection Rules ---
+    match /repertoires/{repertoireId} {
+      allow read: if
+        (resource == null)
+        || resource.data.get('visibility', 'private') == 'public'
+        || resource.data.get('visibility', 'private') == 'unlisted'
+        || resource.data.get('visibility', 'private') == 'active'
+        || (isSignedIn() && resource.data.ownerUid == request.auth.uid)
+        || isAdmin();
+
+      allow create: if
+        isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+
+      allow update, delete: if
+        isSignedIn()
+        && (
+          resource.data.ownerUid == request.auth.uid
+          || isAdmin()
+        );
+    }
+
+    // --- Announcements Collection Rules ---
+    match /announcements/{announcementId} {
+      allow get, list: if isSignedIn() && (
+        isAdmin() || resource.data.isActive == true || resource.data.isPublished == true
+      );
+
+      allow create: if isAdmin()
+        && request.resource.data.id == announcementId
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.summary is string;
+
+      allow update: if isAdmin()
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.title is string
+        && request.resource.data.summary is string;
+
+      allow delete: if isAdmin();
+    }
+
+  }
+}

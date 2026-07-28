@@ -1,0 +1,3017 @@
+import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, AppearanceSettings, Repertoire, Project, Announcement, AnnouncementType, FirestoreDateLike } from '../types';
+
+// Strict in-memory shadowing to replace browser persistent storage for core user/folder/music data
+const MEMORY_KV_STORE: Record<string, string> = {};
+
+const localStorage = {
+  getItem(key: string): string | null {
+    if (key === 'soundrive_datasaver_v2') {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    }
+    return MEMORY_KV_STORE[key] || null;
+  },
+  setItem(key: string, value: string): void {
+    if (key === 'soundrive_datasaver_v2') {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {}
+      return;
+    }
+    MEMORY_KV_STORE[key] = value;
+  },
+  removeItem(key: string): void {
+    if (key === 'soundrive_datasaver_v2') {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+      return;
+    }
+    delete MEMORY_KV_STORE[key];
+  },
+  clear(): void {
+    for (const k in MEMORY_KV_STORE) {
+      delete MEMORY_KV_STORE[k];
+    }
+  }
+};
+
+// Static Royalty-Free MP3 links that are reliable and beautiful
+export const DEMO_SONGS: any[] = [];
+
+export const DEMO_ARTIST: Artist = {
+  userId: "",
+  name: "Artista",
+  avatarUrl: "",
+  city: "",
+  genre: "",
+  whatsapp: "",
+  instagram: "",
+  email: "",
+  bio: "",
+  plan: "free",
+  createdAt: new Date().toISOString(),
+};
+
+export const DEMO_LYRICS: string[] = [
+  `[Refrão]
+Vento da alvorada leva essa dor de mim
+Sopra no meu peito, diz que não é o fim
+Se ela foi embora, traz de volta a flor
+Que plantou sementes desse nosso amor
+
+[Verso 1]
+Madrugada fria na minha janela
+Eu fico sonhando com os abraços dela
+O violão em notas chora de saudade
+Vento da manhã, traga a felicidade
+
+[Verso 2]
+Sei que eu errei, mas posso consertar
+Essa noite inteira eu só quis te amar
+O sereno cai e molha meu quintal
+Vem curar de vez esse meu vendaval`,
+
+  `[Verso 1]
+Você me disse que tinha sentimento
+Mas esfriou igual o sopro do vento
+Deixou meu violão calado no canto
+E transformou em cinzas todo esse meu tanto
+
+[Refrão]
+Esse seu coração de pedra não quer amolecer
+Já procurei mil formas para te esquecer
+Mas toda moda boa que eu resolvo tocar
+Me lembra os seus beijos e me faz chorar
+
+[Verso 2]
+Agora eu bebo ouvindo rádio antigo
+Tentando achar um rumo pra falar contigo
+Mas sei que no seu peito não mora ninguém
+Coração de pedra que não quer meu bem`,
+
+  `[Verso 1]
+Sob a lua do sertão azul brilhante
+Eu vi seu rosto lindo num instante
+Peguei minha sanfona para te cantar
+E nas noites do Nordeste te conquistar
+
+[Refrão]
+Xote mareado, balanço gostoso
+Te abraçar de canto é tão fervoroso
+Arrasta o pé no chão, poeira vai subir
+Ao som do sanfoneiro que nos faz sorrir
+
+[Verso 2]
+Se a noite tá fria, a gente faz esquentar
+No aconchego desse fogo de luar
+Não me deixe sozinho antes do sol nascer
+Noites do Nordeste eu amo com você`,
+
+  `[Verso 1]
+Na imensidão de prédios sob o céu cinzento
+Eu busco um sinal seu a cada momento
+O asfalto reflete a pressa de chegar
+Mas meu pensamento quer te encontrar
+
+[Refrão]
+O horizonte neon brilha na nossa cor
+Pinta a cidade com as cores do amor
+Atravessei a ponte só pra te dizer
+Em meio a luzes mil, eu prefiro você
+
+[Verso 2]
+As estações passam e o trem não quer parar
+A noite me convida para te encontrar
+Compositores contam nossa história real
+Em uma melodia doce e sem igual`,
+
+  `[Verso 1]
+A luz do sol que bate na sua janela
+Mostra como a vida perto de você é bela
+Acústico suave no som de um violão
+É a melodia certa pro meu coração
+
+[Refrão]
+Teus olhos claros brilham mais que o sol
+Me guiam no escuro feito um farol
+E toda canção que eu escrevo pensado em ti
+Diz que o mundo é lindo quando te vê sorrir
+
+[Verso 2]
+Palavras são poucas para descrever
+A paz imensa de te ver crescer
+Dentro dos meus sonhos você é o refrão
+A nota perfeita da minha canção`
+];
+
+// Initial system seed state
+const INITIAL_ARTISTS: Record<string, Artist> = {};
+
+const INITIAL_MUSICS: Record<string, Music[]> = {};
+
+const INITIAL_ANALYTICS: Record<string, Analytics> = {};
+
+// Keys for standard local storage key-value tables
+export const LS_ARTISTS = "pendrive_artists";
+export const LS_MUSICS = "pendrive_musics";
+export const LS_ANALYTICS = "pendrive_analytics";
+export const LS_CURR_USER = "pendrive_curr_user";
+
+// Track in-progress automatic downgrades to prevent duplicate concurrent writes
+const expirationSyncInProgress = new Set<string>();
+
+// Clear old demo account if found in localStorage to avoid stale cached view
+if (localStorage.getItem(LS_CURR_USER)) {
+  localStorage.removeItem(LS_CURR_USER);
+}
+
+// Seed local storage with base tables if empty
+if (!localStorage.getItem(LS_ARTISTS)) {
+  localStorage.setItem(LS_ARTISTS, JSON.stringify(INITIAL_ARTISTS));
+}
+if (!localStorage.getItem(LS_MUSICS)) {
+  localStorage.setItem(LS_MUSICS, JSON.stringify(INITIAL_MUSICS));
+}
+if (!localStorage.getItem(LS_ANALYTICS)) {
+  localStorage.setItem(LS_ANALYTICS, JSON.stringify(INITIAL_ANALYTICS));
+}
+
+// Firebase imports
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  collection, 
+  getDocs, 
+  deleteDoc, 
+  Timestamp,
+  serverTimestamp,
+  query,
+  where,
+  updateDoc,
+  increment,
+  deleteField,
+  writeBatch
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage, auth, handleFirestoreError, OperationType } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
+
+export function createSlug(text: string): string {
+  if (!text) return 'repertorio';
+  return text
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+const parseTimestamp = (val: any): string | null => {
+  if (!val) return null;
+  if (val instanceof Timestamp) return val.toDate().toISOString();
+  if (typeof val.toDate === 'function') return val.toDate().toISOString();
+  if (val && typeof val === 'object' && typeof val._seconds === 'number') {
+    return new Date(val._seconds * 1000).toISOString();
+  }
+  if (val && typeof val === 'object' && typeof val.seconds === 'number') {
+    return new Date(val.seconds * 1000).toISOString();
+  }
+  if (typeof val === 'string') {
+    return val;
+  }
+  try {
+    const parsedDate = new Date(val);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString();
+    }
+  } catch {}
+  return null;
+};
+
+// Safe helper to normalize and retrieve subscription/access expiration date
+export function getSafeExpirationDate(artist: Artist): Date | null {
+  if (!artist) return null;
+  const accessType = artist.accessType || 'free';
+  const plan = artist.plan || 'free';
+
+  if (plan === 'free' || accessType === 'free') {
+    return null;
+  }
+
+  let targetVal: FirestoreDateLike = null;
+
+  if (accessType === 'trial') {
+    targetVal = artist.trialEndsAt || null;
+  } else if (accessType === 'manual') {
+    targetVal = artist.manualAccessEndsAt || null;
+  } else if (accessType === 'mercadopago' || accessType === 'subscriber') {
+    targetVal = artist.subscriptionEndsAt || artist.planExpiresAt || null;
+  } else {
+    // Fallback if accessType is not specified but plan is premium/pro/essencial
+    targetVal = artist.subscriptionEndsAt || artist.planExpiresAt || artist.trialEndsAt || artist.manualAccessEndsAt || null;
+  }
+
+  if (!targetVal) return null;
+
+  try {
+    if (targetVal instanceof Date) {
+      return Number.isNaN(targetVal.getTime()) ? null : targetVal;
+    }
+    if (typeof targetVal === 'object' && targetVal !== null) {
+      const obj = targetVal as { toDate?: () => Date; seconds?: number; _seconds?: number };
+      if (typeof obj.toDate === 'function') {
+        const d = obj.toDate();
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof obj._seconds === 'number') {
+        const d = new Date(obj._seconds * 1000);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof obj.seconds === 'number') {
+        const d = new Date(obj.seconds * 1000);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+    }
+    if (typeof targetVal === 'string') {
+      const d = new Date(targetVal);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+  } catch (err) {
+    console.error("[getSafeExpirationDate] Error parsing expiration date:", err);
+  }
+
+  return null;
+}
+
+// Database Actions Layer
+export const dbService = {
+  // Map and parse raw Firestore user/artist documents to complete Artist object format with precise field naming and UTC timestamp support
+  mapFirestoreDocToArtist(userId: string, d: any): Artist {
+    if (!d) {
+      return {
+        userId,
+        name: "Artista",
+        artistName: "Artista",
+        email: "",
+        plan: "free",
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
+    const cleanPlan = (rawPlan === 'essencial' || rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'essencial' | 'pro' | 'premium';
+    const limit = d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+    const isMainAdmin = (d.email || '').toLowerCase().trim() === 'videopremieroficial@gmail.com' || (d.email || '').toLowerCase().trim() === 'sertanejopremier@gmail.com';
+    const role = isMainAdmin ? 'admin' : (d.role || 'user');
+
+    const result: Artist = {
+      userId,
+      name: d.name || d.artistName || 'Artista',
+      artistName: d.artistName || d.name || 'Artista',
+      avatarUrl: d.avatarUrl || d.profileImageUrl || d.photoURL || '',
+      profileImageUrl: d.profileImageUrl || d.avatarUrl || d.photoURL || '',
+      photoURL: d.photoURL || d.avatarUrl || d.profileImageUrl || '',
+      slug: d.slug || '',
+      city: d.city || '',
+      state: d.state || '',
+      genre: d.genre || d.mainGenre || '',
+      mainGenre: d.mainGenre || d.genre || '',
+      whatsapp: d.whatsapp || d.phone || '',
+      phone: d.phone || d.whatsapp || '',
+      instagram: d.instagram || '',
+      email: d.email || '',
+      bio: d.bio || '',
+      role: role,
+      plan: cleanPlan,
+      paymentStatus: d.paymentStatus || (cleanPlan !== 'free' ? 'approved' : 'inactive'),
+      accessType: d.accessType || (cleanPlan !== 'free' ? 'subscriber' : 'free'),
+      musicLimit: limit,
+      songsCount: d.songsCount !== undefined ? Number(d.songsCount) : 0,
+      trialEndsAt: parseTimestamp(d.trialEndsAt),
+      manualAccessEndsAt: parseTimestamp(d.manualAccessEndsAt),
+      subscriptionStartedAt: parseTimestamp(d.subscriptionStartedAt),
+      subscriptionEndsAt: parseTimestamp(d.subscriptionEndsAt),
+      mercadoPagoPaymentId: d.mercadoPagoPaymentId || d.paymentId || d.id || null,
+      mercadoPagoSubscriptionId: d.mercadoPagoSubscriptionId || null,
+      isBlocked: d.isBlocked || false,
+      createdAt: parseTimestamp(d.createdAt) || new Date().toISOString(),
+      updatedAt: parseTimestamp(d.updatedAt) || new Date().toISOString(),
+    };
+
+    if (d.customBadgeText !== undefined) result.customBadgeText = d.customBadgeText;
+    if (d.customContactLabel !== undefined) result.customContactLabel = d.customContactLabel;
+    if (d.customShareLabel !== undefined) result.customShareLabel = d.customShareLabel;
+    if (d.customRightBadgeTitle !== undefined) result.customRightBadgeTitle = d.customRightBadgeTitle;
+    if (d.customRightBadgeStatus !== undefined) result.customRightBadgeStatus = d.customRightBadgeStatus;
+    if (d.customRightBadgeDescription !== undefined) result.customRightBadgeDescription = d.customRightBadgeDescription;
+    if (d.customNoticeText !== undefined) result.customNoticeText = d.customNoticeText;
+    if (d.customSongsListTitle !== undefined) result.customSongsListTitle = d.customSongsListTitle;
+    if (d.customSongsListSubtitle !== undefined) result.customSongsListSubtitle = d.customSongsListSubtitle;
+    if (d.customCardImageUrl !== undefined) result.customCardImageUrl = d.customCardImageUrl;
+    if (d.userType !== undefined) result.userType = d.userType;
+
+    // Remove any undefined properties to prevent firestore runtime crashes
+    const clean: any = {};
+    for (const [key, value] of Object.entries(result)) {
+      if (value !== undefined) {
+        clean[key] = value;
+      }
+    }
+    return clean as Artist;
+  },
+
+  // Normalize and prepare user object mapping users/{userId} properties
+  getNormalizedUserData(artist: Artist, songsCount = 0) {
+    const planRaw = (artist.plan || 'free').toLowerCase();
+    const plan = planRaw === 'essencial' || planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
+    const defaultLimit = plan === 'free' ? 3 : (plan === 'essencial' ? 10 : (plan === 'pro' ? 15 : 50));
+    const emailLower = (artist.email || '').toLowerCase().trim();
+    const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
+
+    const nameToSlug = (artist.name || artist.artistName || "artista").trim();
+    const cleanSlug = artist.slug || nameToSlug
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/[\s_]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return {
+      uid: artist.userId,
+      email: artist.email || '',
+      artistName: artist.artistName || artist.name || '',
+      slug: cleanSlug,
+      whatsapp: artist.whatsapp || artist.phone || '',
+      phone: artist.phone || artist.whatsapp || '',
+      instagram: artist.instagram || '',
+      avatarUrl: artist.avatarUrl || artist.photoURL || artist.profileImageUrl || '',
+      photoURL: artist.photoURL || artist.avatarUrl || artist.profileImageUrl || '',
+      profileImageUrl: artist.profileImageUrl || artist.avatarUrl || artist.photoURL || '',
+      city: artist.city || '',
+      state: artist.state || '',
+      role: isMainAdmin ? 'admin' : (artist.role || 'user'),
+      plan: plan,
+      paymentStatus: artist.paymentStatus || (plan !== 'free' ? 'manual' : 'inactive'),
+      accessType: artist.accessType || (plan !== 'free' ? 'trial' : 'free'),
+      musicLimit: artist.musicLimit !== undefined ? artist.musicLimit : defaultLimit,
+      songsCount: songsCount,
+      userType: artist.userType || 'Artista',
+      mainGenre: artist.mainGenre || artist.genre || '',
+      totalPlays: 0,
+      totalViews: 0,
+      whatsappClicks: 0,
+      trialEndsAt: artist.trialEndsAt || null,
+      manualAccessEndsAt: artist.manualAccessEndsAt || null,
+      subscriptionStartedAt: artist.subscriptionStartedAt || null,
+      subscriptionEndsAt: artist.subscriptionEndsAt || null,
+      mercadoPagoPaymentId: artist.mercadoPagoPaymentId || null,
+      mercadoPagoSubscriptionId: artist.mercadoPagoSubscriptionId || null,
+      isBlocked: artist.isBlocked || false,
+      createdAt: artist.createdAt || new Date().toISOString(),
+      updatedAt: artist.updatedAt || new Date().toISOString()
+    };
+  },
+
+  // Automated checks for expired trials or manual subscriptions
+  checkAndRevertExpiredAccess(artist: Artist): Artist {
+    let changed = false;
+    const now = new Date();
+    const updated: Artist = { ...artist };
+
+    // Set defaults if absent
+    if (updated.isBlocked === undefined) updated.isBlocked = false;
+    const emailLower = (updated.email || '').toLowerCase().trim();
+    if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
+      updated.role = 'admin';
+    } else if (!updated.role) {
+      updated.role = 'user';
+    }
+
+    if (updated.plan !== 'free') {
+      const endsAt = getSafeExpirationDate(updated);
+      if (endsAt) {
+        if (endsAt < now) {
+          updated.plan = 'free';
+          updated.musicLimit = 3;
+          updated.paymentStatus = 'inactive';
+          updated.accessType = 'free';
+          updated.updatedAt = now.toISOString();
+          changed = true;
+          console.log(`[checkAndRevertExpiredAccess] Reverting user ${updated.userId} to free plan (access expired on ${endsAt.toISOString()}).`);
+        }
+      } else {
+        console.warn(`[checkAndRevertExpiredAccess] Non-free plan found without valid expiration date for user ${updated.userId}. Auto-downgrade skipped.`);
+      }
+    }
+
+    if (changed) {
+      if (expirationSyncInProgress.has(updated.userId)) {
+        console.log(`[checkAndRevertExpiredAccess] Downgrade sync in progress for user ${updated.userId}. Skipping duplicate call.`);
+        return updated;
+      }
+      expirationSyncInProgress.add(updated.userId);
+
+      // 1. Update localStorage artists list
+      try {
+        const artists = this.getAllArtists();
+        artists[updated.userId] = updated;
+        localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+      } catch (e) {
+        console.error("Error saving updated artists list locally: ", e);
+      }
+
+      // 2. If current user is this artist, update current user in localStorage too
+      try {
+        const u = localStorage.getItem(LS_CURR_USER);
+        if (u) {
+          const parsed = JSON.parse(u) as Artist;
+          if (parsed.userId === updated.userId) {
+            localStorage.setItem(LS_CURR_USER, JSON.stringify(updated));
+          }
+        }
+      } catch (e) {
+        console.error("Error updating current user locally: ", e);
+      }
+
+      // 3. Persist to Firestore asynchronously, freeing the in-progress lock in finally
+      void this.updateArtistProfileLocallyAndFirestore(updated.userId, updated)
+        .then(() => {
+          // 4. Enforce track limits by plan validity ONLY after successful persistence
+          try {
+            this.enforceTracksByPlanValidity(updated);
+          } catch (e) {
+            console.error("Error in local enforcement caller:", e);
+          }
+        })
+        .catch(err => {
+          console.error(`[checkAndRevertExpiredAccess] Firestore update failed for user ${updated.userId}:`, err);
+        })
+        .finally(() => {
+          expirationSyncInProgress.delete(updated.userId);
+        });
+    }
+
+    return updated;
+  },
+
+  // Enforces plan limits and locks excess tracks or restores them upon renewal
+  enforceTracksByPlanValidity(artist: Artist) {
+    try {
+      const artistId = artist.userId;
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const tracks: Music[] = musicsMap[artistId] || [];
+      if (tracks.length === 0) return;
+
+      let changed = false;
+      const cleanPlan = artist.plan || 'free';
+
+      if (cleanPlan === 'free') {
+        const candidates = tracks.filter(t => t.status === 'active' || t.status === 'locked_by_expired_plan');
+        const preferredIds = artist.preferredFreeTracks || [];
+        const selectedTracks: Music[] = [];
+
+        // 1. Recover from selectedTracks
+        preferredIds.forEach(pId => {
+          const found = candidates.find(t => t.trackId === pId);
+          if (found && selectedTracks.length < 3) {
+            selectedTracks.push(found);
+          }
+        });
+
+        // 2. Fallback to order sorting candidates
+        const sortedCandidates = [...candidates].sort((a, b) => {
+          const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
+          const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
+          if (posA !== posB) return posA - posB;
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeA - timeB;
+        });
+
+        sortedCandidates.forEach(cand => {
+          if (selectedTracks.length < 3 && !selectedTracks.some(s => s.trackId === cand.trackId)) {
+            selectedTracks.push(cand);
+          }
+        });
+
+        const updatedTracks = tracks.map(track => {
+          if (track.status === 'active' || track.status === 'locked_by_expired_plan') {
+            const isSelected = selectedTracks.some(s => s.trackId === track.trackId);
+            const targetStatus = isSelected ? 'active' : 'locked_by_expired_plan';
+            if (track.status !== targetStatus) {
+              changed = true;
+              const songDocRef = doc(db, 'songs', track.trackId);
+              setDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+                console.error("Error syncing track locked state to Firestore root collection:", e);
+              });
+              const legacyDocRef = doc(db, 'artists', artistId, 'musics', track.trackId);
+              setDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+                console.error("Error syncing track locked state to legacy subcollection:", e);
+              });
+              return { ...track, status: targetStatus, updatedAt: new Date().toISOString() };
+            }
+          }
+          return track;
+        });
+
+        if (changed) {
+          musicsMap[artistId] = updatedTracks;
+          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        }
+      } else {
+        // Active Pro/Premium: restore locked ones
+        const updatedTracks = tracks.map(track => {
+          if (track.status === 'locked_by_expired_plan') {
+            changed = true;
+            const songDocRef = doc(db, 'songs', track.trackId);
+            setDoc(songDocRef, { status: 'active', updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+              console.error("Error restoring track active state on Firestore root collection:", e);
+            });
+            const legacyDocRef = doc(db, 'artists', artistId, 'musics', track.trackId);
+            setDoc(legacyDocRef, { status: 'active', updatedAt: new Date().toISOString() }, { merge: true }).catch(e => {
+              console.error("Error restoring track active state on legacy subcollection:", e);
+            });
+            return { ...track, status: 'active', updatedAt: new Date().toISOString() };
+          }
+          return track;
+        });
+
+        if (changed) {
+          musicsMap[artistId] = updatedTracks;
+          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        }
+      }
+    } catch (e) {
+      console.error("Error in enforceTracksByPlanValidity:", e);
+    }
+  },
+
+  // Async enforcer that pulls directly from Firestore to unblock/lock songs in full sync
+  async enforceTracksByPlanValidityAsync(userId: string, plan: string, musicLimit?: number) {
+    try {
+      console.log(`[TRACK_RECONCILE_DEBUG] [enforceTracksByPlanValidityAsync] Iniciando reenquadramento para o usuário ${userId}. Plano: ${plan}, Limite fornecido: ${musicLimit}`);
+      
+      let tracks: any[] = [];
+      const songsQuery1 = query(collection(db, 'songs'), where('ownerId', '==', userId));
+      const songsSnap1 = await getDocs(songsQuery1).catch((err) => {
+        console.error(`[TRACK_RECONCILE_DEBUG] Erro ao ler canções por ownerId:`, err);
+        return null;
+      });
+
+      const songsQuery2 = query(collection(db, 'songs'), where('artistId', '==', userId));
+      const songsSnap2 = await getDocs(songsQuery2).catch((err) => {
+        console.error(`[TRACK_RECONCILE_DEBUG] Erro ao ler canções por artistId:`, err);
+        return null;
+      });
+      
+      // Fallback legacy check
+      const legacyColRef = collection(db, 'artists', userId, 'musics');
+      const legacySnap = await getDocs(legacyColRef).catch((err) => {
+        console.error(`[TRACK_RECONCILE_DEBUG] Erro ao ler subcoleção legacy:`, err);
+        return null;
+      });
+
+      const mergedDocsMap = new Map<string, any>();
+
+      if (songsSnap1 && !songsSnap1.empty) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Encontradas ${songsSnap1.docs.length} canções na coleção raiz 'songs' (ownerId).`);
+        songsSnap1.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = docSnap.id || d.songId || d.trackId;
+          mergedDocsMap.set(id, { ...d, id, trackId: id });
+        });
+      }
+
+      if (songsSnap2 && !songsSnap2.empty) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Encontradas ${songsSnap2.docs.length} canções na coleção raiz 'songs' (artistId).`);
+        songsSnap2.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = docSnap.id || d.songId || d.trackId;
+          if (!mergedDocsMap.has(id)) {
+            mergedDocsMap.set(id, { ...d, id, trackId: id });
+          }
+        });
+      }
+
+      if (legacySnap && !legacySnap.empty) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Encontradas ${legacySnap.docs.length} canções na subcoleção legacy 'artists/{id}/musics'.`);
+        legacySnap.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          const id = d.trackId || d.id || docSnap.id;
+          if (!mergedDocsMap.has(id)) {
+            mergedDocsMap.set(id, { ...d, id, trackId: id });
+          }
+        });
+      }
+
+      tracks = Array.from(mergedDocsMap.values()).map(d => {
+        return {
+          trackId: d.trackId || d.id || d.songId,
+          artistId: d.ownerId || d.artistId || userId,
+          title: d.title,
+          status: d.status,
+          position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+          orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+          createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+        };
+      });
+
+      if (tracks.length === 0) {
+        console.log(`[TRACK_RECONCILE_DEBUG] Nenhuma música encontrada para o usuário ${userId}`);
+        return;
+      }
+
+      const cleanPlan = plan || 'free';
+      const maxAllowed = musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'free' ? 3 : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+
+      // Enforce limits on active, locked, undefined, null or empty status (essentially all that are not deleted/inactive)
+      const candidates = tracks.filter(t => 
+        t.status === 'active' || 
+        t.status === 'locked_by_expired_plan' || 
+        t.status === 'undefined' || 
+        !t.status || 
+        t.status === 'null' ||
+        t.status === 'pending'
+      );
+
+      console.log(`[TRACK_RECONCILE_DEBUG] Total de músicas na base: ${tracks.length}. Candidatas qualificadas para limite: ${candidates.length}. Limite permitido para o plano: ${maxAllowed}`);
+
+      const sortedCandidates = [...candidates].sort((a, b) => {
+        const posA = a.orderIndex !== undefined ? a.orderIndex : (a.position !== undefined ? a.position : 99999);
+        const posB = b.orderIndex !== undefined ? b.orderIndex : (b.position !== undefined ? b.position : 99999);
+        if (posA !== posB) return posA - posB;
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+
+      const selectedTracks = sortedCandidates.slice(0, maxAllowed);
+      console.log(`[TRACK_RECONCILE_DEBUG] Faixas selecionadas para ficarem ATIVAS (${selectedTracks.length}):`, selectedTracks.map(s => `"${s.title}" (${s.trackId})`).join(", "));
+
+      const updatePromises = tracks.map(async (track) => {
+        const isCandidate = candidates.some(c => c.trackId === track.trackId);
+        if (isCandidate) {
+          const isSelected = selectedTracks.some(s => s.trackId === track.trackId);
+          const targetStatus = isSelected ? 'active' : 'locked_by_expired_plan';
+          
+          if (track.status !== targetStatus) {
+            console.log(`[TRACK_RECONCILE_DEBUG] Atualizando faixa "${track.title}" (${track.trackId}): status anterior: ${track.status} -> novo status: ${targetStatus}`);
+            const songDocRef = doc(db, 'songs', track.trackId);
+            await setDoc(songDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch((err) => {
+              console.error(`[TRACK_RECONCILE_DEBUG] Erro ao gravar status no documento 'songs/${track.trackId}':`, err);
+            });
+            
+            const legacyDocRef = doc(db, 'artists', userId, 'musics', track.trackId);
+            await setDoc(legacyDocRef, { status: targetStatus, updatedAt: new Date().toISOString() }, { merge: true }).catch((err) => {
+              console.error(`[TRACK_RECONCILE_DEBUG] Erro ao gravar status no documento subcoleção legacy 'artists/${userId}/musics/${track.trackId}':`, err);
+            });
+
+            track.status = targetStatus;
+          } else {
+            console.log(`[TRACK_RECONCILE_DEBUG] Faixa "${track.title}" (${track.trackId}) já está no status correto: ${track.status}`);
+          }
+        }
+        return track;
+      });
+
+      await Promise.all(updatePromises);
+      console.log(`[TRACK_RECONCILE_DEBUG] Sincronização no Firestore concluída.`);
+
+      // Sync user tracks in Admin's local storage LS_MUSICS to keep the active view updated
+      try {
+        const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+        const existingLsTracks: Music[] = musicsMap[userId] || [];
+        
+        const updatedLsTracks = existingLsTracks.map(lsTrack => {
+          const matchingTrack = tracks.find(t => t.trackId === lsTrack.trackId);
+          if (matchingTrack) {
+            return {
+              ...lsTrack,
+              status: matchingTrack.status,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return lsTrack;
+        });
+
+        musicsMap[userId] = updatedLsTracks;
+
+        const artists = this.getAllArtists();
+        const artist = artists[userId];
+        if (artist && artist.slug) {
+          musicsMap[artist.slug] = updatedLsTracks;
+        }
+
+        localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        console.log(`[TRACK_RECONCILE_DEBUG] Sincronização com o cache local efetuada.`);
+      } catch (err) {
+        console.error("[TRACK_RECONCILE_DEBUG] Erro ao atualizar cache local:", err);
+      }
+    } catch (e) {
+      console.error("[TRACK_RECONCILE_DEBUG] Erro geral em enforceTracksByPlanValidityAsync:", e);
+    }
+  },
+
+  // Active signed-in artist session state
+  getCurrentUser(): Artist | null {
+    const u = localStorage.getItem(LS_CURR_USER);
+    if (!u) return null;
+    try {
+      const parsed = JSON.parse(u) as Artist;
+      return this.checkAndRevertExpiredAccess(parsed);
+    } catch {
+      return null;
+    }
+  },
+
+  setCurrentUser(artist: Artist | null) {
+    if (artist) {
+      // Run automatic access expiration check
+      const checkedArtist = this.checkAndRevertExpiredAccess(artist);
+      localStorage.setItem(LS_CURR_USER, JSON.stringify(checkedArtist));
+      
+      const artists = this.getAllArtists();
+      artists[checkedArtist.userId] = checkedArtist;
+      localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+
+      // Note: We removed the unconditional write to Firestore from here because setCurrentUser is called by onSnapshot.
+      // Writing back here was causing an infinite feedback loop of writes and triggering real-time snapshots indefinitely.
+      // Firestore writes are correctly and explicitly handled during actual profile updates, user logins, and when access status changes are computed.
+    } else {
+      localStorage.removeItem(LS_CURR_USER);
+    }
+  },
+
+  getAllArtists(): Record<string, Artist> {
+    const raw = localStorage.getItem(LS_ARTISTS);
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  },
+
+  getArtist(id: string): Artist | null {
+    const normalized = id.toLowerCase().trim();
+    const artists = this.getAllArtists();
+    
+    // Exact or slugged search (replacing accents/spaces)
+    const found = (Object.values(artists) as Artist[]).find((art: Artist) => {
+      const artSlugField = (art.slug || "").toLowerCase().trim();
+      const artSlug = art.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+      const uriSlug = art.userId.toLowerCase();
+      return artSlugField === normalized || artSlug === normalized || uriSlug === normalized || art.userId === id;
+    });
+
+    const artistToReturn = found || artists[id] || null;
+    if (artistToReturn) {
+      return this.checkAndRevertExpiredAccess(artistToReturn);
+    }
+    return null;
+  },
+
+  updateArtistProfile(id: string, updated: Partial<Artist>): Artist {
+    const artists = this.getAllArtists();
+    const existing = artists[id] || {
+      userId: id,
+      name: updated.name || "Artista Desconhecido",
+      email: updated.email || "artist@gmail.com",
+      plan: "free",
+      createdAt: new Date().toISOString()
+    };
+    
+    const saved: Artist = { ...existing, ...updated, updatedAt: new Date().toISOString() };
+    
+    if (updated.name) {
+      const slugifyStr = (text: string) => {
+        return text
+          .toString()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/[\s_]+/g, '-')
+          .replace(/-+/g, '-');
+      };
+      saved.artistName = updated.name;
+      saved.slug = slugifyStr(updated.name);
+    }
+
+    artists[id] = saved;
+    localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+    
+    // If current artist is the edited one, sync session state too
+    const curr = this.getCurrentUser();
+    if (curr && curr.userId === id) {
+      localStorage.setItem(LS_CURR_USER, JSON.stringify(saved));
+    }
+
+    // Sync to Firestore in background (revisits both artists and users)
+    void this.updateArtistProfileLocallyAndFirestore(id, saved).catch(e => {
+      console.error("[updateArtistProfile] Failed background sync to Firestore:", e);
+    });
+
+    return saved;
+  },
+
+  async registerUserInFirestore(uid: string, data: Partial<Artist>): Promise<Artist> {
+    const defaultLimit = 3; // free limit
+    const nowISO = new Date().toISOString();
+    const emailLower = (data.email || '').toLowerCase().trim();
+    const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
+    const role = isMainAdmin ? 'admin' : 'user';
+    
+    // Build a clean Artist profile
+    const newProfile: Artist = {
+      userId: uid,
+      name: data.artistName || data.name || 'Artista',
+      artistName: data.artistName || data.name || 'Artista',
+      email: data.email || '',
+      whatsapp: data.whatsapp || '',
+      phone: data.whatsapp || '',
+      city: data.city || '',
+      state: data.state || '',
+      mainGenre: data.mainGenre || 'Sertanejo',
+      genre: data.mainGenre || 'Sertanejo',
+      instagram: data.instagram || '',
+      userType: data.userType || 'Artista',
+      role: role,
+      plan: 'free',
+      paymentStatus: 'inactive',
+      accessType: 'free',
+      musicLimit: defaultLimit,
+      songsCount: 0,
+      createdAt: nowISO,
+      updatedAt: nowISO,
+      isBlocked: false,
+    };
+
+    // Save locally
+    const artists = this.getAllArtists();
+    artists[uid] = newProfile;
+    localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+    localStorage.setItem(LS_CURR_USER, JSON.stringify(newProfile));
+
+    // Also initialize musics and analytics locally
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    musicsMap[uid] = [];
+    localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+    const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+    analyticsMap[uid] = { artistId: uid, viewsCount: 0, whatsappClicks: 0 };
+    localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+
+    // Dual-write to Firebase Firestore
+    try {
+      // 2. Antes de salvar no Firestore, garantir que o usuário está autenticado:
+      if (auth.currentUser && auth.currentUser.uid === uid) {
+        await auth.currentUser.getIdToken(true);
+      }
+
+      // 3. Salvar o perfil usando setDoc com merge true
+      await setDoc(doc(db, "users", uid), {
+        uid,
+        email: newProfile.email,
+        artistName: newProfile.artistName,
+        userType: newProfile.userType,
+        whatsapp: newProfile.whatsapp,
+        city: newProfile.city,
+        state: newProfile.state,
+        mainGenre: newProfile.mainGenre,
+        instagram: newProfile.instagram,
+        role: role,
+        plan: "free",
+        musicLimit: 3,
+        songsCount: 0,
+        totalPlays: 0,
+        totalViews: 0,
+        whatsappClicks: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Write 'artists'
+      await setDoc(doc(db, "artists", uid), {
+        ...newProfile,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Write initial analytics
+      await setDoc(doc(db, "artists", uid, "analytics", "metrics"), {
+        artistId: uid,
+        viewsCount: 0,
+        whatsappClicks: 0
+      }, { merge: true });
+
+    } catch (e) {
+      console.error("Firestore dual writing during registration failed: ", e);
+      handleFirestoreError(e, OperationType.WRITE, `users/${uid}`);
+    }
+
+    return newProfile;
+  },
+
+  // Save changes to localStorage AND dual-write to Firestore (artists/{id} AND users/{id})
+  updateArtistProfileLocallyAndFirestore(id: string, saved: Artist): Promise<void> {
+    try {
+      const musicCount = (this.getArtistMusics(id) || []).length;
+      const normalizedUser = this.getNormalizedUserData(saved, musicCount);
+
+      const cleanObjectPayload = (obj: any): any => {
+        const clean: any = {};
+        for (const [key, val] of Object.entries(obj)) {
+          if (val !== undefined) {
+            clean[key] = val;
+          }
+        }
+        return clean;
+      };
+
+      const artistsPayload = cleanObjectPayload({
+        ...saved,
+        createdAt: Timestamp.fromDate(new Date(saved.createdAt))
+      });
+
+      const usersPayload = cleanObjectPayload({
+        ...normalizedUser,
+        createdAt: Timestamp.fromDate(new Date(normalizedUser.createdAt)),
+        updatedAt: Timestamp.fromDate(new Date(normalizedUser.updatedAt)),
+        trialEndsAt: normalizedUser.trialEndsAt ? Timestamp.fromDate(new Date(normalizedUser.trialEndsAt)) : null,
+        manualAccessEndsAt: normalizedUser.manualAccessEndsAt ? Timestamp.fromDate(new Date(normalizedUser.manualAccessEndsAt)) : null,
+        subscriptionStartedAt: normalizedUser.subscriptionStartedAt ? Timestamp.fromDate(new Date(normalizedUser.subscriptionStartedAt)) : null,
+        subscriptionEndsAt: normalizedUser.subscriptionEndsAt ? Timestamp.fromDate(new Date(normalizedUser.subscriptionEndsAt)) : null,
+      });
+
+      // Async write to 'artists' collection
+      const p1 = setDoc(doc(db, "artists", id), artistsPayload, { merge: true }).catch(e => {
+        console.error("Failed to sync updated profile to artists: ", e);
+        throw e;
+      });
+
+      // Async write to 'users' collection with raw dates converted to Firestore timestamps
+      const p2 = setDoc(doc(db, "users", id), usersPayload, { merge: true }).catch(e => {
+        console.error("Failed to sync updated profile to users: ", e);
+        throw e;
+      });
+
+      return Promise.all([p1, p2]).then(() => {});
+    } catch (e) {
+      console.error("Firestore sync exception: ", e);
+      return Promise.reject(e);
+    }
+  },
+
+  // Ensure the admin was authenticated & registered in Firestore users collection
+  async ensureAdminAuth(): Promise<void> {
+    const localUserStr = localStorage.getItem(LS_CURR_USER);
+    if (!localUserStr) return;
+    
+    try {
+      const localUser = JSON.parse(localUserStr) as Artist;
+      const emailLower = (localUser.email || '').toLowerCase().trim();
+      
+      if (emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com') {
+        const fireUser = auth.currentUser;
+        // Verify real signed-in credentials match admin email
+        const fireEmailLower = fireUser?.email?.toLowerCase().trim() || '';
+        if (fireUser && (fireEmailLower === 'videopremieroficial@gmail.com' || fireEmailLower === 'sertanejopremier@gmail.com')) {
+          let updatedUser = { ...localUser, role: 'admin' as const };
+          let needsLocalSave = false;
+          
+          // Local index / userId mapping sync with current Auth UID
+          if (localUser.userId !== fireUser.uid) {
+            console.log(`Migrating admin local userId from '${localUser.userId}' to '${fireUser.uid}'`);
+            const artists = this.getAllArtists();
+            if (artists[localUser.userId]) {
+              delete artists[localUser.userId];
+            }
+            
+            updatedUser.userId = fireUser.uid;
+            artists[fireUser.uid] = updatedUser;
+            localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+            needsLocalSave = true;
+          }
+          
+          if (localUser.role !== 'admin') {
+            updatedUser.role = 'admin';
+            needsLocalSave = true;
+          }
+          
+          // Keep Firestore users role matching to satisfy isAdmin() check
+          const usersTableRef = doc(db, 'users', fireUser.uid);
+          const adminData = this.getNormalizedUserData(updatedUser);
+          
+          await setDoc(usersTableRef, {
+            ...adminData,
+            role: 'admin',
+            createdAt: Timestamp.fromDate(new Date(updatedUser.createdAt)),
+            updatedAt: Timestamp.fromDate(new Date())
+          }, { merge: true });
+          
+          // Also sync to artists matching
+          await setDoc(doc(db, 'artists', fireUser.uid), {
+            ...updatedUser,
+            role: 'admin',
+            createdAt: Timestamp.fromDate(new Date(updatedUser.createdAt)),
+            updatedAt: Timestamp.fromDate(new Date())
+          }, { merge: true });
+          
+          if (needsLocalSave) {
+            localStorage.setItem(LS_CURR_USER, JSON.stringify(updatedUser));
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("ensureAdminAuth skipped or failed: ", error);
+    }
+  },
+
+  // Admin Area operations: Loads all user records
+  async getAllUsersForAdmin(): Promise<Artist[]> {
+    try {
+      await this.ensureAdminAuth();
+      
+      const usersMap: Record<string, any> = {};
+      const artistsMap: Record<string, any> = {};
+
+      // 1. Fetch 'users' collection. If this fails, the error propagates to the outer catch
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.forEach(docSnap => {
+        usersMap[docSnap.id] = docSnap.data();
+      });
+
+      // 2. Fetch 'artists' collection for enrichment purposes
+      try {
+        const artistsSnap = await getDocs(collection(db, 'artists'));
+        artistsSnap.forEach(docSnap => {
+          artistsMap[docSnap.id] = docSnap.data();
+        });
+      } catch (err) {
+        console.warn("Could not list 'artists' collection due to permissions or configuration:", err);
+      }
+
+      const dbUsers: Artist[] = [];
+      const primaryUids = Object.keys(usersMap);
+
+      primaryUids.forEach(uid => {
+        const userData = usersMap[uid];
+        const artistDoc = artistsMap[uid] || {};
+
+        const formattedUser = this.mapFirestoreDocToArtist(uid, userData);
+
+        // Enrich empty/missing profile fields from the artists collection
+        if (artistsMap[uid]) {
+          const baseHasName = userData.name || userData.artistName;
+          if (!baseHasName) {
+            if (artistDoc.name) {
+              formattedUser.name = artistDoc.name;
+            }
+            if (artistDoc.artistName) {
+              formattedUser.artistName = artistDoc.artistName;
+            }
+          }
+
+          // Backfill empty avatar/photo fields
+          if (!formattedUser.avatarUrl && artistDoc.avatarUrl) {
+            formattedUser.avatarUrl = artistDoc.avatarUrl;
+          }
+          if (!formattedUser.photoURL && artistDoc.photoURL) {
+            formattedUser.photoURL = artistDoc.photoURL;
+          }
+          if (!formattedUser.profileImageUrl && artistDoc.profileImageUrl) {
+            formattedUser.profileImageUrl = artistDoc.profileImageUrl;
+          }
+
+          // Standardize across any found avatar values
+          const bestAvatar = formattedUser.avatarUrl || formattedUser.profileImageUrl || formattedUser.photoURL;
+          if (bestAvatar) {
+            if (!formattedUser.avatarUrl) formattedUser.avatarUrl = bestAvatar;
+            if (!formattedUser.profileImageUrl) formattedUser.profileImageUrl = bestAvatar;
+            if (!formattedUser.photoURL) formattedUser.photoURL = bestAvatar;
+          }
+        }
+
+        dbUsers.push(formattedUser);
+      });
+
+      const localArtists = this.getAllArtists();
+
+      // Merge local storage users if not in Firestore list
+      const firestoreUids = new Set(dbUsers.map(u => u.userId));
+      const mergedList = [...dbUsers];
+
+      Object.values(localArtists).forEach((art: Artist) => {
+        if (!firestoreUids.has(art.userId)) {
+          const songsCount = (this.getArtistMusics(art.userId) || []).length;
+          const norm = this.getNormalizedUserData(art, songsCount);
+          mergedList.push(norm);
+        }
+      });
+
+      // Synchronize all songs and repertoires in local storage cache for accurate admin calculations
+      try {
+        const allSongsSnap = await getDocs(collection(db, 'songs')).catch(() => null);
+        if (allSongsSnap && !allSongsSnap.empty) {
+          const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+          const songsByOwner: Record<string, Music[]> = {};
+          
+          allSongsSnap.forEach(songDoc => {
+            const d = songDoc.data();
+            const ownerId = d.ownerId || d.artistId;
+            if (ownerId) {
+              if (!songsByOwner[ownerId]) {
+                songsByOwner[ownerId] = [];
+              }
+              songsByOwner[ownerId].push({
+                trackId: songDoc.id || d.songId || d.trackId,
+                artistId: ownerId,
+                title: d.title,
+                composer: d.composer || "",
+                partners: d.partners || "",
+                singer: d.performer || d.singer || "",
+                performer: d.performer || d.singer || "",
+                genre: d.genre || "",
+                description: d.description || "",
+                audioUrl: d.audioUrl,
+                coverUrl: d.coverUrl || "",
+                lyrics: d.lyrics || "",
+                playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                status: d.status || "active",
+                storageProvider: d.storageProvider || "cloudflare_r2",
+                storagePath: d.storagePath || "",
+                fileSize: d.fileSize || 0,
+                mimeType: d.mimeType || "audio/mpeg",
+                originalFileName: d.originalFileName || "",
+                audioFileId: d.audioFileId || "",
+                position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+                orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+                createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+              });
+            }
+          });
+
+          // Update local storage LS_MUSICS for each user
+          Object.entries(songsByOwner).forEach(([ownerId, tracks]) => {
+            musicsMap[ownerId] = tracks;
+            // Also resolve under slugs if they exist
+            const foundArtist = mergedList.find(u => u.userId === ownerId);
+            if (foundArtist && foundArtist.slug) {
+              musicsMap[foundArtist.slug] = tracks;
+            }
+          });
+          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+        }
+
+        const allRepsSnap = await getDocs(collection(db, 'repertoires')).catch(() => null);
+        if (allRepsSnap && !allRepsSnap.empty) {
+          const repsByOwner: Record<string, Repertoire[]> = {};
+          
+          allRepsSnap.forEach(repDoc => {
+            const d = repDoc.data();
+            const ownerUid = d.ownerUid;
+            if (ownerUid) {
+              if (!repsByOwner[ownerUid]) {
+                repsByOwner[ownerUid] = [];
+              }
+              repsByOwner[ownerUid].push({
+                id: repDoc.id,
+                ownerUid: ownerUid,
+                name: d.name || 'Pasta sem Nome',
+                slug: d.slug || '',
+                description: d.description || '',
+                type: d.type || 'repertoire',
+                trackIds: d.trackIds || [],
+                orderedTrackIds: d.orderedTrackIds || d.trackIds || [],
+                visibility: d.visibility || 'active',
+                createdAt: d.createdAt,
+                updatedAt: d.updatedAt
+              });
+            }
+          });
+
+          // No longer caching repertoires in localStorage to make Firestore the single source of truth
+          // Object.entries(repsByOwner).forEach(([ownerUid, reps]) => {
+          //   localStorage.setItem(`somdrive_repertoires_${ownerUid}`, JSON.stringify(reps));
+          // });
+        }
+      } catch (syncErr) {
+        console.error("Error background pre-fetching tracks/repertoires for admin:", syncErr);
+      }
+
+      // Apply expiry check and return
+      const finalList = mergedList.map(u => {
+        return this.checkAndRevertExpiredAccess(u);
+      });
+
+      return finalList;
+    } catch (e) {
+      console.warn("Exception retrieving Firestore users, returning localStorage content:", e);
+      const localArtists = this.getAllArtists();
+      return Object.values(localArtists).map((art: Artist) => {
+        const songsCount = (this.getArtistMusics(art.userId) || []).length;
+        const norm = this.getNormalizedUserData(art, songsCount);
+        return this.checkAndRevertExpiredAccess(norm);
+      });
+    }
+  },
+
+  // Save admin updates directly
+  async updateUserDataFromAdmin(userId: string, updatedFields: Partial<Artist>): Promise<void> {
+    const artists = this.getAllArtists();
+    const existing = artists[userId] || {
+      userId,
+      name: updatedFields.name || "Artista",
+      email: updatedFields.email || "",
+      plan: "free",
+      createdAt: new Date().toISOString()
+    };
+
+    const saved: Artist = {
+      ...existing,
+      ...updatedFields,
+      updatedAt: new Date().toISOString()
+    };
+
+    artists[userId] = saved;
+    localStorage.setItem(LS_ARTISTS, JSON.stringify(artists));
+
+    const curr = this.getCurrentUser();
+    if (curr && curr.userId === userId) {
+      localStorage.setItem(LS_CURR_USER, JSON.stringify(saved));
+    }
+
+    // Single write to local and Firestore dual target
+    await this.updateArtistProfileLocallyAndFirestore(userId, saved).catch(e => {
+      console.error(`[updateUserDataFromAdmin] Failed syncing user ${userId} to Firestore:`, e);
+      throw e;
+    });
+  },
+
+  getTotalSongsCount(): number {
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    let total = 0;
+    Object.values(musicsMap).forEach((songsList: any) => {
+      total += (songsList || []).length;
+    });
+    return total;
+  },
+
+  getArtistMusics(artistId: string): Music[] {
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    
+    // Resolve artistId if it is a slug
+    let targetId = artistId;
+    const artists = this.getAllArtists();
+    const foundArtist = (Object.values(artists) as Artist[]).find((artList: Artist) => {
+      const artSlugField = (artList.slug || "").toLowerCase().trim();
+      const artSlugName = artList.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+      const inputSlug = artistId.toLowerCase().trim();
+      return artSlugField === inputSlug || artSlugName === inputSlug || artList.userId === artistId;
+    });
+    if (foundArtist) {
+      targetId = foundArtist.userId;
+    }
+
+    const tracks: Music[] = musicsMap[targetId] || musicsMap[artistId] || [];
+    return tracks.sort((a, b) => {
+      const getPosVal = (t: Music) => {
+        if (t.orderIndex !== undefined) return t.orderIndex;
+        if (t.position !== undefined) return t.position;
+        return 99999;
+      };
+      const posA = getPosVal(a);
+      const posB = getPosVal(b);
+      if (posA !== posB) return posA - posB;
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeA - timeB;
+    });
+  },
+
+  async saveMusicOrder(artistId: string, orderedTrackIds: string[]): Promise<void> {
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    const tracks: Music[] = musicsMap[artistId] || [];
+
+    const updatedTracks = tracks.map(track => {
+      const newPos = orderedTrackIds.indexOf(track.trackId);
+      const idxVal = newPos !== -1 ? newPos : 99999;
+      return {
+        ...track,
+        position: idxVal,
+        orderIndex: idxVal
+      };
+    });
+
+    updatedTracks.sort((a, b) => {
+      const valA = a.orderIndex ?? a.position ?? 99999;
+      const valB = b.orderIndex ?? b.position ?? 99999;
+      return valA - valB;
+    });
+    musicsMap[artistId] = updatedTracks;
+    localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+    try {
+      for (const track of updatedTracks) {
+        const songRef = doc(db, 'songs', track.trackId);
+        await updateDoc(songRef, { 
+          position: track.orderIndex, 
+          orderIndex: track.orderIndex 
+        }).catch(() => {});
+
+        const legacyRef = doc(db, 'artists', artistId, 'musics', track.trackId);
+        await updateDoc(legacyRef, { 
+          position: track.orderIndex, 
+          orderIndex: track.orderIndex 
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error("Error committing track reorder to Firestore:", e);
+    }
+  },
+
+  async findAudioFileByHash(hash: string): Promise<any | null> {
+    try {
+      const q = query(collection(db, 'audioFiles'), where('audioHash', '==', hash));
+      const snap = await getDocs(q).catch(e => {
+        handleFirestoreError(e, OperationType.GET, 'audioFiles');
+        throw e;
+      });
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      return null;
+    } catch (e) {
+      console.error("Error in findAudioFileByHash:", e);
+      return null;
+    }
+  },
+
+  async createAudioFile(id: string, data: any): Promise<void> {
+    try {
+      const docRef = doc(db, 'audioFiles', id);
+      await setDoc(docRef, {
+        ...data,
+        createdAt: Timestamp.fromDate(new Date())
+      }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `audioFiles/${id}`);
+        throw e;
+      });
+    } catch (e) {
+      console.error("Error in createAudioFile:", e);
+      throw e;
+    }
+  },
+
+  async incrementAudioFileUsage(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'audioFiles', id);
+      await updateDoc(docRef, {
+        usageCount: increment(1)
+      }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `audioFiles/${id}`);
+        throw e;
+      });
+    } catch (e) {
+      console.error("Error in incrementAudioFileUsage:", e);
+      throw e;
+    }
+  },
+
+  async addMusic(artistId: string, track: Omit<Music, 'playsCount' | 'createdAt'>): Promise<Music> {
+    const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+    const tracks: Music[] = musicsMap[artistId] || [];
+
+    const playsValue = track.plays !== undefined ? track.plays : 0;
+    const performerValue = track.performer || track.singer || '';
+    const statusValue = track.status || 'active';
+    const storageProviderValue = track.storageProvider || 'cloudflare_r2';
+
+    const initialIndex = tracks.length;
+
+    const newTrack: Music = {
+      ...track,
+      playsCount: playsValue,
+      plays: playsValue,
+      status: statusValue,
+      performer: performerValue,
+      singer: track.singer || performerValue,
+      storageProvider: storageProviderValue,
+      position: track.position !== undefined ? track.position : initialIndex,
+      orderIndex: track.orderIndex !== undefined ? track.orderIndex : initialIndex,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      repertoireId: track.repertoireId !== undefined ? track.repertoireId : null,
+      publicationDestination: track.publicationDestination || (track.repertoireId ? 'repertoire' : 'general'),
+      isActive: track.isActive !== undefined ? track.isActive : (statusValue === 'active'),
+      isPublic: track.isPublic !== undefined ? track.isPublic : true
+    };
+
+    tracks.push(newTrack);
+    musicsMap[artistId] = tracks;
+    localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+    // Wait for sync to Firestore
+    try {
+      const songPayload = {
+        songId: newTrack.trackId,
+        ownerId: newTrack.artistId,
+        title: newTrack.title,
+        composer: newTrack.composer || '',
+        partners: newTrack.partners || '',
+        performer: newTrack.performer || newTrack.singer || '',
+        genre: newTrack.genre || '',
+        lyrics: newTrack.lyrics || '',
+        description: newTrack.description || '',
+        audioFileId: newTrack.audioFileId || '',
+        audioUrl: newTrack.audioUrl,
+        status: newTrack.status || 'active',
+        storagePath: newTrack.storagePath || '',
+        storageProvider: newTrack.storageProvider || 'cloudflare_r2',
+        fileSize: newTrack.fileSize || 0,
+        mimeType: newTrack.mimeType || 'audio/mpeg',
+        originalFileName: newTrack.originalFileName || '',
+        plays: playsValue,
+        position: newTrack.orderIndex,
+        orderIndex: newTrack.orderIndex,
+        repertoireId: newTrack.repertoireId,
+        publicationDestination: newTrack.publicationDestination,
+        isActive: newTrack.isActive,
+        isPublic: newTrack.isPublic,
+        createdAt: Timestamp.fromDate(new Date(newTrack.createdAt)),
+        updatedAt: Timestamp.fromDate(new Date(newTrack.updatedAt || newTrack.createdAt))
+      };
+
+      // Write to new songs root collection
+      await setDoc(doc(db, "songs", newTrack.trackId), songPayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `songs/${newTrack.trackId}`);
+      });
+
+      // Write to legacy artist musics subcollection of course for flawless compatibility
+      const firestoreTrackPayload = {
+        ...songPayload,
+        id: newTrack.trackId,
+        playsCount: playsValue,
+        trackId: newTrack.trackId,
+        artistId: newTrack.artistId,
+        coverUrl: newTrack.coverUrl || '',
+      };
+
+      await setDoc(doc(db, "artists", artistId, "musics", newTrack.trackId), firestoreTrackPayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `artists/${artistId}/musics/${newTrack.trackId}`);
+      });
+    } catch (e: any) {
+      console.error("erro ao salvar no Firestore:", e);
+      throw e;
+    }
+
+    return newTrack;
+  },
+
+  async incrementPlayCount(artistId: string, trackId: string): Promise<void> {
+    // 1. Persist atomic increments using a single write batch to ensure atomicity
+    try {
+      const batch = writeBatch(db);
+      
+      const songRef = doc(db, "songs", trackId);
+      const artistMusicRef = doc(db, "artists", artistId, "musics", trackId);
+      
+      batch.set(songRef, {
+        plays: increment(1),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      batch.set(artistMusicRef, {
+        playsCount: increment(1),
+        plays: increment(1),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      await batch.commit();
+
+      // 2. Optional local cache update: ONLY update if track exists in cache
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const tracks: Music[] = musicsMap[artistId] || [];
+      const track = tracks.find(t => t.trackId === trackId);
+      if (track) {
+        track.playsCount = (track.playsCount || 0) + 1;
+        track.plays = (track.plays !== undefined ? track.plays : 0) + 1;
+        track.updatedAt = new Date().toISOString();
+        musicsMap[artistId] = tracks;
+        localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+      }
+    } catch (e: any) {
+      console.error("Firestore batch write failed in incrementPlayCount:", e);
+      handleFirestoreError(e, OperationType.WRITE, `songs/${trackId} and artists/${artistId}/musics/${trackId}`);
+      throw e;
+    }
+  },
+
+  getAnalytics(artistId: string): Analytics {
+    const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+    if (!analyticsMap[artistId]) {
+      analyticsMap[artistId] = {
+        artistId,
+        viewsCount: 0,
+        whatsappClicks: 0
+      };
+      localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+    }
+    return analyticsMap[artistId];
+  },
+
+  async incrementAnalyticsView(artistId: string, isProfileView = true, isPlayIncrement = false): Promise<void> {
+    if (!isProfileView && isPlayIncrement) {
+      // Se essa chamada não incrementa nenhum campo de analytics, não realizar uma escrita vazia ou desnecessária no documento.
+      return;
+    }
+
+    const updateData: any = {
+      artistId,
+    };
+
+    if (isProfileView) {
+      updateData.viewsCount = increment(1);
+    } else {
+      updateData.whatsappClicks = increment(1);
+    }
+
+    try {
+      // 1. Remotely persist atomic increment first
+      await setDoc(doc(db, "artists", artistId, "analytics", "metrics"), updateData, { merge: true });
+      
+      // 2. Update local cache only after remote success
+      const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+      if (!analyticsMap[artistId]) {
+        analyticsMap[artistId] = { artistId, viewsCount: 0, whatsappClicks: 0 };
+      }
+      
+      if (isProfileView) {
+        analyticsMap[artistId].viewsCount += 1;
+      } else {
+        analyticsMap[artistId].whatsappClicks += 1;
+      }
+      
+      localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+    } catch (e: any) {
+      console.error("Firestore error in incrementAnalyticsView:", e);
+      handleFirestoreError(e, OperationType.WRITE, `artists/${artistId}/analytics/metrics`);
+      throw e;
+    }
+  },
+
+  // ----------------------------------------------------
+  // Highly robust on-demand Firestore synchronization
+  // ----------------------------------------------------
+  async syncArtistData(artistId: string): Promise<boolean> {
+    try {
+      const normalizedQuery = artistId.trim();
+      const queryLower = normalizedQuery.toLowerCase();
+      let resolvedUserId = normalizedQuery;
+      let artData: any = null;
+
+      // Helper function to create clean slug
+      const generateCleanSlug = (nameStr: string): string => {
+        if (!nameStr) return "";
+        return nameStr
+          .toString()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .replace(/[\s_]+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      };
+
+      // 1. Try to find the document directly by ID in 'artists' collection
+      const artistDocRef = doc(db, 'artists', normalizedQuery);
+      const artistSnap = await getDoc(artistDocRef).catch(error => {
+        console.error("PUBLIC CATALOG LOAD ERROR", {
+          step: "syncArtistData.getDoc(artists-direct)",
+          code: error?.code,
+          message: error?.message,
+          slug: normalizedQuery
+        });
+        return null;
+      });
+
+      if (artistSnap && artistSnap.exists()) {
+        artData = artistSnap.data();
+        resolvedUserId = artData.userId || normalizedQuery;
+      } else {
+        // 2. Query 'artists' collection for slug
+        const qArtists = query(collection(db, 'artists'), where('slug', '==', normalizedQuery));
+        const snapArtists = await getDocs(qArtists).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR", {
+            step: "syncArtistData.getDocs(artists-slug)",
+            code: error?.code,
+            message: error?.message,
+            slug: normalizedQuery
+          });
+          return null;
+        });
+        if (snapArtists && !snapArtists.empty) {
+          const docSnap = snapArtists.docs[0];
+          artData = docSnap.data();
+          resolvedUserId = artData.userId || docSnap.id;
+        } else {
+          // 3. Query 'users' collection for slug
+          const qUsers = query(collection(db, 'users'), where('slug', '==', normalizedQuery));
+          const snapUsers = await getDocs(qUsers).catch(error => {
+            console.error("PUBLIC CATALOG LOAD ERROR", {
+              step: "syncArtistData.getDocs(users-slug)",
+              code: error?.code,
+              message: error?.message,
+              slug: normalizedQuery
+            });
+            return null;
+          });
+          if (snapUsers && !snapUsers.empty) {
+            const docSnap = snapUsers.docs[0];
+            artData = docSnap.data();
+            resolvedUserId = artData.uid || artData.userId || docSnap.id;
+          } else {
+            // 4. Try direct get from 'users' collection too
+            const userDocRef = doc(db, 'users', normalizedQuery);
+            const userSnap = await getDoc(userDocRef).catch(error => {
+              console.error("PUBLIC CATALOG LOAD ERROR", {
+                step: "syncArtistData.getDoc(users-direct)",
+                code: error?.code,
+                message: error?.message,
+                slug: normalizedQuery
+              });
+              return null;
+            });
+            if (userSnap && userSnap.exists()) {
+              artData = userSnap.data();
+              resolvedUserId = artData.uid || artData.userId || normalizedQuery;
+            }
+          }
+        }
+      }
+
+      // If we found the artist data, load complete profile from 'artists/' + resolvedUserId
+      if (resolvedUserId) {
+        const fullArtistRef = doc(db, 'artists', resolvedUserId);
+        const fullArtistSnap = await getDoc(fullArtistRef).catch(error => {
+          console.error("PUBLIC CATALOG LOAD ERROR", {
+            step: "syncArtistData.getDoc(artists-full-profile)",
+            code: error?.code,
+            message: error?.message,
+            slug: normalizedQuery
+          });
+          return null;
+        });
+        if (fullArtistSnap && fullArtistSnap.exists()) {
+          artData = { ...artData, ...fullArtistSnap.data() };
+        }
+
+        // If no slug exists in the doc, generate and save it automatically!
+        if (artData && !artData.slug) {
+          const generatedSlug = generateCleanSlug(artData.name || artData.artistName || "artista");
+          if (generatedSlug) {
+            artData.slug = generatedSlug;
+            
+            // Save to 'artists'
+            await setDoc(doc(db, "artists", resolvedUserId), { slug: generatedSlug }, { merge: true }).catch(err => {
+              console.error("Failed to update auto slug in artists collection:", err);
+            });
+
+            // Save to 'users'
+            await setDoc(doc(db, "users", resolvedUserId), { slug: generatedSlug }, { merge: true }).catch(err => {
+              console.error("Failed to update auto slug in users collection:", err);
+            });
+          }
+        }
+
+        const formattedArtist = this.mapFirestoreDocToArtist(resolvedUserId, artData);
+
+        // Cache artist profile in LocalStorage under BOTH resolvedUserId and slug for instant rendering
+        const cachedArtists = this.getAllArtists();
+        cachedArtists[resolvedUserId] = formattedArtist;
+        if (formattedArtist.slug) {
+          cachedArtists[formattedArtist.slug] = formattedArtist;
+        }
+        if (normalizedQuery !== resolvedUserId && normalizedQuery !== formattedArtist.slug) {
+          cachedArtists[normalizedQuery] = formattedArtist;
+        }
+        localStorage.setItem(LS_ARTISTS, JSON.stringify(cachedArtists));
+
+        const curr = this.getCurrentUser();
+        if (curr && curr.userId === resolvedUserId) {
+          localStorage.setItem(LS_CURR_USER, JSON.stringify(formattedArtist));
+        }
+
+        // Fetch songs from root 'songs' collection and legacy subcollection
+        let fetchedTracks: Music[] = [];
+        const songsQuery1 = query(collection(db, 'songs'), where('ownerId', '==', resolvedUserId));
+        const songsSnap1 = await getDocs(songsQuery1).catch(e => {
+          handleFirestoreError(e, OperationType.GET, 'songs');
+          throw e;
+        });
+
+        const songsQuery2 = query(collection(db, 'songs'), where('artistId', '==', resolvedUserId));
+        const songsSnap2 = await getDocs(songsQuery2).catch(() => null);
+
+        // Fallback to legacy subcollection
+        const legacyColRef = collection(db, 'artists', resolvedUserId, 'musics');
+        const legacySnap = await getDocs(legacyColRef).catch(() => null);
+
+        const mergedDocsMap = new Map<string, any>();
+
+        if (songsSnap1 && !songsSnap1.empty) {
+          songsSnap1.docs.forEach(docSnap => {
+            const d = docSnap.data();
+            const id = docSnap.id || d.songId || d.trackId;
+            mergedDocsMap.set(id, { ...d, id, trackId: id });
+          });
+        }
+
+        if (songsSnap2 && !songsSnap2.empty) {
+          songsSnap2.docs.forEach(docSnap => {
+            const d = docSnap.data();
+            const id = docSnap.id || d.songId || d.trackId;
+            if (!mergedDocsMap.has(id)) {
+              mergedDocsMap.set(id, { ...d, id, trackId: id });
+            }
+          });
+        }
+
+        if (legacySnap && !legacySnap.empty) {
+          legacySnap.docs.forEach(docSnap => {
+            const d = docSnap.data();
+            const id = d.trackId || d.id || docSnap.id;
+            if (!mergedDocsMap.has(id)) {
+              mergedDocsMap.set(id, { ...d, id, trackId: id });
+            }
+          });
+        }
+
+        fetchedTracks = Array.from(mergedDocsMap.values()).map(d => {
+          const trackId = d.trackId || d.id || d.songId;
+          const artistId = d.ownerId || d.artistId || resolvedUserId;
+          return {
+            trackId: trackId,
+            artistId: artistId,
+            title: d.title,
+            composer: d.composer || "",
+            partners: d.partners || "",
+            singer: d.performer || d.singer || "",
+            performer: d.performer || d.singer || "",
+            genre: d.genre || "",
+            description: d.description || "",
+            audioUrl: d.audioUrl,
+            coverUrl: d.coverUrl || "",
+            lyrics: d.lyrics || "",
+            playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+            plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+            status: d.status || "active",
+            storageProvider: d.storageProvider || "cloudflare_r2",
+            storagePath: d.storagePath || "",
+            fileSize: d.fileSize || 0,
+            mimeType: d.mimeType || "audio/mpeg",
+            originalFileName: d.originalFileName || "",
+            audioFileId: d.audioFileId || "",
+            position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+            orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+            updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString(),
+            repertoireId: d.repertoireId !== undefined ? d.repertoireId : null,
+            publicationDestination: d.publicationDestination || (d.repertoireId ? 'repertoire' : 'general'),
+            isActive: d.isActive !== undefined ? d.isActive : (d.status !== 'inactive'),
+            isPublic: d.isPublic !== undefined ? d.isPublic : true
+          };
+        });
+
+        // Automatically migrate/sync these tracks to the root "songs" collection for future correctness with status field
+        for (const track of fetchedTracks) {
+          const songDocRef = doc(db, 'songs', track.trackId);
+          setDoc(songDocRef, {
+            songId: track.trackId,
+            ownerId: track.artistId,
+            title: track.title,
+            composer: track.composer || '',
+            partners: track.partners || '',
+            performer: track.performer || '',
+            genre: track.genre || '',
+            lyrics: track.lyrics || '',
+            description: track.description || '',
+            audioFileId: track.audioFileId || `migrated-${track.trackId}`,
+            audioUrl: track.audioUrl,
+            status: track.status,
+            storagePath: track.storagePath || '',
+            storageProvider: track.storageProvider || 'cloudflare_r2',
+            fileSize: track.fileSize || 0,
+            mimeType: track.mimeType || 'audio/mpeg',
+            originalFileName: track.originalFileName || '',
+            plays: track.plays !== undefined ? track.plays : 0,
+            repertoireId: track.repertoireId !== undefined ? track.repertoireId : null,
+            publicationDestination: track.publicationDestination || 'general',
+            isActive: track.isActive !== undefined ? track.isActive : true,
+            isPublic: track.isPublic !== undefined ? track.isPublic : true,
+            createdAt: Timestamp.fromDate(new Date(track.createdAt)),
+            updatedAt: Timestamp.fromDate(new Date(track.updatedAt || track.createdAt))
+          }, { merge: true }).catch(err => {
+            console.error("Migration to songs collection failed: ", err);
+          });
+        }
+
+        // Cache tracks
+        const allMusics = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+        allMusics[resolvedUserId] = fetchedTracks;
+        if (formattedArtist.slug) {
+          allMusics[formattedArtist.slug] = fetchedTracks;
+        }
+        if (normalizedQuery !== resolvedUserId && normalizedQuery !== formattedArtist.slug) {
+          allMusics[normalizedQuery] = fetchedTracks;
+        }
+        localStorage.setItem(LS_MUSICS, JSON.stringify(allMusics));
+
+        // Fetch analytics
+        const analyticsRef = doc(db, 'artists', resolvedUserId, 'analytics', 'metrics');
+        const analyticsSnap = await getDoc(analyticsRef).catch(e => {
+          handleFirestoreError(e, OperationType.GET, `artists/${resolvedUserId}/analytics/metrics`);
+          throw e;
+        });
+        if (analyticsSnap && analyticsSnap.exists()) {
+          const anData = analyticsSnap.data() as Analytics;
+          const analyticsMap = JSON.parse(localStorage.getItem(LS_ANALYTICS) || "{}");
+          analyticsMap[resolvedUserId] = anData;
+          analyticsMap[normalizedQuery] = anData;
+          if (formattedArtist.slug) {
+            analyticsMap[formattedArtist.slug] = anData;
+          }
+          localStorage.setItem(LS_ANALYTICS, JSON.stringify(analyticsMap));
+        } else {
+          const localAn = this.getAnalytics(resolvedUserId);
+          setDoc(analyticsRef, localAn, { merge: true }).catch(() => {});
+        }
+
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      console.error("syncArtistData failed gracefully, preserving cached offline state: ", e);
+      return false;
+    }
+  },
+
+  // Firebase Storage File Upload
+  async uploadFile(artistId: string, file: File, type: 'audio' | 'cover', progressCallback?: (prog: number) => void): Promise<string> {
+    try {
+      const cleanName = file.name.replace(/[^a-zA-Z0-9ms._-]/g, '').slice(-40);
+      const uniqueId = `file-${Date.now()}-${Math.floor(Math.random() * 899) + 100}`;
+      const folder = type === 'audio' ? 'songs' : 'covers';
+      const storageRef = ref(storage, `artists/${artistId}/${folder}/${uniqueId}_${cleanName}`);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      if (progressCallback) progressCallback(100);
+      return await getDownloadURL(snapshot.ref);
+    } catch (error) {
+      console.error("Firebase Storage Upload Error:", error);
+      throw error;
+    }
+  },
+
+  // Cloudflare R2 Upload for Avatars/Profile Photos
+  async uploadAvatar(userId: string, file: File): Promise<string> {
+    const mimeLower = file.type.toLowerCase();
+    const nameLower = file.name.toLowerCase();
+    const isAcceptedMime = mimeLower === "image/jpeg" || mimeLower === "image/jpg" || mimeLower === "image/png" || mimeLower === "image/webp";
+    const isAcceptedExt = nameLower.endsWith(".jpeg") || nameLower.endsWith(".jpg") || nameLower.endsWith(".png") || nameLower.endsWith(".webp");
+    
+    if (!isAcceptedMime && !isAcceptedExt) {
+      const errMsg = "Formato de arquivo inválido. Apenas imagens nos formatos JPEG, PNG e WEBP são permitidas.";
+      console.error("Formato Inválido ao subir avatar:", {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        userId
+      });
+      throw new Error(errMsg);
+    }
+    
+    const maxSizeBytes = 2 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      const errMsg = "A imagem é muito grande. O limite máximo é de 2 MB.";
+      console.error("Tamanho Excedido ao subir avatar:", {
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        userId
+      });
+      throw new Error(errMsg);
+    }
+
+    let uploadUrl = "";
+    let publicImageUrl = "";
+
+    // 1. Obter URL presignada do R2
+    try {
+      const response = await fetch("/api/r2-presigned-image-upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fileType: file.type || "image/jpeg",
+          fileSize: file.size,
+          userId,
+          fileName: file.name
+        })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP error ${response.status}`);
+      }
+
+      const resData = await response.json();
+      uploadUrl = resData.uploadUrl;
+      publicImageUrl = resData.publicImageUrl;
+    } catch (err: any) {
+      console.error("erro ao gerar URL R2", {
+        error: err.message || String(err),
+        userId,
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        }
+      });
+      throw new Error("Não foi possível gerar a autorização de upload do R2.");
+    }
+
+    // 2. PUT da imagem para o R2 (usando a URL gerada)
+    let usedProxy = false;
+    try {
+      console.log("Tentando upload direto (PUT) no R2 com pre-signed URL...");
+      const putResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "image/jpeg"
+        },
+        body: file
+      });
+
+      if (!putResponse.ok) {
+        throw new Error(`HTTP status ${putResponse.status}`);
+      }
+      console.log("Upload direto com PUT concluído com sucesso.");
+    } catch (err: any) {
+      console.warn("Upload direto PUT falhou (provável CORS ou restrição de rede). Tentando rota proxy de contingência...", err);
+      try {
+        console.log("Iniciando fallback via proxy de imagem R2...");
+        const proxyResponse = await fetch("/api/r2-proxy-image-upload", {
+          method: "POST",
+          headers: {
+            "x-file-name": encodeURIComponent(file.name),
+            "x-file-type": file.type || "image/jpeg",
+            "x-file-size": String(file.size),
+            "x-user-id": userId
+          },
+          body: file
+        });
+
+        if (!proxyResponse.ok) {
+          const errData = await proxyResponse.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${proxyResponse.status}`);
+        }
+
+        const proxyData = await proxyResponse.json();
+        publicImageUrl = proxyData.publicImageUrl;
+        usedProxy = true;
+        console.log("Upload via proxy de contingência realizado com sucesso:", publicImageUrl);
+      } catch (proxyErr: any) {
+        console.error("erro no PUT da imagem", {
+          error: proxyErr.message || String(proxyErr),
+          userId,
+          file: {
+            name: file.name,
+            type: file.type,
+            size: file.size
+          }
+        });
+        throw new Error("Não foi possível enviar a imagem para o servidor de armazenamento.");
+      }
+    }
+
+    // 3. Salvar no Firestore users/{userId} e artists/{userId}
+    try {
+      const userRef = doc(db, "users", userId);
+      const artistRef = doc(db, "artists", userId);
+
+      const updatePayload = {
+        avatarUrl: publicImageUrl,
+        photoURL: publicImageUrl,
+        profileImageUrl: publicImageUrl,
+        updatedAt: serverTimestamp()
+      };
+
+      await setDoc(userRef, updatePayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `users/${userId}`);
+        throw err;
+      });
+
+      await setDoc(artistRef, updatePayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `artists/${userId}`);
+        throw err;
+      });
+    } catch (err: any) {
+      console.error("erro ao salvar Firestore", {
+        error: err.message || String(err),
+        userId,
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size
+        }
+      });
+      throw new Error("Não foi possível salvar os caminhos da imagem no banco de dados.");
+    }
+
+    return publicImageUrl;
+  },
+
+  async deleteMusic(artistId: string, trackId: string): Promise<boolean> {
+    try {
+      // Async delete from firestore (both songs and artists subcol)
+      const songDocRef = doc(db, 'songs', trackId);
+      await deleteDoc(songDocRef).catch(e => {
+        handleFirestoreError(e, OperationType.DELETE, `songs/${trackId}`);
+        throw e;
+      });
+
+      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
+      await deleteDoc(musicDocRef).catch(() => {
+        // Fallback catch, the legacy record might not exist or failed, but don't block
+      });
+
+      // Local storage cleanup
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const currentList: Music[] = musicsMap[artistId] || [];
+      const updatedList = currentList.filter(t => t.trackId !== trackId);
+      musicsMap[artistId] = updatedList;
+      localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+      return true;
+    } catch (e) {
+      console.error("Error deleting music:", e);
+      return false;
+    }
+  },
+
+  async toggleMusicStatus(artistId: string, trackId: string, currentStatus: string): Promise<string> {
+    try {
+      const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+      
+      const songDocRef = doc(db, 'songs', trackId);
+      await setDoc(songDocRef, {
+        status: nextStatus,
+        updatedAt: Timestamp.fromDate(new Date())
+      }, { merge: true }).catch(e => {
+        handleFirestoreError(e, OperationType.WRITE, `songs/${trackId}`);
+        throw e;
+      });
+
+      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
+      await setDoc(musicDocRef, {
+        status: nextStatus,
+        updatedAt: Timestamp.fromDate(new Date())
+      }, { merge: true }).catch(() => {
+        // Legacy fallback
+      });
+
+      // Update locally
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const currentList: Music[] = musicsMap[artistId] || [];
+      const updatedList = currentList.map(t => t.trackId === trackId ? { ...t, status: nextStatus, updatedAt: new Date().toISOString() } : t);
+      musicsMap[artistId] = updatedList;
+      localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+      return nextStatus;
+    } catch (e) {
+      console.error("Error toggling music status:", e);
+      throw e;
+    }
+  },
+
+  async updateMusic(artistId: string, trackId: string, updatedFields: Partial<Music>): Promise<Music> {
+    try {
+      // Local storage tables update
+      const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+      const currentList: Music[] = musicsMap[artistId] || [];
+      const updatedList = currentList.map(t => {
+        if (t.trackId === trackId) {
+          return {
+            ...t,
+            ...updatedFields,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return t;
+      });
+      musicsMap[artistId] = updatedList;
+      localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+
+      const updatedTrack = updatedList.find(t => t.trackId === trackId)!;
+
+      // Firestore update in 'songs' collection
+      const songsDocRef = doc(db, 'songs', trackId);
+      const songsPayload: any = {
+        title: updatedTrack.title,
+        genre: updatedTrack.genre || '',
+        composer: updatedTrack.composer || '',
+        performer: updatedTrack.performer || updatedTrack.singer || '',
+        singer: updatedTrack.singer || updatedTrack.performer || '',
+        partners: updatedTrack.partners || '',
+        description: updatedTrack.description || '',
+        lyrics: updatedTrack.lyrics || '',
+        updatedAt: Timestamp.fromDate(new Date())
+      };
+      
+      if (updatedTrack.coverUrl) {
+        songsPayload.coverUrl = updatedTrack.coverUrl;
+      }
+
+      if (updatedTrack.audioUrl) {
+        songsPayload.audioUrl = updatedTrack.audioUrl;
+      }
+      if (updatedTrack.storagePath) {
+        songsPayload.storagePath = updatedTrack.storagePath;
+      }
+      if (updatedTrack.fileSize !== undefined) {
+        songsPayload.fileSize = updatedTrack.fileSize;
+      }
+      if (updatedTrack.mimeType) {
+        songsPayload.mimeType = updatedTrack.mimeType;
+      }
+      if (updatedTrack.originalFileName) {
+        songsPayload.originalFileName = updatedTrack.originalFileName;
+      }
+
+      if (updatedTrack.repertoireId !== undefined) {
+        songsPayload.repertoireId = updatedTrack.repertoireId;
+      }
+      if (updatedTrack.publicationDestination !== undefined) {
+        songsPayload.publicationDestination = updatedTrack.publicationDestination;
+      }
+      if (updatedTrack.status !== undefined) {
+        songsPayload.status = updatedTrack.status;
+        songsPayload.isActive = updatedTrack.status === 'active';
+        songsPayload.isPublic = updatedTrack.status === 'active';
+      } else {
+        if (updatedTrack.isActive !== undefined) {
+          songsPayload.isActive = updatedTrack.isActive;
+        }
+        if (updatedTrack.isPublic !== undefined) {
+          songsPayload.isPublic = updatedTrack.isPublic;
+        }
+      }
+
+      await setDoc(songsDocRef, songsPayload, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `songs/${trackId}`);
+        throw err;
+      });
+
+      // Firestore update in parent subcollection for seamless UI compatibility
+      const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
+      const legacyPayload = {
+        ...songsPayload,
+        playsCount: updatedTrack.playsCount,
+        plays: updatedTrack.plays || updatedTrack.playsCount,
+        id: trackId,
+        trackId: trackId,
+        artistId: artistId,
+        coverUrl: updatedTrack.coverUrl || '',
+      };
+      await setDoc(musicDocRef, legacyPayload, { merge: true }).catch(() => {
+        // Fallback for subcollection if it doesn't exist or is legacy
+      });
+
+      return updatedTrack;
+    } catch (e) {
+      console.error("Error updating music:", e);
+      throw e;
+    }
+  },
+
+  async getPaymentSettings(): Promise<PaymentSettings | null> {
+    try {
+      const docRef = doc(db, 'settings', 'payment');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as PaymentSettings;
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching payment settings:", e);
+      return null;
+    }
+  },
+
+  async updatePaymentSettings(settings: Partial<PaymentSettings>, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'payment');
+      const dataToSave = {
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/payment');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating payment settings:", e);
+      throw e;
+    }
+  },
+
+  async getShareCardSettings(): Promise<ShareCardSettings | null> {
+    try {
+      const docRef = doc(db, 'settings', 'shareCard');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data() as ShareCardSettings;
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching share card settings:", e);
+      return null;
+    }
+  },
+
+  async deleteShareCardSettings(updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'shareCard');
+      const dataToSave = {
+        ogImageUrl: "",
+        ogImageVersion: String(Date.now()),
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/shareCard');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error deleting share card settings:", e);
+      throw e;
+    }
+  },
+
+  async updateShareCardSettings(ogImageUrl: string, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'shareCard');
+      const dataToSave = {
+        ogImageUrl,
+        ogImageVersion: String(Date.now()),
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/shareCard');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating share card settings:", e);
+      throw e;
+    }
+  },
+
+  async getAppearanceSettings(): Promise<AppearanceSettings> {
+    try {
+      const docRef = doc(db, 'settings', 'appearance');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          logoScale: typeof data.logoScale === 'number' ? data.logoScale : 1.0,
+          showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
+          customLogoUrl: typeof data.customLogoUrl === 'string' ? data.customLogoUrl : '',
+          updatedAt: data.updatedAt,
+          updatedBy: data.updatedBy
+        };
+      }
+      return { logoScale: 1.0, showLogo: true, customLogoUrl: '' };
+    } catch (e) {
+      console.error("Error fetching appearance settings:", e);
+      return { logoScale: 1.0, showLogo: true, customLogoUrl: '' };
+    }
+  },
+
+  async updateAppearanceSettings(settings: { logoScale?: number; showLogo?: boolean; customLogoUrl?: string }, updatedBy: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'settings', 'appearance');
+      const dataToSave = {
+        ...settings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: updatedBy
+      };
+      await setDoc(docRef, dataToSave, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/appearance');
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error updating appearance settings:", e);
+      throw e;
+    }
+  },
+
+  // ================= REPERTOIRES & PROJECTS STORAGE LAYER =================
+  async getRepertoires(ownerUid: string, onlyPublic?: boolean): Promise<Repertoire[]> {
+    try {
+      // Query repertoires: filter by visibility for public users to obey Firestore security rules safely
+      let q;
+      if (onlyPublic) {
+        q = query(
+          collection(db, 'repertoires'),
+          where('ownerUid', '==', ownerUid),
+          where('visibility', '==', 'public')
+        );
+      } else {
+        q = query(collection(db, 'repertoires'), where('ownerUid', '==', ownerUid));
+      }
+
+      const snap = await getDocs(q).catch(e => {
+        const error = e as any;
+        console.error("PUBLIC CATALOG LOAD ERROR", {
+          step: "getRepertoires",
+          code: error?.code,
+          message: error?.message,
+          ownerUid
+        });
+        if (onlyPublic) {
+          // Return null to fall through gracefully without throwing and crashing the page
+          return null;
+        }
+        handleFirestoreError(e, OperationType.GET, 'repertoires');
+        throw e;
+      });
+
+      if (snap && !snap.empty) {
+        const reps: Repertoire[] = snap.docs.map(docSnap => {
+          const data = docSnap.data();
+          let visibilityVal = data.visibility || 'public';
+          if (visibilityVal === 'active') visibilityVal = 'public';
+          return {
+            id: docSnap.id,
+            ownerUid: data.ownerUid,
+            name: data.name,
+            slug: data.slug || '',
+            description: data.description || '',
+            type: data.type || 'repertoire',
+            trackIds: data.trackIds || [],
+            orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+            visibility: (visibilityVal === 'unlisted') ? 'unlisted' : (visibilityVal === 'private') ? 'private' : 'public',
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString()
+          } as Repertoire;
+        });
+
+        // Upgrade and save slugs or corrected visibility for any repertoires needing updates
+        const finalReps: Repertoire[] = [];
+        for (const rep of reps) {
+          let needsRemoteUpdate = false;
+          const remoteUpdates: any = {};
+
+          if (!rep.slug) {
+            const baseSlug = createSlug(rep.name || 'repertorio');
+            let uniqueSlug = baseSlug;
+            let counter = 2;
+            while (
+              finalReps.some(r => r.slug === uniqueSlug) ||
+              reps.some(r => r.id !== rep.id && r.slug === uniqueSlug)
+            ) {
+              uniqueSlug = `${baseSlug}-${counter}`;
+              counter++;
+            }
+            rep.slug = uniqueSlug;
+            remoteUpdates.slug = uniqueSlug;
+            needsRemoteUpdate = true;
+          }
+
+          const snapDoc = snap.docs.find(d => d.id === rep.id);
+          const rawDbVal = snapDoc ? snapDoc.data().visibility : null;
+          if (rawDbVal === 'active' || !rawDbVal) {
+            remoteUpdates.visibility = 'public';
+            needsRemoteUpdate = true;
+          }
+
+          if (needsRemoteUpdate) {
+            try {
+              const docRef = doc(db, 'repertoires', rep.id);
+              await setDoc(docRef, remoteUpdates, { merge: true }).catch(err => {
+                handleFirestoreError(err, OperationType.WRITE, `repertoires/${rep.id}`);
+                throw err;
+              });
+            } catch (err) {
+              console.error("Firestore connection issue during auto-upgrade:", err);
+            }
+          }
+          finalReps.push(rep);
+        }
+
+        if (onlyPublic) {
+          return finalReps.filter(r => r.visibility === 'public');
+        }
+        return finalReps;
+      }
+    } catch (e) {
+      console.error("Error in getRepertoires:", e);
+      throw e;
+    }
+    return [];
+  },
+
+  async getRepertoireBySlugOrId(ownerUid: string, slugOrId: string): Promise<Repertoire | null> {
+    try {
+      // 1. Try slug query first
+      const q = query(
+        collection(db, 'repertoires'),
+        where('ownerUid', '==', ownerUid),
+        where('slug', '==', slugOrId)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        const data = docSnap.data();
+        let visibilityVal = data.visibility || 'public';
+        if (visibilityVal === 'active') visibilityVal = 'public';
+        return {
+          id: docSnap.id,
+          ownerUid: data.ownerUid,
+          name: data.name,
+          slug: data.slug || '',
+          description: data.description || '',
+          type: data.type || 'repertoire',
+          trackIds: data.trackIds || [],
+          orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+          visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? 'unlisted' : 'public',
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString()
+        } as Repertoire;
+      }
+
+      // 2. Fallback to direct document ID check
+      if (slugOrId.startsWith('rep_') || /^[A-Za-z0-9_-]{20,36}$/.test(slugOrId)) {
+        const docRef = doc(db, 'repertoires', slugOrId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.ownerUid === ownerUid) {
+            let visibilityVal = data.visibility || 'public';
+            if (visibilityVal === 'active') visibilityVal = 'public';
+            return {
+              id: docSnap.id,
+              ownerUid: data.ownerUid,
+              name: data.name,
+              slug: data.slug || '',
+              description: data.description || '',
+              type: data.type || 'repertoire',
+              trackIds: data.trackIds || [],
+              orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+              visibility: (visibilityVal === 'unlisted' || visibilityVal === 'private') ? 'unlisted' : 'public',
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt || new Date().toISOString()
+            } as Repertoire;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error in getRepertoireBySlugOrId:", err);
+    }
+    return null;
+  },
+
+  async saveRepertoire(repertoire: Repertoire): Promise<Repertoire> {
+    const ownerUid = repertoire.ownerUid;
+    
+    // Ensure slug is populated
+    if (!repertoire.slug) {
+      const baseSlug = createSlug(repertoire.name || 'repertorio');
+      const currentReps = await this.getRepertoires(ownerUid);
+      const otherReps = currentReps.filter(r => r.id !== repertoire.id);
+      
+      let uniqueSlug = baseSlug;
+      let counter = 2;
+      while (otherReps.some(r => r.slug === uniqueSlug)) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+      repertoire.slug = uniqueSlug;
+    }
+
+    // Force strict normalized visibility values to fully match Firestore queries
+    const normalizedVisibility: "public" | "unlisted" | "private" = (repertoire.visibility === 'unlisted') ? 'unlisted' : (repertoire.visibility === 'private') ? 'private' : 'public';
+
+    const savedRep: Repertoire = { 
+      ...repertoire, 
+      visibility: normalizedVisibility,
+      createdAt: repertoire.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString() 
+    };
+
+    try {
+      // Sync strictly to Firestore - do NOT cache or fallback in localStorage
+      const docRef = doc(db, 'repertoires', repertoire.id);
+      await setDoc(docRef, savedRep, { merge: true }).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `repertoires/${repertoire.id}`);
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error inside saveRepertoire:", e);
+      throw e;
+    }
+
+    return savedRep;
+  },
+
+  async deleteRepertoire(id: string, ownerUid: string): Promise<void> {
+    try {
+      // Delete strictly from Firestore - do NOT cache or fallback in localStorage
+      const docRef = doc(db, 'repertoires', id);
+      await deleteDoc(docRef).catch(err => {
+        handleFirestoreError(err, OperationType.DELETE, `repertoires/${id}`);
+        throw err;
+      });
+    } catch (e) {
+      console.error("Error inside deleteRepertoire:", e);
+      throw e;
+    }
+  },
+
+  async getProjects(ownerUid: string): Promise<Project[]> {
+    const localKey = `somdrive_projects_${ownerUid}`;
+    try {
+      const q = query(collection(db, 'projects'), where('ownerUid', '==', ownerUid));
+      const snap = await getDocs(q).catch(e => {
+        console.warn("Could not fetch projects from Firestore, using local fallback", e);
+        return null;
+      });
+
+      if (snap && !snap.empty) {
+        const projs: Project[] = snap.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ownerUid: data.ownerUid,
+            name: data.name,
+            description: data.description || '',
+            type: data.type || 'Sertanejo',
+            trackIds: data.trackIds || [],
+            orderedTrackIds: data.orderedTrackIds || data.trackIds || [],
+            status: data.status || 'draft',
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString()
+          } as Project;
+        });
+        localStorage.setItem(localKey, JSON.stringify(projs));
+        return projs;
+      }
+    } catch (e) {
+      console.error("Error in getProjects:", e);
+    }
+
+    const cached = localStorage.getItem(localKey);
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  async saveProject(project: Project): Promise<void> {
+    const ownerUid = project.ownerUid;
+    const localKey = `somdrive_projects_${ownerUid}`;
+    
+    // Save to LocalStorage first
+    const cached = localStorage.getItem(localKey);
+    let projs: Project[] = cached ? JSON.parse(cached) : [];
+    const index = projs.findIndex(p => p.id === project.id);
+    if (index !== -1) {
+      projs[index] = { ...project, updatedAt: new Date().toISOString() };
+    } else {
+      projs.push({ ...project, createdAt: project.createdAt || new Date().toISOString() });
+    }
+    localStorage.setItem(localKey, JSON.stringify(projs));
+
+    // Sync to Firestore
+    try {
+      const docRef = doc(db, 'projects', project.id);
+      await setDoc(docRef, { ...project, updatedAt: new Date().toISOString() }, { merge: true }).catch(err => {
+        console.error("Error writing project to Firestore:", err);
+      });
+    } catch (e) {
+      console.error("Sync error in saveProject:", e);
+    }
+  },
+
+  async deleteProject(id: string, ownerUid: string): Promise<void> {
+    const localKey = `somdrive_projects_${ownerUid}`;
+    
+    // Delete from LocalStorage first
+    const cached = localStorage.getItem(localKey);
+    if (cached) {
+      let projs: Project[] = JSON.parse(cached);
+      projs = projs.filter(p => p.id !== id);
+      localStorage.setItem(localKey, JSON.stringify(projs));
+    }
+
+    // Delete from Firestore
+    try {
+      const docRef = doc(db, 'projects', id);
+      await deleteDoc(docRef).catch(err => {
+        console.error("Error deleting project in Firestore:", err);
+      });
+    } catch (e) {
+      console.error("Deletion error in deleteProject:", e);
+    }
+  },
+
+  async getAnnouncements(onlyActive: boolean): Promise<Announcement[]> {
+    try {
+      if (!auth.currentUser) {
+        return [];
+      }
+      let q;
+      if (onlyActive) {
+        q = query(collection(db, 'announcements'), where('isActive', '==', true));
+      } else {
+        q = query(collection(db, 'announcements'));
+      }
+      
+      const snap = await getDocs(q);
+      const list: Announcement[] = [];
+      
+      snap.forEach(d => {
+        const data = d.data() as any;
+        list.push({
+          id: d.id,
+          title: data.title || '',
+          type: data.type || 'announcement',
+          summary: data.summary || '',
+          content: data.content || '',
+          imageUrl: data.imageUrl || '',
+          imageStoragePath: data.imageStoragePath || '',
+          whatsappNumber: data.whatsappNumber || '',
+          whatsappMessage: data.whatsappMessage || '',
+          buttonText: data.buttonText || '',
+          buttonUrl: data.buttonUrl || '',
+          priority: typeof data.priority === 'number' ? data.priority : 0,
+          isActive: typeof data.isActive === 'boolean' ? data.isActive : false,
+          startsAt: parseTimestamp(data.startsAt) || new Date().toISOString(),
+          endsAt: data.endsAt ? parseTimestamp(data.endsAt) : null,
+          createdAt: parseTimestamp(data.createdAt) || new Date().toISOString(),
+          updatedAt: parseTimestamp(data.updatedAt) || new Date().toISOString(),
+          createdBy: data.createdBy || '',
+        });
+      });
+
+      // Sort by priority desc, then createdAt desc
+      list.sort((a, b) => {
+        if (b.priority !== a.priority) {
+          return b.priority - a.priority;
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+      return list;
+    } catch (e) {
+      console.error("Error loading announcements:", e);
+      return [];
+    }
+  },
+
+  async saveAnnouncement(announcement: Announcement, isEditExplicit?: boolean): Promise<void> {
+    try {
+      const docRef = doc(db, 'announcements', announcement.id);
+      
+      const cleanTitle = (announcement.title || '').trim();
+      const cleanSummary = (announcement.summary || '').trim();
+      const cleanType = announcement.type;
+      const cleanPriority = Number(announcement.priority);
+      const isPublished = Boolean(announcement.isActive);
+      const startsAtDate = new Date(announcement.startsAt);
+
+      if (!cleanTitle || !cleanSummary || !announcement.startsAt || isNaN(startsAtDate.getTime())) {
+        throw new Error("Campos obrigatórios inválidos ou ausentes (Título, Resumo e Data de Início).");
+      }
+
+      const isEdit = isEditExplicit !== undefined ? isEditExplicit : !!announcement.createdAt;
+      
+      let finalCreatedAt: any = Timestamp.fromDate(new Date());
+      if (isEdit && announcement.createdAt) {
+        const parsedCreated = new Date(announcement.createdAt);
+        if (!isNaN(parsedCreated.getTime())) {
+          finalCreatedAt = Timestamp.fromDate(parsedCreated);
+        }
+      }
+
+      const firestoreData: any = {
+        id: announcement.id,
+        title: cleanTitle,
+        type: cleanType,
+        summary: cleanSummary,
+        priority: cleanPriority,
+        
+        // Backward compatibility flags
+        isActive: isPublished,
+        // Requested flag
+        isPublished: isPublished,
+        
+        // StartsAt (Standard/Backward Compatibility) & startAt (New)
+        startsAt: Timestamp.fromDate(startsAtDate),
+        startAt: Timestamp.fromDate(startsAtDate),
+        
+        // Creator
+        createdBy: (announcement.createdBy || auth.currentUser?.uid || '').trim(),
+        
+        // Timestamps using robust client-side Timestamps to guarantee type correctness in security rules
+        createdAt: finalCreatedAt,
+        updatedAt: Timestamp.fromDate(new Date())
+      };
+
+      // Optional fields: only save if defined and not empty, otherwise delete them if editing
+      
+      // content & details
+      if (announcement.content !== undefined && announcement.content !== null && announcement.content.trim() !== '') {
+        const cleanContent = announcement.content.trim();
+        firestoreData.content = cleanContent;
+        firestoreData.details = cleanContent;
+      } else if (isEdit) {
+        firestoreData.content = deleteField();
+        firestoreData.details = deleteField();
+      }
+
+      // imageUrl
+      if (announcement.imageUrl !== undefined && announcement.imageUrl !== null && announcement.imageUrl.trim() !== '') {
+        firestoreData.imageUrl = announcement.imageUrl.trim();
+      } else if (isEdit) {
+        firestoreData.imageUrl = deleteField();
+      }
+
+      // imageStoragePath
+      if (announcement.imageStoragePath !== undefined && announcement.imageStoragePath !== null && announcement.imageStoragePath.trim() !== '') {
+        firestoreData.imageStoragePath = announcement.imageStoragePath.trim();
+      } else if (isEdit) {
+        firestoreData.imageStoragePath = deleteField();
+      }
+
+      // whatsappNumber
+      if (announcement.whatsappNumber !== undefined && announcement.whatsappNumber !== null && announcement.whatsappNumber.trim() !== '') {
+        firestoreData.whatsappNumber = announcement.whatsappNumber.trim();
+      } else if (isEdit) {
+        firestoreData.whatsappNumber = deleteField();
+      }
+
+      // whatsappMessage
+      if (announcement.whatsappMessage !== undefined && announcement.whatsappMessage !== null && announcement.whatsappMessage.trim() !== '') {
+        firestoreData.whatsappMessage = announcement.whatsappMessage.trim();
+      } else if (isEdit) {
+        firestoreData.whatsappMessage = deleteField();
+      }
+
+      // buttonText & actionButtonText
+      if (announcement.buttonText !== undefined && announcement.buttonText !== null && announcement.buttonText.trim() !== '') {
+        const cleanBtnText = announcement.buttonText.trim();
+        firestoreData.buttonText = cleanBtnText;
+        firestoreData.actionButtonText = cleanBtnText;
+      } else if (isEdit) {
+        firestoreData.buttonText = deleteField();
+        firestoreData.actionButtonText = deleteField();
+      }
+
+      // buttonUrl & actionButtonUrl
+      if (announcement.buttonUrl !== undefined && announcement.buttonUrl !== null && announcement.buttonUrl.trim() !== '') {
+        const cleanBtnUrl = announcement.buttonUrl.trim();
+        firestoreData.buttonUrl = cleanBtnUrl;
+        firestoreData.actionButtonUrl = cleanBtnUrl;
+      } else if (isEdit) {
+        firestoreData.buttonUrl = deleteField();
+        firestoreData.actionButtonUrl = deleteField();
+      }
+
+      // endsAt & endAt
+      if (announcement.endsAt !== undefined && announcement.endsAt !== null && announcement.endsAt !== '') {
+        const endsAtDate = new Date(announcement.endsAt);
+        if (!isNaN(endsAtDate.getTime())) {
+          firestoreData.endsAt = Timestamp.fromDate(endsAtDate);
+          firestoreData.endAt = Timestamp.fromDate(endsAtDate);
+        } else if (isEdit) {
+          firestoreData.endsAt = deleteField();
+          firestoreData.endAt = deleteField();
+        }
+      } else if (isEdit) {
+        firestoreData.endsAt = deleteField();
+        firestoreData.endAt = deleteField();
+      }
+
+      // Sanitize firestoreData to remove any keys that are undefined or null
+      Object.keys(firestoreData).forEach(key => {
+        if (firestoreData[key] === undefined || firestoreData[key] === null) {
+          delete firestoreData[key];
+        }
+      });
+
+      console.log("[ANNOUNCEMENT 5] payload preparado");
+      console.log("[ANNOUNCEMENT PAYLOAD]", firestoreData);
+      console.log("[ANNOUNCEMENT 6] antes do setDoc");
+      await setDoc(docRef, firestoreData, { merge: true });
+      console.log("[ANNOUNCEMENT 7] setDoc concluído");
+    } catch (e) {
+      console.error("[ANNOUNCEMENT ERROR]", e);
+      console.error("Error saving announcement to Firestore:", e);
+      handleFirestoreError(e, OperationType.WRITE, `announcements/${announcement.id}`);
+    }
+  },
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'announcements', id);
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.error("Error deleting announcement from Firestore:", e);
+      handleFirestoreError(e, OperationType.DELETE, `announcements/${id}`);
+    }
+  },
+
+  async uploadAnnouncementImage(announcementId: string, file: File): Promise<{ imageUrl: string, imageStoragePath: string }> {
+    try {
+      const maxSizeBytes = 2 * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        throw new Error("A imagem é muito grande. O limite máximo é de 2 MB.");
+      }
+
+      const userId = auth.currentUser?.uid || "admin";
+      let uploadUrl = "";
+      let publicImageUrl = "";
+
+      // 20-second timeout using AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.warn("[ANNOUNCEMENT IMAGE TIMEOUT] Tempo limite de 20 segundos atingido para upload.");
+        controller.abort();
+      }, 20000);
+
+      try {
+        const response = await fetch("/api/r2-presigned-image-upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            fileType: file.type || "image/jpeg",
+            fileSize: file.size,
+            userId,
+            fileName: file.name
+          }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => ({}));
+          throw new Error(errJson.error || `HTTP error ${response.status}`);
+        }
+
+        const resData = await response.json();
+        uploadUrl = resData.uploadUrl;
+        publicImageUrl = resData.publicImageUrl;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        console.error("Erro ao obter URL presignada R2:", err);
+        throw new Error("Não foi possível gerar a autorização de upload do R2.");
+      }
+
+      try {
+        console.log("Tentando upload direto (PUT) no R2 com pre-signed URL...");
+        const putResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type || "image/jpeg"
+          },
+          body: file,
+          signal: controller.signal
+        });
+
+        if (!putResponse.ok) {
+          throw new Error(`HTTP status ${putResponse.status}`);
+        }
+        clearTimeout(timeoutId);
+        console.log("Upload direto PUT no R2 concluído com sucesso.");
+        return { imageUrl: publicImageUrl, imageStoragePath: "" };
+      } catch (err: any) {
+        console.warn("Upload direto PUT falhou (CORS ou rede). Tentando rota proxy de contingência...", err);
+        
+        const fallbackController = new AbortController();
+        const fallbackTimeoutId = setTimeout(() => {
+          fallbackController.abort();
+        }, 20000);
+
+        try {
+          const proxyResponse = await fetch("/api/r2-proxy-image-upload", {
+            method: "POST",
+            headers: {
+              "x-file-name": encodeURIComponent(file.name),
+              "x-file-type": file.type || "image/jpeg",
+              "x-file-size": String(file.size),
+              "x-user-id": userId
+            },
+            body: file,
+            signal: fallbackController.signal
+          });
+
+          if (!proxyResponse.ok) {
+            const errData = await proxyResponse.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP ${proxyResponse.status}`);
+          }
+
+          const proxyData = await proxyResponse.json();
+          publicImageUrl = proxyData.publicImageUrl;
+          clearTimeout(fallbackTimeoutId);
+          console.log("Upload via proxy de contingência realizado com sucesso:", publicImageUrl);
+          return { imageUrl: publicImageUrl, imageStoragePath: "" };
+        } catch (proxyErr: any) {
+          clearTimeout(fallbackTimeoutId);
+          console.error("Erro no PUT/Proxy da imagem:", proxyErr);
+          throw new Error("Não foi possível enviar a imagem para o servidor de armazenamento.");
+        }
+      }
+    } catch (error) {
+      console.error("Error uploading announcement image to storage:", error);
+      throw error;
+    }
+  },
+
+  async deleteAnnouncementImage(imageStoragePath: string): Promise<void> {
+    try {
+      if (!imageStoragePath || !imageStoragePath.startsWith("announcements/")) {
+        console.log("Ignorando exclusão de imagem não-Firebase.");
+        return;
+      }
+      const imageRef = ref(storage, imageStoragePath);
+      await deleteObject(imageRef);
+    } catch (e) {
+      console.error("Error deleting announcement image from storage:", e);
+      // Let it fail gracefully so it never blocks announcement deletion
+    }
+  }
+};

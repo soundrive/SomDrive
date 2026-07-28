@@ -1,0 +1,17 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+*.mp3
+*.m4a
+*.wav
+*.zip
+public/audio-tests/
+public/audio-tests-final/
+.cache/
+tmp/

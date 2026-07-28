@@ -1,0 +1,300 @@
+/**
+ * Types modeling the "Meu Pen Drive Digital" application state
+ */
+
+export type FirestoreDateLike =
+  | string
+  | Date
+  | {
+      toDate?: () => Date;
+      seconds?: number;
+      _seconds?: number;
+    }
+  | null;
+
+export interface Artist {
+  userId: string; // matches uid
+  name: string; // matches artistName
+  avatarUrl?: string;
+  photoURL?: string;
+  profileImageUrl?: string;
+  city?: string;
+  state?: string;
+  genre?: string;
+  whatsapp?: string; // matches phone
+  instagram?: string;
+  email: string;
+  bio?: string;
+  plan: 'free' | 'essencial' | 'pro' | 'premium';
+  subscriptionDate?: string;
+  subscriptionStatus?: 'ativo' | 'pendente' | 'cancelado';
+  createdAt: string;
+
+  // Custom public catalog texts
+  customBadgeText?: string;
+  customContactLabel?: string;
+  customShareLabel?: string;
+  customRightBadgeTitle?: string;
+  customRightBadgeStatus?: string;
+  customRightBadgeDescription?: string;
+  customNoticeText?: string;
+  customSongsListTitle?: string;
+  customSongsListSubtitle?: string;
+  customCardImageUrl?: string;
+
+  // Extended Admin properties
+  role?: 'user' | 'admin';
+  paymentStatus?: 'inactive' | 'active' | 'pending' | 'cancelled' | 'manual';
+  accessType?: 'free' | 'mercadopago' | 'manual' | 'trial' | 'subscriber';
+  musicLimit?: number;
+  songsCount?: number;
+  trialEndsAt?: FirestoreDateLike;
+  manualAccessEndsAt?: FirestoreDateLike;
+  subscriptionStartedAt?: FirestoreDateLike;
+  subscriptionEndsAt?: FirestoreDateLike;
+  planExpiresAt?: FirestoreDateLike;
+  planStatus?: string;
+  expirationTracksStatus?: string;
+  mercadoPagoPaymentId?: string | null;
+  mercadoPagoSubscriptionId?: string | null;
+  isBlocked?: boolean;
+  isBillingBetaTester?: boolean;
+  billingType?: string | null;
+  preapprovalPlanId?: string | null;
+  lastPaymentId?: string | null;
+  lastPaymentStatus?: string | null;
+  nextPaymentDate?: string | null;
+  updatedAt?: string;
+  phone?: string;
+  artistName?: string;
+  userType?: string;
+  mainGenre?: string;
+  slug?: string;
+  preferredFreeTracks?: string[];
+}
+
+export interface Music {
+  trackId: string; // id
+  artistId: string; // ownerId
+  title: string;
+  composer?: string;
+  singer?: string; // matches performer
+  performer?: string; // name of singer or vocal guide
+  genre?: string;
+  description?: string;
+  audioUrl: string; // cloudflare r2 URL
+  coverUrl?: string; // image cover URL
+  lyrics?: string; // lyrics of the track
+  playsCount: number; // local/view tracker playsCount
+  plays?: number; // matches plays: 0
+  status?: string; // "active" or "inactive" for private links
+  storageProvider?: "cloudflare_r2" | string;
+  storagePath?: string;
+  fileSize?: number;
+  mimeType?: string;
+  originalFileName?: string;
+  createdAt: string;
+  updatedAt?: string;
+
+  // New Deduplication parameters
+  audioFileId?: string;
+  partners?: string;
+  audioHash?: string;
+  position?: number;
+  orderIndex?: number;
+
+  // Repertoire fields and visibility flags
+  repertoireId?: string | null;
+  publicationDestination?: "general" | "repertoire";
+  isActive?: boolean;
+  isPublic?: boolean;
+
+  // Audio Optimization fields (Etapa 2B)
+  optimizedAudioUrl?: string;
+  optimizedFileSize?: number;
+  originalFileSize?: number;
+  audioOptimizationStatus?: "none" | "processing" | "ready" | "failed";
+  audioOptimizationSavings?: number;
+  artistName?: string;
+
+  // VBR Beta Optimizer fields (Etapa 3 - Beta q7)
+  audioUrlOriginal?: string;
+  audioUrlOptimized?: string;
+  optimizedStatus?: "pending" | "ready" | "failed" | "skipped";
+  optimizedFormat?: "mp3";
+  optimizedPreset?: "vbr_q7";
+  optimizedBitrateAverage?: number;
+  optimizedCreatedAt?: any;
+}
+
+export interface Analytics {
+  artistId: string;
+  viewsCount: number;
+  whatsappClicks: number;
+}
+
+export interface AppUser {
+  uid: string;
+  email: string;
+  displayName?: string;
+}
+
+export interface PaymentSettings {
+  essencialMonthlyUrl?: string;
+  essencialAnnualUrl?: string;
+  proMonthlyUrl?: string;
+  proAnnualUrl?: string;
+  premiumMonthlyUrl?: string;
+  premiumAnnualUrl?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface ShareCardSettings {
+  ogImageUrl: string;
+  ogImageVersion: string;
+  updatedAt?: any;
+  updatedBy?: string;
+}
+
+export interface AppearanceSettings {
+  logoScale: number;
+  showLogo?: boolean;
+  customLogoUrl?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface Repertoire {
+  id: string; // generated id
+  ownerUid: string;
+  name: string;
+  slug?: string;
+  description?: string;
+  type: 'repertoire' | 'collection' | 'playlist' | 'project';
+  trackIds: string[];
+  orderedTrackIds?: string[];
+  visibility: 'public' | 'unlisted' | 'private' | 'active';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Project {
+  id: string; // generated id
+  ownerUid: string;
+  name: string;
+  description?: string;
+  type: string;
+  trackIds: string[];
+  orderedTrackIds?: string[];
+  status: 'active' | 'completed' | 'draft' | 'private';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type AnnouncementType = 'audition' | 'opportunity' | 'announcement' | 'invitation';
+
+export interface Announcement {
+  id: string;
+  title: string;
+  type: AnnouncementType;
+  summary: string;
+  content?: string;
+  imageUrl?: string;
+  imageStoragePath?: string;
+  whatsappNumber?: string;
+  whatsappMessage?: string;
+  buttonText?: string;
+  buttonUrl?: string;
+  priority: number;
+  isActive: boolean;
+  startsAt: string; // ISO string in UI, Timestamp in DB
+  endsAt?: string | null; // ISO string in UI, Timestamp in DB or null
+  createdAt: string; // ISO string in UI, Timestamp in DB
+  updatedAt: string; // ISO string in UI, Timestamp in DB
+  createdBy: string;
+}
+
+export function getCleanComposer(
+  track?: { composer?: string; artistName?: string; singer?: string; genre?: string },
+  catalogArtistName?: string
+ ): string {
+   if (!track) return catalogArtistName || '';
+   const artist = (catalogArtistName || track.artistName || '').trim();
+   const composer = (track.composer || '').trim();
+   const genre = (track.genre || '').trim();
+   
+   const lowerComposer = composer.toLowerCase();
+   
+   const exactGenres = [
+     'sertanejo',
+     'sertanejo universitário',
+     'sertanejo universitario',
+     'modão',
+     'modao',
+     'arrocha',
+     'piseiro',
+     'forró',
+     'forro',
+     'pisadinha',
+     'pagode',
+     'samba',
+     'pop',
+     'rock',
+     'funk',
+     'gospel',
+     'mpb',
+     'trap',
+     'rap',
+     'reggae',
+     'axé',
+     'axe',
+     'country',
+     'bachata',
+     'brega',
+     'bossa nova',
+     'romântico',
+     'romantico',
+     'lambada',
+     'catálogo',
+     'catalogo'
+   ];
+ 
+   const lowerAdminTerms = [
+     'starnejo',
+     'sertanejo premier',
+     'video premier',
+     'somdrive',
+     'suporte somdrive',
+     'admin',
+     'administrador',
+     'som drive',
+     'star nejo',
+     'sertanejopremier',
+     'videopremier',
+     'suporte',
+     'teste',
+     'test',
+     'administrador logado',
+     'conta de teste'
+   ];
+ 
+   // Use exact matching for genres to prevent false positives like "Raphael" (which contains "rap")
+   const isGenreOrStyle = exactGenres.includes(lowerComposer);
+   
+   // Admin names should still be blocked if they appear as substrings since they represent system default text
+   const isAdminName = lowerAdminTerms.some(term => lowerComposer.includes(term)) ||
+     lowerComposer === 'starnejo' ||
+     lowerComposer === 'somdrive';
+ 
+   // Also check if composer field is equal to genre field (case-insensitive)
+   const matchesGenreField = genre && lowerComposer === genre.toLowerCase();
+   
+   if (!composer || isGenreOrStyle || isAdminName || matchesGenreField) {
+     return artist || 'SomDrive';
+   }
+   
+   return composer;
+ }
+
+
