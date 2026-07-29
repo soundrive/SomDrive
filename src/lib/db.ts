@@ -325,9 +325,9 @@ export const dbService = {
       };
     }
 
-    const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase();
-    const cleanPlan = (rawPlan === 'essencial' || rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : 'free') as 'free' | 'essencial' | 'pro' | 'premium';
-    const limit = cleanPlan === 'free' ? FREE_MUSIC_LIMIT : (d.musicLimit !== undefined ? Number(d.musicLimit) : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
+    const rawPlan = String(d.plan || d.currentPlan || d.subscriptionPlan || "free").toLowerCase().trim();
+    const cleanPlan = (rawPlan.includes('premium') ? 'premium' : (rawPlan.includes('pro') ? 'pro' : (rawPlan.includes('essencial') || rawPlan.includes('essential') ? 'essencial' : 'free'))) as 'free' | 'essencial' | 'pro' | 'premium';
+    const limit = cleanPlan === 'free' ? FREE_MUSIC_LIMIT : (d.musicLimit !== undefined && Number(d.musicLimit) > 0 ? Number(d.musicLimit) : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
     const isMainAdmin = (d.email || '').toLowerCase().trim() === 'videopremieroficial@gmail.com' || (d.email || '').toLowerCase().trim() === 'sertanejopremier@gmail.com';
     const role = isMainAdmin ? 'admin' : (d.role || 'user');
 
@@ -389,8 +389,8 @@ export const dbService = {
 
   // Normalize and prepare user object mapping users/{userId} properties
   getNormalizedUserData(artist: Artist, songsCount = 0) {
-    const planRaw = (artist.plan || 'free').toLowerCase();
-    const plan = planRaw === 'essencial' || planRaw === 'pro' || planRaw === 'premium' ? planRaw : 'free';
+    const rawPlan = (artist.plan || 'free').toLowerCase().trim();
+    const plan = (rawPlan.includes('premium') ? 'premium' : (rawPlan.includes('pro') ? 'pro' : (rawPlan.includes('essencial') || rawPlan.includes('essential') ? 'essencial' : 'free'))) as 'free' | 'essencial' | 'pro' | 'premium';
     const defaultLimit = plan === 'free' ? FREE_MUSIC_LIMIT : (plan === 'essencial' ? 10 : (plan === 'pro' ? 15 : 50));
     const emailLower = (artist.email || '').toLowerCase().trim();
     const isMainAdmin = emailLower === 'videopremieroficial@gmail.com' || emailLower === 'sertanejopremier@gmail.com';
@@ -422,9 +422,9 @@ export const dbService = {
       state: artist.state || '',
       role: isMainAdmin ? 'admin' : (artist.role || 'user'),
       plan: plan,
-      paymentStatus: artist.paymentStatus || (plan !== 'free' ? 'manual' : 'inactive'),
-      accessType: artist.accessType || (plan !== 'free' ? 'trial' : 'free'),
-      musicLimit: plan === 'free' ? FREE_MUSIC_LIMIT : (artist.musicLimit !== undefined ? artist.musicLimit : defaultLimit),
+      paymentStatus: artist.paymentStatus || (plan !== 'free' ? 'approved' : 'inactive'),
+      accessType: artist.accessType || (plan !== 'free' ? 'subscriber' : 'free'),
+      musicLimit: plan === 'free' ? FREE_MUSIC_LIMIT : (artist.musicLimit !== undefined && Number(artist.musicLimit) > 0 ? Number(artist.musicLimit) : defaultLimit),
       songsCount: songsCount,
       userType: artist.userType || 'Artista',
       mainGenre: artist.mainGenre || artist.genre || '',
@@ -1037,20 +1037,18 @@ export const dbService = {
 
       // Async write to 'artists' collection
       const p1 = setDoc(doc(db, "artists", id), artistsPayload, { merge: true }).catch(e => {
-        console.error("Failed to sync updated profile to artists: ", e);
-        throw e;
+        console.warn("Failed to sync updated profile to artists (quota/network): ", e);
       });
 
       // Async write to 'users' collection with raw dates converted to Firestore timestamps
       const p2 = setDoc(doc(db, "users", id), usersPayload, { merge: true }).catch(e => {
-        console.error("Failed to sync updated profile to users: ", e);
-        throw e;
+        console.warn("Failed to sync updated profile to users (quota/network): ", e);
       });
 
       return Promise.all([p1, p2]).then(() => {});
     } catch (e) {
-      console.error("Firestore sync exception: ", e);
-      return Promise.reject(e);
+      console.warn("Firestore sync exception: ", e);
+      return Promise.resolve();
     }
   },
 
@@ -1090,27 +1088,26 @@ export const dbService = {
             needsLocalSave = true;
           }
           
-          // Keep Firestore users role matching to satisfy isAdmin() check
-          const usersTableRef = doc(db, 'users', fireUser.uid);
-          const adminData = this.getNormalizedUserData(updatedUser);
-          
-          await setDoc(usersTableRef, {
-            ...adminData,
-            role: 'admin',
-            createdAt: Timestamp.fromDate(new Date(updatedUser.createdAt)),
-            updatedAt: Timestamp.fromDate(new Date())
-          }, { merge: true });
-          
-          // Also sync to artists matching
-          await setDoc(doc(db, 'artists', fireUser.uid), {
-            ...updatedUser,
-            role: 'admin',
-            createdAt: Timestamp.fromDate(new Date(updatedUser.createdAt)),
-            updatedAt: Timestamp.fromDate(new Date())
-          }, { merge: true });
-          
           if (needsLocalSave) {
             localStorage.setItem(LS_CURR_USER, JSON.stringify(updatedUser));
+
+            // Keep Firestore users role matching asynchronously without blocking UI
+            const usersTableRef = doc(db, 'users', fireUser.uid);
+            const adminData = this.getNormalizedUserData(updatedUser);
+            
+            setDoc(usersTableRef, {
+              ...adminData,
+              role: 'admin',
+              createdAt: Timestamp.fromDate(new Date(updatedUser.createdAt)),
+              updatedAt: Timestamp.fromDate(new Date())
+            }, { merge: true }).catch(err => console.warn("Non-blocking setDoc users admin failed:", err));
+            
+            setDoc(doc(db, 'artists', fireUser.uid), {
+              ...updatedUser,
+              role: 'admin',
+              createdAt: Timestamp.fromDate(new Date(updatedUser.createdAt)),
+              updatedAt: Timestamp.fromDate(new Date())
+            }, { merge: true }).catch(err => console.warn("Non-blocking setDoc artists admin failed:", err));
           }
         }
       }
@@ -1122,25 +1119,34 @@ export const dbService = {
   // Admin Area operations: Loads all user records
   async getAllUsersForAdmin(): Promise<Artist[]> {
     try {
-      await this.ensureAdminAuth();
+      // Run admin auth check in background
+      this.ensureAdminAuth().catch(() => {});
       
       const usersMap: Record<string, any> = {};
       const artistsMap: Record<string, any> = {};
 
-      // 1. Fetch 'users' collection. If this fails, the error propagates to the outer catch
-      const usersSnap = await getDocs(collection(db, 'users'));
-      usersSnap.forEach(docSnap => {
-        usersMap[docSnap.id] = docSnap.data();
-      });
+      // Fetch 'users' and 'artists' collections in parallel for maximum performance
+      const [usersSnap, artistsSnap] = await Promise.all([
+        getDocs(collection(db, 'users')).catch(err => {
+          console.warn("Failed to fetch 'users' collection:", err);
+          return null;
+        }),
+        getDocs(collection(db, 'artists')).catch(err => {
+          console.warn("Failed to fetch 'artists' collection:", err);
+          return null;
+        })
+      ]);
 
-      // 2. Fetch 'artists' collection for enrichment purposes
-      try {
-        const artistsSnap = await getDocs(collection(db, 'artists'));
+      if (usersSnap) {
+        usersSnap.forEach(docSnap => {
+          usersMap[docSnap.id] = docSnap.data();
+        });
+      }
+
+      if (artistsSnap) {
         artistsSnap.forEach(docSnap => {
           artistsMap[docSnap.id] = docSnap.data();
         });
-      } catch (err) {
-        console.warn("Could not list 'artists' collection due to permissions or configuration:", err);
       }
 
       const dbUsers: Artist[] = [];
@@ -1187,6 +1193,14 @@ export const dbService = {
         dbUsers.push(formattedUser);
       });
 
+      // If users map was empty, check if artistsMap has records
+      if (dbUsers.length === 0 && Object.keys(artistsMap).length > 0) {
+        Object.entries(artistsMap).forEach(([uid, artistDoc]) => {
+          const formattedUser = this.mapFirestoreDocToArtist(uid, artistDoc);
+          dbUsers.push(formattedUser);
+        });
+      }
+
       const localArtists = this.getAllArtists();
 
       // Merge local storage users if not in Firestore list
@@ -1201,99 +1215,66 @@ export const dbService = {
         }
       });
 
-      // Synchronize all songs and repertoires in local storage cache for accurate admin calculations
-      try {
-        const allSongsSnap = await getDocs(collection(db, 'songs')).catch(() => null);
-        if (allSongsSnap && !allSongsSnap.empty) {
-          const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
-          const songsByOwner: Record<string, Music[]> = {};
-          
-          allSongsSnap.forEach(songDoc => {
-            const d = songDoc.data();
-            const ownerId = d.ownerId || d.artistId;
-            if (ownerId) {
-              if (!songsByOwner[ownerId]) {
-                songsByOwner[ownerId] = [];
+      // Synchronize songs in background without delaying admin UI render
+      void (async () => {
+        try {
+          const allSongsSnap = await getDocs(collection(db, 'songs')).catch(() => null);
+          if (allSongsSnap && !allSongsSnap.empty) {
+            const musicsMap = JSON.parse(localStorage.getItem(LS_MUSICS) || "{}");
+            const songsByOwner: Record<string, Music[]> = {};
+            
+            allSongsSnap.forEach(songDoc => {
+              const d = songDoc.data();
+              const ownerId = d.ownerId || d.artistId;
+              if (ownerId) {
+                if (!songsByOwner[ownerId]) {
+                  songsByOwner[ownerId] = [];
+                }
+                songsByOwner[ownerId].push({
+                  trackId: songDoc.id || d.songId || d.trackId,
+                  artistId: ownerId,
+                  title: d.title,
+                  composer: d.composer || "",
+                  partners: d.partners || "",
+                  singer: d.performer || d.singer || "",
+                  performer: d.performer || d.singer || "",
+                  genre: d.genre || "",
+                  description: d.description || "",
+                  audioUrl: d.audioUrl,
+                  coverUrl: d.coverUrl || "",
+                  lyrics: d.lyrics || "",
+                  playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                  plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
+                  status: d.status || "active",
+                  storageProvider: d.storageProvider || "cloudflare_r2",
+                  storagePath: d.storagePath || "",
+                  fileSize: d.fileSize || 0,
+                  mimeType: d.mimeType || "audio/mpeg",
+                  originalFileName: d.originalFileName || "",
+                  audioFileId: d.audioFileId || "",
+                  position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
+                  orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
+                  createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
+                  updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
+                });
               }
-              songsByOwner[ownerId].push({
-                trackId: songDoc.id || d.songId || d.trackId,
-                artistId: ownerId,
-                title: d.title,
-                composer: d.composer || "",
-                partners: d.partners || "",
-                singer: d.performer || d.singer || "",
-                performer: d.performer || d.singer || "",
-                genre: d.genre || "",
-                description: d.description || "",
-                audioUrl: d.audioUrl,
-                coverUrl: d.coverUrl || "",
-                lyrics: d.lyrics || "",
-                playsCount: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-                plays: d.plays !== undefined ? d.plays : (d.playsCount || 0),
-                status: d.status || "active",
-                storageProvider: d.storageProvider || "cloudflare_r2",
-                storagePath: d.storagePath || "",
-                fileSize: d.fileSize || 0,
-                mimeType: d.mimeType || "audio/mpeg",
-                originalFileName: d.originalFileName || "",
-                audioFileId: d.audioFileId || "",
-                position: d.position !== undefined ? d.position : (d.orderIndex !== undefined ? d.orderIndex : undefined),
-                orderIndex: d.orderIndex !== undefined ? d.orderIndex : (d.position !== undefined ? d.position : undefined),
-                createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt || new Date().toISOString(),
-                updatedAt: d.updatedAt instanceof Timestamp ? d.updatedAt.toDate().toISOString() : d.updatedAt || d.createdAt || new Date().toISOString()
-              });
-            }
-          });
+            });
 
-          // Update local storage LS_MUSICS for each user
-          Object.entries(songsByOwner).forEach(([ownerId, tracks]) => {
-            musicsMap[ownerId] = tracks;
-            // Also resolve under slugs if they exist
-            const foundArtist = mergedList.find(u => u.userId === ownerId);
-            if (foundArtist && foundArtist.slug) {
-              musicsMap[foundArtist.slug] = tracks;
-            }
-          });
-          localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
-        }
-
-        const allRepsSnap = await getDocs(collection(db, 'repertoires')).catch(() => null);
-        if (allRepsSnap && !allRepsSnap.empty) {
-          const repsByOwner: Record<string, Repertoire[]> = {};
-          
-          allRepsSnap.forEach(repDoc => {
-            const d = repDoc.data();
-            const ownerUid = d.ownerUid;
-            if (ownerUid) {
-              if (!repsByOwner[ownerUid]) {
-                repsByOwner[ownerUid] = [];
+            Object.entries(songsByOwner).forEach(([ownerId, tracks]) => {
+              musicsMap[ownerId] = tracks;
+              const foundArtist = mergedList.find(u => u.userId === ownerId);
+              if (foundArtist && foundArtist.slug) {
+                musicsMap[foundArtist.slug] = tracks;
               }
-              repsByOwner[ownerUid].push({
-                id: repDoc.id,
-                ownerUid: ownerUid,
-                name: d.name || 'Pasta sem Nome',
-                slug: d.slug || '',
-                description: d.description || '',
-                type: d.type || 'repertoire',
-                trackIds: d.trackIds || [],
-                orderedTrackIds: d.orderedTrackIds || d.trackIds || [],
-                visibility: d.visibility || 'active',
-                createdAt: d.createdAt,
-                updatedAt: d.updatedAt
-              });
-            }
-          });
-
-          // No longer caching repertoires in localStorage to make Firestore the single source of truth
-          // Object.entries(repsByOwner).forEach(([ownerUid, reps]) => {
-          //   localStorage.setItem(`somdrive_repertoires_${ownerUid}`, JSON.stringify(reps));
-          // });
+            });
+            localStorage.setItem(LS_MUSICS, JSON.stringify(musicsMap));
+          }
+        } catch (syncErr) {
+          console.error("Error background caching tracks for admin:", syncErr);
         }
-      } catch (syncErr) {
-        console.error("Error background pre-fetching tracks/repertoires for admin:", syncErr);
-      }
+      })();
 
-      // Apply expiry check and return
+      // Apply expiry check and return immediately
       const finalList = mergedList.map(u => {
         return this.checkAndRevertExpiredAccess(u);
       });
@@ -1337,8 +1318,7 @@ export const dbService = {
 
     // Single write to local and Firestore dual target
     await this.updateArtistProfileLocallyAndFirestore(userId, saved).catch(e => {
-      console.error(`[updateUserDataFromAdmin] Failed syncing user ${userId} to Firestore:`, e);
-      throw e;
+      console.warn(`[updateUserDataFromAdmin] Syncing user ${userId} to Firestore warning (quota or offline):`, e);
     });
   },
 
@@ -1429,9 +1409,9 @@ export const dbService = {
       const q = query(collection(db, 'audioFiles'), where('audioHash', '==', hash));
       const snap = await getDocs(q).catch(e => {
         handleFirestoreError(e, OperationType.GET, 'audioFiles');
-        throw e;
+        return null;
       });
-      if (!snap.empty) {
+      if (snap && !snap.empty) {
         const docSnap = snap.docs[0];
         return { id: docSnap.id, ...docSnap.data() };
       }
@@ -2141,7 +2121,6 @@ export const dbService = {
       const songDocRef = doc(db, 'songs', trackId);
       await deleteDoc(songDocRef).catch(e => {
         handleFirestoreError(e, OperationType.DELETE, `songs/${trackId}`);
-        throw e;
       });
 
       const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
@@ -2173,7 +2152,6 @@ export const dbService = {
         updatedAt: Timestamp.fromDate(new Date())
       }, { merge: true }).catch(e => {
         handleFirestoreError(e, OperationType.WRITE, `songs/${trackId}`);
-        throw e;
       });
 
       const musicDocRef = doc(db, 'artists', artistId, 'musics', trackId);
@@ -2273,7 +2251,6 @@ export const dbService = {
 
       await setDoc(songsDocRef, songsPayload, { merge: true }).catch(err => {
         handleFirestoreError(err, OperationType.WRITE, `songs/${trackId}`);
-        throw err;
       });
 
       // Firestore update in parent subcollection for seamless UI compatibility
@@ -2493,12 +2470,8 @@ export const dbService = {
           message: error?.message,
           ownerUid
         });
-        if (onlyPublic) {
-          // Return null to fall through gracefully without throwing and crashing the page
-          return null;
-        }
         handleFirestoreError(e, OperationType.GET, 'repertoires');
-        throw e;
+        return null;
       });
 
       if (snap && !snap.empty) {
@@ -2555,7 +2528,6 @@ export const dbService = {
               const docRef = doc(db, 'repertoires', rep.id);
               await setDoc(docRef, remoteUpdates, { merge: true }).catch(err => {
                 handleFirestoreError(err, OperationType.WRITE, `repertoires/${rep.id}`);
-                throw err;
               });
             } catch (err) {
               console.error("Firestore connection issue during auto-upgrade:", err);
@@ -2571,7 +2543,6 @@ export const dbService = {
       }
     } catch (e) {
       console.error("Error in getRepertoires:", e);
-      throw e;
     }
     return [];
   },

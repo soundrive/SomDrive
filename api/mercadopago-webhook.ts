@@ -233,24 +233,53 @@ async function findUserByEmailInFirestore(email: string): Promise<string | null>
   if (!email) return null;
   const emailLower = email.toLowerCase().trim();
 
-  // Search 'users' dual sync target
-  const usersSnap = await getDb().collection("users")
-    .where("email", "==", emailLower)
-    .limit(1)
-    .get();
+  try {
+    const dbAdmin = getDb();
 
-  if (!usersSnap.empty) {
-    return usersSnap.docs[0].id;
-  }
+    // 1. Search 'users' by email
+    const uSnap = await dbAdmin.collection("users").where("email", "==", emailLower).limit(1).get().catch(() => null);
+    if (uSnap && !uSnap.empty) return uSnap.docs[0].id;
 
-  // Search 'artists' collection
-  const artistsSnap = await getDb().collection("artists")
-    .where("email", "==", emailLower)
-    .limit(1)
-    .get();
+    // 2. Search 'artists' by email
+    const aSnap = await dbAdmin.collection("artists").where("email", "==", emailLower).limit(1).get().catch(() => null);
+    if (aSnap && !aSnap.empty) return aSnap.docs[0].id;
 
-  if (!artistsSnap.empty) {
-    return artistsSnap.docs[0].id;
+    // 3. Search 'users' by userEmail
+    const uEmailSnap = await dbAdmin.collection("users").where("userEmail", "==", emailLower).limit(1).get().catch(() => null);
+    if (uEmailSnap && !uEmailSnap.empty) return uEmailSnap.docs[0].id;
+
+    // 4. Search 'artists' by userEmail
+    const aEmailSnap = await dbAdmin.collection("artists").where("userEmail", "==", emailLower).limit(1).get().catch(() => null);
+    if (aEmailSnap && !aEmailSnap.empty) return aEmailSnap.docs[0].id;
+
+    // 5. Broad scan fallback across recent/all users if exact indexed query yielded empty
+    const allUsersSnap = await dbAdmin.collection("users").limit(100).get().catch(() => null);
+    if (allUsersSnap && !allUsersSnap.empty) {
+      for (const docSnap of allUsersSnap.docs) {
+        const d = docSnap.data();
+        const e1 = String(d.email || '').toLowerCase().trim();
+        const e2 = String(d.userEmail || '').toLowerCase().trim();
+        const e3 = String(d.contactEmail || '').toLowerCase().trim();
+        if (e1 === emailLower || e2 === emailLower || e3 === emailLower) {
+          return docSnap.id;
+        }
+      }
+    }
+
+    const allArtistsSnap = await dbAdmin.collection("artists").limit(100).get().catch(() => null);
+    if (allArtistsSnap && !allArtistsSnap.empty) {
+      for (const docSnap of allArtistsSnap.docs) {
+        const d = docSnap.data();
+        const e1 = String(d.email || '').toLowerCase().trim();
+        const e2 = String(d.userEmail || '').toLowerCase().trim();
+        const e3 = String(d.contactEmail || '').toLowerCase().trim();
+        if (e1 === emailLower || e2 === emailLower || e3 === emailLower) {
+          return docSnap.id;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[findUserByEmailInFirestore Error]", err);
   }
 
   return null;
@@ -670,11 +699,18 @@ export async function processSinglePayment(paymentId: string, merchantOrderId = 
   let resolvedUid: string | null = null;
   let resolvedPlanCode = '';
 
-  if (externalReference && externalReference.includes('|')) {
-    const parts = externalReference.split('|');
-    resolvedUid = parts[0] ? parts[0].trim() : null;
-    if (parts[1]) {
-      resolvedPlanCode = parts[1].trim();
+  if (externalReference) {
+    const extTrimmed = externalReference.trim();
+    if (extTrimmed.includes('|')) {
+      const parts = extTrimmed.split('|');
+      resolvedUid = parts[0] ? parts[0].trim() : null;
+      if (parts[1]) {
+        resolvedPlanCode = parts[1].trim();
+      }
+    } else if (extTrimmed.includes('@')) {
+      resolvedUid = await findUserByEmailInFirestore(extTrimmed);
+    } else if (extTrimmed.length >= 8) {
+      resolvedUid = extTrimmed;
     }
   }
 
@@ -688,6 +724,14 @@ export async function processSinglePayment(paymentId: string, merchantOrderId = 
     }
     if (!resolvedPlanCode && metadataPlanCode) {
       resolvedPlanCode = String(metadataPlanCode).trim();
+    }
+  }
+
+  // If resolvedUid is an email address, resolve it to real Firestore UID
+  if (resolvedUid && resolvedUid.includes('@')) {
+    const uidFromEmail = await findUserByEmailInFirestore(resolvedUid);
+    if (uidFromEmail) {
+      resolvedUid = uidFromEmail;
     }
   }
 

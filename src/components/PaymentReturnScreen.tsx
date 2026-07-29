@@ -65,6 +65,28 @@ export default function PaymentReturnScreen({ currentUser, onNavigate, onRefresh
     }
   }, []);
 
+  // Trigger background payment verification on return screen mount
+  useEffect(() => {
+    const targetId = params.paymentId || currentUser?.userId || currentUser?.email;
+    if (!targetId) return;
+
+    fetch('/api/mercadopago-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify_payment', paymentId: targetId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        console.log("[PaymentReturn] Verification response:", data);
+        if (currentUser?.userId) {
+          dbService.syncArtistData(currentUser.userId).then(() => {
+            if (onRefreshProfile) onRefreshProfile();
+          });
+        }
+      })
+      .catch(err => console.warn("[PaymentReturn] Background verify failed:", err));
+  }, [params.paymentId, currentUser?.userId, currentUser?.email]);
+
   // Poll user profile to check if Firestore was updated by webhook (only on success path)
   useEffect(() => {
     if (!currentUser || !currentUser.userId) return;
@@ -122,13 +144,23 @@ export default function PaymentReturnScreen({ currentUser, onNavigate, onRefresh
     setManualStatusMessage("");
 
     try {
-      // 1. Consult Firestore to get latest state synced
+      // 1. Force payment verification on backend
+      const targetId = params.paymentId || currentUser.userId || currentUser.email;
+      if (targetId) {
+        await fetch('/api/mercadopago-webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'verify_payment', paymentId: targetId })
+        }).catch(() => {});
+      }
+
+      // 2. Consult Firestore to get latest state synced
       await dbService.syncArtistData(currentUser.userId);
       if (onRefreshProfile) {
         onRefreshProfile();
       }
 
-      // 2. Read refreshed data from local database state
+      // 3. Read refreshed data from local database state
       const refreshedUser = dbService.getCurrentUser();
       
       if (refreshedUser && refreshedUser.plan && refreshedUser.plan !== 'free') {

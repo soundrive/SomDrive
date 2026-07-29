@@ -1521,7 +1521,7 @@ async function startServer() {
   });
 
   // API Route for Mercado Pago webhook integrations
-  app.post("/api/mercadopago-webhook", async (req, res) => {
+  app.all("/api/mercadopago-webhook", async (req, res) => {
     try {
       const handlerFn = typeof mercadopagoWebhookHandler === "function" 
         ? mercadopagoWebhookHandler 
