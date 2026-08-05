@@ -696,10 +696,17 @@ export const dbService = {
       const maxAllowed = cleanPlan === 'free' ? FREE_MUSIC_LIMIT : (musicLimit !== undefined ? Number(musicLimit) : (cleanPlan === 'essencial' ? 10 : (cleanPlan === 'pro' ? 15 : 50)));
 
       if (cleanPlan === 'free') {
-        const userRef = doc(db, 'users', userId);
-        setDoc(userRef, { plan: 'free', musicLimit: FREE_MUSIC_LIMIT, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
-        const artistRef = doc(db, 'artists', userId);
-        setDoc(artistRef, { plan: 'free', musicLimit: FREE_MUSIC_LIMIT, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+        const targetPlan = 'free';
+        const targetMusicLimit = FREE_MUSIC_LIMIT;
+        // Only perform setDoc if plan or musicLimit is not already set to 'free' / FREE_MUSIC_LIMIT
+        const needsUpdate = (plan !== targetPlan) || (musicLimit === undefined || Number(musicLimit) !== targetMusicLimit);
+
+        if (needsUpdate) {
+          const userRef = doc(db, 'users', userId);
+          setDoc(userRef, { plan: targetPlan, musicLimit: targetMusicLimit, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+          const artistRef = doc(db, 'artists', userId);
+          setDoc(artistRef, { plan: targetPlan, musicLimit: targetMusicLimit, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+        }
       }
 
       // Enforce limits on all non-deleted tracks (active, locked_by_expired_plan, inactive, blocked, etc.)
