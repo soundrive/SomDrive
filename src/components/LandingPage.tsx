@@ -296,7 +296,7 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
               <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
             </span>
             <span className="text-[9px] sm:text-[10px] font-mono tracking-wider sm:tracking-widest font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-300 to-yellow-300 uppercase">
-              Para Compositores, Artistas e Produtores
+              Para Compositores, Cantores e Produtores Musicais
             </span>
           </div>
 
@@ -309,16 +309,16 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
             cantor certo.
           </h2>
 
-          <div className="space-y-3">
-            <p className="text-slate-400 text-xs sm:text-sm md:text-base max-w-xl font-normal leading-relaxed">
-              Envie suas músicas em MP3, organize por repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo através de links privados.
+          <div className="space-y-2.5">
+            <p className="text-orange-400 text-sm sm:text-base md:text-lg font-heading font-black uppercase tracking-wide">
+              Pare de enviar músicas pelo WhatsApp.
             </p>
-            <p className="text-orange-400 text-[11px] sm:text-xs font-mono font-bold uppercase tracking-wider">
-              Você escolhe exatamente quais músicas cada pessoa poderá ouvir.
+            <p className="text-slate-300 text-xs sm:text-sm md:text-base max-w-xl font-normal leading-relaxed">
+              O SomDrive foi desenvolvido para compositores, cantores e produtores musicais que desejam organizar seus catálogos e compartilhar repertórios de forma rápida, moderna e profissional.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2 sm:pt-4 shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-1 sm:pt-2 shrink-0">
             <button 
               id="hero-create-btn"
               onClick={() => onNavigate('auth', { isRegister: true })}
@@ -335,36 +335,35 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
             </a>
           </div>
 
-          {/* Custom responsive feature showcases aligned with the screenshot */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-6 sm:pt-8 border-t border-slate-900/80">
-            <div className="flex items-center gap-3">
-              <div className="p-2 sm:p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)] shrink-0">
-                <Lock className="w-4 h-4 sm:w-5 sm:h-5 fill-orange-400/5 animate-pulse" />
-              </div>
-              <div>
-                <p className="text-xs font-heading font-black text-white uppercase tracking-wider">Catálogo Privado</p>
-                <p className="text-[10px] text-slate-500 leading-snug">Acesso por convite</p>
-              </div>
+          {/* Lista de Benefícios Principais */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-5 sm:pt-7 border-t border-slate-900/80">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Organize todas as suas músicas.</span>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className="p-2 sm:p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)] shrink-0">
-                <Send className="w-4 h-4 sm:w-5 sm:h-5 transform -rotate-12" />
-              </div>
-              <div>
-                <p className="text-xs font-heading font-black text-white uppercase tracking-wider">Envie para selecionados</p>
-                <p className="text-[10px] text-slate-500 leading-snug">Você escolhe quem ouve</p>
-              </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Crie repertórios personalizados.</span>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className="p-2 sm:p-3 bg-orange-950/40 border border-orange-500/20 rounded-xl text-orange-400 shadow-[inset_0_1px_5px_rgba(249,115,22,0.1)] shrink-0">
-                <Car className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-heading font-black text-white uppercase tracking-wider">Ouça no Carro</p>
-                <p className="text-[10px] text-slate-500 leading-snug">Bluetooth e modo carro</p>
-              </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Compartilhe somente as músicas que desejar.</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Streaming rápido e leve.</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Funciona no celular, computador e no carro.</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Catálogo privado e seguro.</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 sm:col-span-2">
+              <Check className="w-4 h-4 text-orange-400 shrink-0" />
+              <span>Apresente seu trabalho de forma profissional.</span>
             </div>
           </div>
         </div>

@@ -959,11 +959,12 @@ async function startServer() {
 
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Home Metadata -->
-  <title>SomDrive — Catálogo musical privado para compositores e artistas</title>
-  <meta name="description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
+  <title>SomDrive | Catálogo Musical para Compositores, Cantores e Produtores Musicais</title>
+  <meta name="description" content="Pare de enviar músicas pelo WhatsApp. Organize seu catálogo musical, crie repertórios personalizados e compartilhe apenas as músicas certas com cantores, produtores musicais e parceiros através de um link profissional." />
+  <link rel="canonical" href="https://www.somdrive.com.br/" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="SomDrive — Seu repertório na mão do cantor certo" />
-  <meta property="og:description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
+  <meta property="og:title" content="SomDrive | Catálogo Musical para Compositores, Cantores e Produtores Musicais" />
+  <meta property="og:description" content="Pare de enviar músicas pelo WhatsApp. Organize seu catálogo musical, crie repertórios personalizados e compartilhe apenas as músicas certas com cantores, produtores musicais e parceiros através de um link profissional." />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
   <meta property="og:image:type" content="image/jpeg" />
@@ -972,8 +973,8 @@ async function startServer() {
   <meta property="og:url" content="https://www.somdrive.com.br/" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SomDrive — Seu repertório na mão do cantor certo" />
-  <meta name="twitter:description" content="Organize suas músicas, crie repertórios e compartilhe uma faixa, uma seleção ou todo o seu catálogo." />
+  <meta name="twitter:title" content="SomDrive | Catálogo Musical para Compositores, Cantores e Produtores Musicais" />
+  <meta name="twitter:description" content="Pare de enviar músicas pelo WhatsApp. Organize seu catálogo musical, crie repertórios personalizados e compartilhe apenas as músicas certas com cantores, produtores musicais e parceiros através de um link profissional." />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <link rel="image_src" href="${ogImageToUse}" />
   <meta itemprop="image" content="${ogImageToUse}" />
