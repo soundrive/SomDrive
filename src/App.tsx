@@ -4,7 +4,7 @@ import { Artist, Music as Track, FREE_MUSIC_LIMIT } from './types';
 import ArtistPublic from './components/ArtistPublic';
 import Player from './components/Player';
 import { ShieldAlert } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { onSnapshot, doc } from 'firebase/firestore';
 
@@ -91,6 +91,7 @@ export default function App() {
   
   // Session state
   const [currentUser, setCurrentUser] = useState<Artist | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Playback control states
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -358,13 +359,23 @@ export default function App() {
     handleNavigate('dashboard');
   };
 
-  const handleLogout = () => {
-    dbService.setCurrentUser(null);
-    setCurrentUser(null);
-    setIsPlaying(false);
-    setCurrentTrack(null);
-    setCarMode(false);
-    handleNavigate('landing');
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await signOut(auth);
+      dbService.setCurrentUser(null);
+      setCurrentUser(null);
+      setIsPlaying(false);
+      setCurrentTrack(null);
+      setCarMode(false);
+      handleNavigate('landing');
+    } catch (error) {
+      console.error("Erro ao encerrar a sessão com o Firebase Auth:", error);
+      alert("Não foi possível encerrar a sessão. Por favor, verifique sua conexão e tente novamente.");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   // Music state selectors
