@@ -9,6 +9,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import mercadopagoWebhookHandler, { processPaymentStatus, runAutomaticReconciliation } from "./api/mercadopago-webhook";
 import createCheckoutPaymentHandler from "./api/mercadopago/create-checkout-payment";
 import checkIntegrationsHandler from "./api/admin/check-integrations";
+import { generateSitemapXml } from "./api/sitemap";
 import sharp from "sharp";
 import fs from "fs";
 import crypto from "crypto";
@@ -2492,6 +2493,21 @@ async function startServer() {
         res.setHeader("Content-Type", "image/svg+xml");
         return res.status(200).send(errorSvg);
       }
+    }
+  });
+
+  // Sitemap endpoint handler
+  app.get(["/sitemap.xml", "/api/sitemap"], async (req, res) => {
+    try {
+      const { xml } = await generateSitemapXml();
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=3600");
+      return res.status(200).send(xml);
+    } catch (err) {
+      console.error("Error generating sitemap in server.ts:", err);
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=3600");
+      return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://www.somdrive.com.br/</loc>\n  </url>\n</urlset>`);
     }
   });
 

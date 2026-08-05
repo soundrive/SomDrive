@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /retorno-pagamento
+Disallow: /payment-return
+
+Sitemap: https://www.somdrive.com.br/sitemap.xml

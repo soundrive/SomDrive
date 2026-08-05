@@ -940,12 +940,14 @@ export default async function handler(req: any, res: any) {
       .replace(/<title>.*?<\/title>/gi, "")
       .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
       .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
-      .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
+      .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "")
+      .replace(/<link\s+[^>]*rel\s*=\s*["']?canonical["']?[^>]*\/?>/gi, "");
 
     const ogPayload = `
     <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
     <title>${escapeXml(titleText)}</title>
     <meta name="description" content="${escapeXml(descText)}" />
+    <link rel="canonical" href="${escapeXml(canonicalUrl)}" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="${escapeXml(titleText)}" />
     <meta property="og:description" content="${escapeXml(descText)}" />
