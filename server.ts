@@ -1088,6 +1088,8 @@ async function startServer() {
       htmlContents = htmlContents
         .replace(/<title>.*?<\/title>/gi, "")
         .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
+        .replace(/<link\s+[^>]*rel\s*=\s*["']?canonical["']?[^>]*\/?>/gi, "")
+        .replace(/<meta\s+[^>]*name\s*=\s*["']?robots["']?[^>]*\/?>/gi, "")
         .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
         .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "");
 
@@ -1104,10 +1106,15 @@ async function startServer() {
         customDescription = `Ouça este repertório com ${repertoireTrackCount} ${repertoireTrackCount === 1 ? 'faixa' : 'faixas'} no SomDrive.`;
       }
 
+      const requestPath = req?.originalUrl ? req.originalUrl.split('?')[0] : (repertoireId ? `/s/${cleanSlug}/repertorio/${repertoireId}` : `/s/${cleanSlug}`);
+      const selfCanonicalUrl = `${appBaseUrl}${requestPath}`;
+
       const ogPayload = `
-  <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
+  <!-- Dynamic Custom SomDrive OG Sharing Metadata (Private/Unlisted Shared Link) -->
   <title>${customTitle}</title>
+  <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="${customDescription}" />
+  <link rel="canonical" href="${selfCanonicalUrl}" />
   <meta property="og:type" content="music.playlist" />
   <meta property="og:title" content="${customTitle}" />
   <meta property="og:description" content="${customDescription}" />
@@ -1116,7 +1123,7 @@ async function startServer() {
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${ogUrlToUse}" />
+  <meta property="og:url" content="${selfCanonicalUrl}" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${customTitle}" />
@@ -1200,6 +1207,8 @@ async function startServer() {
 <head>
   <meta charset="utf-8">
   <title>Catálogo musical de ${formattedName} | SomDrive</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="canonical" href="${appBaseUrl}/s/${originalSlug}">
   <meta property="og:type" content="website" />
   <meta property="og:title" content="SomDrive - Catálogo Musical" />
   <meta property="og:description" content="Ouça músicas e composições compartilhadas pelo artista." />
@@ -1208,7 +1217,7 @@ async function startServer() {
   <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:url" content="${ogUrlToUse}" />
+  <meta property="og:url" content="${appBaseUrl}/s/${originalSlug}" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SomDrive - Catálogo Musical" />
@@ -1237,6 +1246,11 @@ async function startServer() {
       artistFound: true
     };
   };
+
+  // 301 Permanent Redirect for legacy "Conversor SunDrive" URLs to the new dedicated MultiConverte service
+  app.get(["/conversor", "/conversor-sundrive", "/sundrive-conversor", "/conversor-de-audio", "/ferramentas/conversor"], (req, res) => {
+    return res.redirect(301, "https://www.multiconverte.com.br/");
+  });
 
   app.get("/api/global-share-card", serveGlobalShareCard);
   app.get("/api/global-share-card.png", serveGlobalShareCard);
@@ -1719,6 +1733,18 @@ async function startServer() {
   [96, 128, 192, 256, 384, 512].forEach((size) => {
     app.get(`/somdrive-player-${size}.png`, async (req, res) => {
       try {
+        const fileInDist = path.join(process.cwd(), 'dist', `somdrive-player-${size}.png`);
+        const fileInPublic = path.join(process.cwd(), 'public', `somdrive-player-${size}.png`);
+        if (fs.existsSync(fileInDist)) {
+          res.setHeader("Content-Type", "image/png");
+          res.setHeader("Cache-Control", "public, max-age=86405, s-maxage=86405");
+          return res.sendFile(fileInDist);
+        } else if (fs.existsSync(fileInPublic)) {
+          res.setHeader("Content-Type", "image/png");
+          res.setHeader("Cache-Control", "public, max-age=86405, s-maxage=86405");
+          return res.sendFile(fileInPublic);
+        }
+
         const playerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Seamless vibrant green gradient matching the gorgeous new logo -->
