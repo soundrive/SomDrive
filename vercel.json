@@ -5,6 +5,43 @@
       "schedule": "0 3 * * *"
     }
   ],
+  "redirects": [
+    {
+      "source": "/catalogo/:slug/repertorio/:repertoireSlug",
+      "destination": "/s/:slug/repertorio/:repertoireSlug",
+      "permanent": true
+    },
+    {
+      "source": "/catalogo/:slug",
+      "destination": "/s/:slug",
+      "permanent": true
+    },
+    {
+      "source": "/conversor",
+      "destination": "https://www.multiconverte.com.br/",
+      "permanent": true
+    },
+    {
+      "source": "/conversor-sundrive",
+      "destination": "https://www.multiconverte.com.br/",
+      "permanent": true
+    },
+    {
+      "source": "/sundrive-conversor",
+      "destination": "https://www.multiconverte.com.br/",
+      "permanent": true
+    },
+    {
+      "source": "/conversor-de-audio",
+      "destination": "https://www.multiconverte.com.br/",
+      "permanent": true
+    },
+    {
+      "source": "/ferramentas/conversor",
+      "destination": "https://www.multiconverte.com.br/",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -21,10 +58,6 @@
     {
       "source": "/s/:slug",
       "destination": "/api/metadata?slug=:slug"
-    },
-    {
-      "source": "/catalogo/:slug",
-      "destination": "/index.html"
     },
     {
       "source": "/(.*)",

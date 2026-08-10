@@ -536,18 +536,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 2. Non-crawler & Non-image request -> Redirect visitors to the SPA public paths
-    if (!isCrawler && !isImageRequest) {
-      const redirectLocation = repertoireIdStr 
-        ? `/catalogo/${slugStr}/repertorio/${repertoireIdStr}`
-        : `/catalogo/${slugStr}`;
-      res.writeHead(302, {
-        Location: redirectLocation
-      });
-      return res.end();
-    }
-
-    // 3. Image Request -> Generate and render the physical CD/Vinyl card
+    // 2. Image Request -> Generate and render the physical CD/Vinyl card
     if (isImageRequest) {
       const cleanName = escapeXml((artist.name || "Compositor").trim().toUpperCase());
       const cleanGenre = escapeXml((artist.genre || "Música Sertaneja").trim());
@@ -941,11 +930,13 @@ export default async function handler(req: any, res: any) {
       .replace(/<meta\s+[^>]*name\s*=\s*["']?description["']?[^>]*\/?>/gi, "")
       .replace(/<meta\s+[^>]*property\s*=\s*["']?og:[^"'\s>]*["']?[^>]*\/?>/gi, "")
       .replace(/<meta\s+[^>]*name\s*=\s*["']?twitter:[^"'\s>]*["']?[^>]*\/?>/gi, "")
-      .replace(/<link\s+[^>]*rel\s*=\s*["']?canonical["']?[^>]*\/?>/gi, "");
+      .replace(/<link\s+[^>]*rel\s*=\s*["']?canonical["']?[^>]*\/?>/gi, "")
+      .replace(/<meta\s+[^>]*name\s*=\s*["']?robots["']?[^>]*\/?>/gi, "");
 
     const ogPayload = `
     <!-- Dynamic Custom SomDrive OG Sharing Metadata -->
     <title>${escapeXml(titleText)}</title>
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="description" content="${escapeXml(descText)}" />
     <link rel="canonical" href="${escapeXml(canonicalUrl)}" />
     <meta property="og:type" content="website" />
@@ -981,9 +972,9 @@ export default async function handler(req: any, res: any) {
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="refresh" content="0; url=/catalogo/${slugStr}" />
+    <meta http-equiv="refresh" content="0; url=/s/${slugStr}" />
     <script>
-      window.location.href = "/catalogo/${slugStr}";
+      window.location.href = "/s/${slugStr}";
     </script>
     <title>SomDrive - Redirecionando...</title>
   </head>
