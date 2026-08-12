@@ -538,7 +538,7 @@ async function startServer() {
   });
 
   // API Route for Cloudflare R2 proxy image/avatar upload (bypasses CORS entirely)
-  app.post("/api/r2-proxy-image-upload", express.raw({ type: '*/*', limit: '2MB' }), async (req, res) => {
+  app.post("/api/r2-proxy-image-upload", express.raw({ type: '*/*', limit: '10mb' }), async (req, res) => {
     const fileName = req.headers["x-file-name"] ? decodeURIComponent(req.headers["x-file-name"] as string) : undefined;
     const fileType = req.headers["x-file-type"] as string;
     const fileSizeStr = req.headers["x-file-size"] as string;
@@ -572,10 +572,10 @@ async function startServer() {
         return res.status(400).json({ error: errMsg });
       }
 
-      // 2. Validar tamanho máximo <= 2 MB
-      const maxSizeBytes = 2 * 1024 * 1024;
+      // 2. Validar tamanho máximo <= 10 MB
+      const maxSizeBytes = 10 * 1024 * 1024;
       if (fileSize > maxSizeBytes) {
-        const errMsg = `Esta imagem possui ${(fileSize / (1024 * 1024)).toFixed(2)} MB, ultrapassando o limite máximo permitido de 2 MB.`;
+        const errMsg = `Esta imagem possui ${(fileSize / (1024 * 1024)).toFixed(2)} MB, ultrapassando o limite máximo permitido de 10 MB.`;
         console.error("R2 Proxy Image Upload - Erro Tamanho:", { fileSize, limit: maxSizeBytes });
         return res.status(400).json({ error: errMsg });
       }
@@ -2567,6 +2567,25 @@ async function startServer() {
       console.error("Critical error inside HTML metadata tag injector:", criticalErr);
     }
     next();
+  });
+
+  // Express error handling middleware to capture body-parser or payload limit errors as JSON
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err) {
+      if (err.type === 'entity.too.large' || err.status === 413 || err.code === 'LIMIT_FILE_SIZE') {
+        console.error("Express Error Handler - Payload Too Large:", err);
+        return res.status(413).json({
+          error: "O arquivo enviado é muito grande. O limite máximo permitido para envio de imagem é de 10 MB."
+        });
+      }
+      if (req.path.startsWith('/api/')) {
+        console.error("Express API Error Handler:", err);
+        return res.status(err.status || 500).json({
+          error: err.message || "Erro interno do servidor."
+        });
+      }
+    }
+    next(err);
   });
 
   // Vite middleware for development

@@ -55,10 +55,10 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: errMsg });
     }
 
-    // 2. Validar tamanho máximo <= 2 MB
-    const maxSizeBytes = 2 * 1024 * 1024;
+    // 2. Validar tamanho máximo <= 10 MB
+    const maxSizeBytes = 10 * 1024 * 1024;
     if (fileSize > maxSizeBytes) {
-      const errMsg = `Esta imagem possui ${(fileSize / (1024 * 1024)).toFixed(2)} MB, ultrapassando o limite limite de 2 MB.`;
+      const errMsg = `Esta imagem possui ${(fileSize / (1024 * 1024)).toFixed(2)} MB, ultrapassando o limite de 10 MB.`;
       console.error("CORS Proxy Image - Erro Tamanho:", { fileSize, limit: maxSizeBytes });
       return res.status(400).json({ error: errMsg });
     }

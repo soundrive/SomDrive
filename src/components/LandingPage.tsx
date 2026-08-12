@@ -25,7 +25,15 @@ import {
   Bell,
   Link,
   Bluetooth,
-  Send
+  Send,
+  MoreVertical,
+  Search,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Repeat,
+  FileText,
+  List
 } from 'lucide-react';
 import { Artist } from '../types';
 import { PLANS_CONFIG } from '../lib/plansConfig';
@@ -39,6 +47,14 @@ interface LandingPageProps {
   logoScale?: number;
   showLogo?: boolean;
   customLogoUrl?: string;
+  landingCtaImageUrl?: string;
+  landingCtaImageScale?: number;
+  landingCtaImageOffsetY?: number;
+  landingCtaImageOffsetX?: number;
+  collectionImageUrl?: string;
+  collectionImageScale?: number;
+  collectionImageOffsetY?: number;
+  collectionImageOffsetX?: number;
 }
 
 const TEST_ARTISTS = [
@@ -113,11 +129,27 @@ const TEST_ARTISTS = [
   }
 ];
 
-export default function LandingPage({ onNavigate, currentUser, onLogout, logoScale, showLogo, customLogoUrl }: LandingPageProps) {
+export default function LandingPage({ 
+  onNavigate, 
+  currentUser, 
+  onLogout, 
+  logoScale, 
+  showLogo, 
+  customLogoUrl, 
+  landingCtaImageUrl,
+  landingCtaImageScale = 100,
+  landingCtaImageOffsetY = 0,
+  landingCtaImageOffsetX = 0,
+  collectionImageUrl,
+  collectionImageScale = 100,
+  collectionImageOffsetY = 0,
+  collectionImageOffsetX = 0
+}: LandingPageProps) {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0);
   const [isSimulatedPlaying, setIsSimulatedPlaying] = useState(true);
+  const [collectionImageFailed, setCollectionImageFailed] = useState(false);
 
   const landingPlans = {
     free: {
@@ -493,124 +525,211 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
             </div>
 
             {/* Viewport viewport wrapper */}
-            <div className="flex-1 bg-[#06070a] rounded-[28px] sm:rounded-[38px] p-3 sm:p-4.5 pt-5 sm:pt-7 pb-3 sm:pb-4 overflow-hidden flex flex-col justify-between select-none relative">
+            <div className="flex-1 bg-[#06080e] rounded-[28px] sm:rounded-[38px] p-2.5 sm:p-3.5 pt-4 sm:pt-5 pb-2.5 sm:pb-3.5 overflow-hidden flex flex-col justify-between select-none relative font-sans text-white">
               
               {/* Inner ambient mesh circles */}
-              <div className="absolute inset-x-0 top-1/4 bottom-1/4 bg-[radial-gradient(ellipse_at_center,rgba(249,115,22,0.06),transparent_60%)] -z-10 pointer-events-none"></div>
+              <div className="absolute inset-x-0 top-1/4 bottom-1/4 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.08),transparent_65%)] -z-10 pointer-events-none"></div>
               
-              {/* Phone Header */}
-              <div className="flex items-center justify-between pb-2.5 sm:pb-3.5 border-b border-white/[0.04] mb-2 sm:mb-3.5 mt-0.5 sm:mt-1">
+              {/* 1. Phone Header */}
+              <div className="flex items-center justify-between pb-2 border-b border-white/[0.06] mb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="flex items-end gap-0.5 h-2.5 sm:h-3 shrink-0">
-                    <span className="w-0.5 h-1 bg-orange-500 animate-pulse rounded-full"></span>
-                    <span className="w-0.5 h-2 bg-orange-500 animate-pulse rounded-full" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-0.5 h-1.5 bg-orange-500 animate-pulse rounded-full" style={{ animationDelay: '300ms' }}></span>
+                  <div className="flex items-end gap-0.5 h-3 shrink-0">
+                    <span className="w-0.5 h-1.5 bg-emerald-500 animate-pulse rounded-full"></span>
+                    <span className="w-0.5 h-3 bg-emerald-500 animate-pulse rounded-full" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-0.5 h-2 bg-emerald-500 animate-pulse rounded-full" style={{ animationDelay: '300ms' }}></span>
                   </div>
-                  <span className="text-[9.5px] sm:text-xs font-heading font-black tracking-widest text-white uppercase mt-0.5">SOMDRIVE</span>
+                  <span className="text-[10px] sm:text-xs font-heading font-black tracking-widest text-white uppercase">SOMDRIVE</span>
                 </div>
                 
-                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  <div className="relative">
-                    <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 hover:text-white transition cursor-pointer" />
-                    <span className="absolute top-0 right-0 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-orange-500 rounded-full animate-ping"></span>
-                    <span className="absolute top-0 right-0 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-orange-500 rounded-full"></span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="relative p-0.5">
+                    <Bell className="w-3.5 h-3.5 text-slate-300 hover:text-white transition cursor-pointer" />
+                    <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
+                    <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                   </div>
-                  <div className="w-5.5 h-5.5 sm:w-7 sm:h-7 rounded-full bg-[#121319] border border-orange-500/20 flex items-center justify-center text-[8.5px] sm:text-[10px] font-heading font-black text-orange-400 shadow shadow-orange-500/10">
+                  <div className="w-6 h-6 rounded-full bg-[#0d1612] border border-emerald-500/40 flex items-center justify-center text-[9px] font-heading font-black text-emerald-400 shadow-sm shadow-emerald-500/20">
                     GS
                   </div>
                 </div>
               </div>
 
-              {/* Private Catalog Card */}
-              <div className="bg-[#121319]/90 border border-white/[0.05] p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-3.5 shadow-md shadow-black/30 mb-2 sm:mb-3 hover:border-orange-500/10 transition-colors">
-                <div className="p-2 sm:p-2.5 bg-yellow-500/10 border border-yellow-550/20 text-yellow-550 rounded-lg sm:rounded-xl relative shadow-[inset_0_1px_5px_rgba(234,179,8,0.1)] shrink-0">
-                  <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-yellow-500/10" />
+              {/* 2. Private Catalog Card */}
+              <div className="bg-[#0f121a] border border-white/[0.08] p-2 sm:p-2.5 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-3 shadow-md mb-1.5">
+                <div className="p-1.5 sm:p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-lg sm:rounded-xl shrink-0">
+                  <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-[10px] sm:text-[11px] font-heading font-black text-white uppercase tracking-wider">Catálogo Privado</h4>
-                  <p className="text-[8.5px] sm:text-[9.5px]/none font-mono text-slate-500 tracking-wide mt-0.5">Acesso por convite</p>
+                  <h4 className="text-[9.5px] sm:text-[11px] font-heading font-black text-white uppercase tracking-wider leading-tight">CATÁLOGO PRIVADO</h4>
+                  <p className="text-[8px] sm:text-[9.5px] font-mono text-slate-400 tracking-wide mt-0.5 leading-tight">Acesso por convite</p>
                 </div>
               </div>
 
-              {/* Spectacular Circular Equalizer Spectrogram */}
-              <div className="flex-1 flex items-center justify-center relative min-h-[140px] sm:min-h-[170px] my-2 sm:my-3">
-                {/* Concentric glowing rings */}
-                <div className="absolute rounded-full border border-orange-500/5 w-44 h-44 sm:w-60 sm:h-60 animate-pulse"></div>
-                <div className="absolute rounded-full border border-dashed border-orange-500/15 w-36 h-36 sm:w-48 sm:h-48 animate-spin-slow"></div>
-                <div className="absolute rounded-full border border-orange-500/25 bg-radial-gradient from-orange-950/2 w-28 h-28 sm:w-36 sm:h-36 flex items-center justify-center shadow-[inset_0_0_30px_rgba(249,115,22,0.15)]">
-                  
-                  {/* Decorative rotating dotted line circle */}
-                  <svg className="w-full h-full absolute animate-spin-slow opacity-25" viewBox="0 0 100 100" style={{ animationDuration: '30s' }}>
-                    <circle cx="50" cy="50" r="42" fill="none" stroke="#f97316" strokeWidth="1" strokeDasharray="2, 6" />
-                  </svg>
-                  
-                  {/* Dynamic central soundwaves */}
-                  <div className="flex items-center gap-1 justify-center h-10 sm:h-14 w-20 sm:w-28 relative z-10">
-                    {[10, 24, 40, 50, 36, 20, 32, 46, 26, 14, 18].map((h, i) => {
-                      const delay = (i % 4) * 120;
-                      return (
-                        <div
-                          key={i}
-                          style={{
-                            height: `${h * 0.8}px`,
-                            animationDelay: `${delay}ms`
-                          }}
-                          className="w-[1.5px] sm:w-[2.5px] bg-gradient-to-t from-orange-600 via-amber-400 to-yellow-300 rounded-full animate-pulse opacity-95 shadow-[0_0_8px_rgba(249,115,22,0.4)]"
-                        />
-                      );
-                    })}
-                  </div>
+              {/* 3. Transmissão Bluetooth Strip */}
+              <div className="flex items-center justify-between py-1 px-0.5 mb-1.5">
+                <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-bold tracking-wider">
+                  <Bluetooth className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 shrink-0" />
+                  <span className="uppercase text-[8px] sm:text-[9.5px]">TRANSMISSÃO BLUETOOTH</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="px-2 py-0.5 bg-[#121520] border border-white/10 text-slate-200 rounded text-[7.5px] sm:text-[8.5px] font-mono font-bold flex items-center gap-1">
+                    <FileText className="w-2.5 h-2.5 text-slate-400" /> LETRAS
+                  </span>
+                  <span className="px-2 py-0.5 bg-[#121520] border border-white/10 text-slate-200 rounded text-[7.5px] sm:text-[8.5px] font-mono font-bold flex items-center gap-1">
+                    <Smartphone className="w-2.5 h-2.5 text-slate-400" /> CELULAR
+                  </span>
                 </div>
               </div>
 
-              {/* Three Grid Feature Buttons */}
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-1 sm:mt-2 mb-2 sm:mb-3.5">
-                {/* Envio */}
-                <div className="bg-[#121319]/80 border border-white/[0.04] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex flex-col items-center justify-between text-center min-h-[75px] sm:min-h-[85px] shadow-sm">
-                  <div className="p-1 sm:p-1.5 bg-orange-950/50 border border-orange-500/20 text-orange-400 rounded-md sm:rounded-lg">
-                    <Send className="w-3 h-3 sm:w-3.5 sm:h-3.5 transform -rotate-45" />
+              {/* 4. Player Central (Prominent & Styled) */}
+              <div className="flex flex-col items-center justify-center py-2 sm:py-3 px-3 bg-[#0a0d14] border border-white/[0.06] rounded-xl sm:rounded-2xl mb-1.5 text-center relative overflow-hidden shadow-inner">
+                <div className="flex items-center justify-center gap-3 sm:gap-4 mb-1.5">
+                  {/* Left soundwave */}
+                  <div className="flex items-center gap-0.5 h-5 sm:h-6 shrink-0">
+                    <span className="w-0.5 sm:w-1 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span className="w-0.5 sm:w-1 h-4 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '100ms' }}></span>
+                    <span className="w-0.5 sm:w-1 h-5.5 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></span>
+                    <span className="w-0.5 sm:w-1 h-3 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></span>
                   </div>
-                  <span className="text-[8px] sm:text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1 sm:mt-1.5">Envio por</span>
-                  <span className="text-[7.5px] sm:text-[8px] font-mono font-bold text-orange-400 uppercase tracking-tight mt-0.5 sm:mt-1 flex items-center gap-0.5">
-                    <span className="w-1 h-1 bg-orange-500 rounded-full"></span> Convite
+
+                  {/* Center circle play/pause */}
+                  <div className="w-11 h-11 sm:w-13 sm:h-13 rounded-full border-[2.5px] sm:border-[3px] border-emerald-500 bg-emerald-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(16,185,129,0.35)] shrink-0">
+                    <Pause className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 fill-emerald-400" />
+                  </div>
+
+                  {/* Right soundwave */}
+                  <div className="flex items-center gap-0.5 h-5 sm:h-6 shrink-0">
+                    <span className="w-0.5 sm:w-1 h-3 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></span>
+                    <span className="w-0.5 sm:w-1 h-5.5 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></span>
+                    <span className="w-0.5 sm:w-1 h-4 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '100ms' }}></span>
+                    <span className="w-0.5 sm:w-1 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                  </div>
+                </div>
+
+                <h4 className="text-xs sm:text-sm font-heading font-black text-white uppercase tracking-widest leading-none">POR METADE</h4>
+                <p className="text-[8.5px] sm:text-[9.5px] font-mono text-slate-400 tracking-wide mt-1 leading-none">Guia</p>
+              </div>
+
+              {/* 5. MEU REPERTÓRIO */}
+              <div className="flex-1 flex flex-col min-h-0 mb-1.5">
+                <div className="flex items-center justify-between pb-1 px-0.5 mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <List className="w-3 h-3 text-emerald-400" />
+                    <span className="text-[9px] sm:text-[10.5px] font-heading font-black text-white uppercase tracking-wider">MEU REPERTÓRIO</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Search className="w-3 h-3 hover:text-white transition cursor-pointer" />
+                    <MoreVertical className="w-3 h-3 hover:text-white transition cursor-pointer" />
+                  </div>
+                </div>
+
+                {/* Songs list */}
+                <div className="space-y-1 bg-[#090c13] border border-white/[0.06] rounded-xl sm:rounded-2xl p-1.5 overflow-hidden shadow-sm">
+                  {[
+                    { title: 'Som da Estrada', duration: '02:45', active: true },
+                    { title: 'Amor na Estrada', duration: '03:18', active: false },
+                    { title: 'Saudade de Nós', duration: '03:02', active: false },
+                    { title: 'Coração Sem Volta', duration: '02:57', active: false },
+                    { title: 'Melodia do Amanhã', duration: '03:33', active: false }
+                  ].map((track, idx) => (
+                    <div 
+                      key={idx}
+                      className={`flex items-center justify-between px-2 py-1 rounded-lg text-left transition-colors ${track.active ? 'bg-emerald-500/10 border border-emerald-500/25' : 'hover:bg-white/[0.03]'}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full flex items-center justify-center shrink-0 ${track.active ? 'bg-emerald-500 text-slate-950' : 'bg-[#151924] text-slate-400'}`}>
+                          <Play className={`w-2 h-2 ml-0.5 ${track.active ? 'fill-slate-950' : 'fill-slate-400'}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[8.5px] sm:text-[9.5px] font-heading font-bold text-white tracking-tight truncate leading-tight">{track.title}</p>
+                          <p className="text-[7px] sm:text-[8px] font-mono text-slate-400 leading-none mt-0.5">Guia</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                        <span className="text-[7.5px] sm:text-[8.5px] font-mono text-slate-400">{track.duration}</span>
+                        <MoreVertical className="w-2.5 h-2.5 text-slate-500" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 6. Three Grid Feature Buttons */}
+              <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                {/* Envio por convite */}
+                <div className="bg-[#0c0e15] border border-white/[0.06] p-1.5 sm:p-2 rounded-xl flex flex-col items-center justify-center text-center">
+                  <div className="p-1 bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 rounded-lg mb-1">
+                    <Send className="w-3 h-3 sm:w-3.5 sm:h-3.5 transform -rotate-45 text-emerald-400" />
+                  </div>
+                  <span className="text-[7.5px] sm:text-[8.5px] font-heading font-bold text-slate-300 uppercase leading-none">ENVIO POR</span>
+                  <span className="text-[7px] sm:text-[8px] font-mono font-bold text-emerald-400 uppercase tracking-tight mt-1 flex items-center gap-1">
+                    <span className="w-1 h-1 bg-emerald-500 rounded-full"></span> CONVITE
                   </span>
                 </div>
 
                 {/* Bluetooth */}
-                <div className="bg-[#121319]/80 border border-white/[0.04] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex flex-col items-center justify-between text-center min-h-[75px] sm:min-h-[85px] shadow-sm">
-                  <div className="p-1 sm:p-1.5 bg-blue-950/50 border border-blue-500/20 text-blue-400 rounded-md sm:rounded-lg">
-                    <Bluetooth className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <div className="bg-[#0c0e15] border border-white/[0.06] p-1.5 sm:p-2 rounded-xl flex flex-col items-center justify-center text-center">
+                  <div className="p-1 bg-blue-950/60 border border-blue-500/30 text-blue-400 rounded-lg mb-1">
+                    <Bluetooth className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-400" />
                   </div>
-                  <span className="text-[8px] sm:text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1 sm:mt-1.5">Bluetooth</span>
-                  <span className="text-[7.5px] sm:text-[8px] font-mono font-bold text-emerald-400 uppercase tracking-tight mt-0.5 sm:mt-1 flex items-center gap-0.5">
-                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></span> On
+                  <span className="text-[7.5px] sm:text-[8.5px] font-heading font-bold text-slate-300 uppercase leading-none">BLUETOOTH</span>
+                  <span className="text-[7px] sm:text-[8px] font-mono font-bold text-blue-400 uppercase tracking-tight mt-1 flex items-center gap-1">
+                    <span className="w-1 h-1 bg-blue-500 rounded-full animate-ping"></span> ON
                   </span>
                 </div>
 
                 {/* Modo Carro */}
-                <div className="bg-[#121319]/80 border border-white/[0.04] p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl flex flex-col items-center justify-between text-center min-h-[75px] sm:min-h-[85px] shadow-sm">
-                  <div className="p-1 sm:p-1.5 bg-yellow-950/50 border border-yellow-550/20 text-yellow-500 rounded-md sm:rounded-lg">
-                    <Car className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <div className="bg-[#0c0e15] border border-white/[0.06] p-1.5 sm:p-2 rounded-xl flex flex-col items-center justify-center text-center">
+                  <div className="p-1 bg-amber-950/60 border border-amber-500/30 text-amber-400 rounded-lg mb-1">
+                    <Car className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
                   </div>
-                  <span className="text-[8px] sm:text-[9px] font-heading font-black text-slate-300 uppercase leading-none mt-1 sm:mt-1.5">Modo Carro</span>
-                  <span className="text-[7.5px] sm:text-[8px] font-mono font-bold text-yellow-400 uppercase tracking-tight mt-0.5 sm:mt-1 flex items-center gap-0.5">
-                    <span className="w-1 h-1 bg-yellow-500 rounded-full"></span> Ativo
+                  <span className="text-[7.5px] sm:text-[8.5px] font-heading font-bold text-slate-300 uppercase leading-none">MODO CARRO</span>
+                  <span className="text-[7px] sm:text-[8px] font-mono font-bold text-amber-400 uppercase tracking-tight mt-1 flex items-center gap-1">
+                    <span className="w-1 h-1 bg-amber-400 rounded-full"></span> ATIVO
                   </span>
                 </div>
               </div>
 
-              {/* Wide Enviar por Link Button */}
+              {/* 7. Wide Enviar por Link Button */}
               <button 
                 onClick={() => onNavigate('auth', { isRegister: true })}
-                className="w-full py-2.5 sm:py-3.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 rounded-xl font-heading font-black tracking-widest text-[9.5px] sm:text-[10.5px] uppercase cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 group transition-all duration-300 shadow-md shadow-orange-500/10 hover:shadow-orange-550/20 transform hover:-translate-y-0.5 select-none"
+                className="w-full py-2 sm:py-2.5 bg-gradient-to-r from-emerald-500 via-emerald-400 to-amber-400 hover:from-emerald-400 hover:to-amber-300 text-slate-950 rounded-xl font-heading font-black tracking-widest text-[9px] sm:text-[10px] uppercase cursor-pointer flex items-center justify-center gap-1.5 transition-all duration-300 shadow-md shadow-emerald-500/20 select-none mb-1.5"
               >
-                <Link className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-950 stroke-[2.5]" /> Enviar por Link
+                <Link className="w-3 h-3 text-slate-950 stroke-[2.5]" /> ENVIAR POR LINK
               </button>
 
-              {/* Footer text */}
-              <div className="flex items-center justify-center gap-1 mt-2.5 sm:mt-3.5 text-slate-500 text-[8px] sm:text-[8.5px] font-mono uppercase tracking-widest">
-                <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600" />
-                <span>Compartilhe com selecionados</span>
+              {/* 8. Bottom Audio Progress & Controls */}
+              <div className="pt-1 border-t border-white/[0.06] space-y-1">
+                {/* Progress bar */}
+                <div className="flex items-center gap-1.5 text-[7px] sm:text-[8px] font-mono text-slate-400">
+                  <span>00:20</span>
+                  <div className="flex-1 h-1 bg-slate-800 rounded-full relative overflow-hidden flex items-center">
+                    <div className="w-[30%] h-full bg-gradient-to-r from-emerald-500 to-amber-400 rounded-full"></div>
+                    <div className="w-1.5 h-1.5 bg-white rounded-full shadow absolute left-[28%] -translate-x-1/2"></div>
+                  </div>
+                  <span>01:07</span>
+                </div>
+
+                {/* Player Controls */}
+                <div className="flex items-center justify-between px-3 pt-0.5">
+                  <Shuffle className="w-3 h-3 text-slate-500 hover:text-slate-300 transition cursor-pointer" />
+                  <SkipBack className="w-3.5 h-3.5 text-slate-300 fill-slate-300 hover:text-white transition cursor-pointer" />
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-emerald-500 bg-emerald-500/20 flex items-center justify-center shadow-sm shadow-emerald-500/20">
+                    <Pause className="w-2.5 h-2.5 text-emerald-400 fill-emerald-400" />
+                  </div>
+                  <SkipForward className="w-3.5 h-3.5 text-slate-300 fill-slate-300 hover:text-white transition cursor-pointer" />
+                  <Repeat className="w-3 h-3 text-slate-500 hover:text-slate-300 transition cursor-pointer" />
+                </div>
+
+                {/* Mode Chips */}
+                <div className="flex items-center justify-center gap-2 pt-0.5">
+                  <span className="px-2 py-0.5 bg-[#0c0e15] border border-emerald-500/40 text-emerald-400 rounded-lg text-[7px] sm:text-[8px] font-mono font-bold flex items-center gap-1">
+                    <FileText className="w-2.5 h-2.5" /> LETRA
+                  </span>
+                  <span className="px-2 py-0.5 bg-[#0c0e15] border border-white/10 text-slate-300 rounded-lg text-[7px] sm:text-[8px] font-mono font-bold flex items-center gap-1">
+                    <Car className="w-2.5 h-2.5 text-slate-400" /> CARRO
+                  </span>
+                </div>
               </div>
 
             </div>
@@ -684,10 +803,10 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
       </section>
 
       {/* ORGANIZE SUAS MÚSICAS */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28">
-        <div className="bg-gradient-to-br from-[#0d1326] to-[#080d1a] border border-slate-850 rounded-3xl p-8 md:p-12 shadow-2xl">
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-28 overflow-x-clip">
+        <div className="bg-gradient-to-br from-[#0d1326] to-[#080d1a] border border-slate-850 rounded-3xl p-8 md:p-12 shadow-2xl relative">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-5">
+            <div className="lg:col-span-7 space-y-5 relative z-10">
               <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Organize Seu Acervo</h3>
               <h2 className="text-2xl md:text-4xl font-heading font-black tracking-tight uppercase text-white leading-tight">
                 ORGANIZE SEU ACERVO DO SEU JEITO
@@ -703,27 +822,48 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
               </div>
             </div>
 
-            <div className="lg:col-span-5 bg-[#06080d]/80 border border-slate-800 p-6 rounded-2xl space-y-4">
-              <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 pb-2 border-b border-white/[0.04] font-black">Exemplo Visual Prático:</h4>
-              <ul className="space-y-2.5 text-xs">
-                <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
-                  <span className="text-slate-300">📁 Românticas</span>
-                  <span className="font-mono text-orange-400 font-bold">5 músicas</span>
-                </li>
-                <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
-                  <span className="text-slate-300">📁 Animadas</span>
-                  <span className="font-mono text-orange-400 font-bold">6 músicas</span>
-                </li>
-                <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
-                  <span className="text-slate-300">📁 Para gravação</span>
-                  <span className="font-mono text-orange-400 font-bold">4 músicas</span>
-                </li>
-                <li className="flex justify-between items-center bg-orange-950/35 px-3.5 py-2 rounded-lg border border-orange-500/20 font-black">
-                  <span className="text-white">⭐ Repertório completo</span>
-                  <span className="font-mono text-orange-400">15 músicas</span>
-                </li>
-              </ul>
-            </div>
+            {collectionImageUrl && !collectionImageFailed ? (
+              <div className="lg:col-span-5 relative z-20 flex justify-center lg:justify-end items-center mt-6 lg:mt-0 pointer-events-none select-none">
+                <div 
+                  className="relative max-w-[320px] sm:max-w-[380px] md:max-w-[440px] lg:max-w-[500px] w-full flex items-center justify-center lg:justify-end origin-bottom-right transition-transform duration-150"
+                  style={{
+                    transform: `translate(${collectionImageOffsetX || 0}px, ${collectionImageOffsetY || 0}px) scale(${(collectionImageScale || 100) / 100})`,
+                  }}
+                >
+                  <img 
+                    src={collectionImageUrl} 
+                    alt="Organize Seu Acervo SomDrive" 
+                    className="w-full h-auto object-contain max-h-[380px] sm:max-h-[440px] md:max-h-[520px] lg:max-h-[600px] drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)]"
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      setCollectionImageFailed(true);
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="lg:col-span-5 bg-[#06080d]/80 border border-slate-800 p-6 rounded-2xl space-y-4 relative z-10">
+                <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 pb-2 border-b border-white/[0.04] font-black">Exemplo Visual Prático:</h4>
+                <ul className="space-y-2.5 text-xs">
+                  <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
+                    <span className="text-slate-300">📁 Românticas</span>
+                    <span className="font-mono text-orange-400 font-bold">5 músicas</span>
+                  </li>
+                  <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
+                    <span className="text-slate-300">📁 Animadas</span>
+                    <span className="font-mono text-orange-400 font-bold">6 músicas</span>
+                  </li>
+                  <li className="flex justify-between items-center bg-slate-900/50 px-3.5 py-2 rounded-lg border border-slate-850">
+                    <span className="text-slate-300">📁 Para gravação</span>
+                    <span className="font-mono text-orange-400 font-bold">4 músicas</span>
+                  </li>
+                  <li className="flex justify-between items-center bg-orange-950/35 px-3.5 py-2 rounded-lg border border-orange-500/20 font-black">
+                    <span className="text-white">⭐ Repertório completo</span>
+                    <span className="font-mono text-orange-400">15 músicas</span>
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -1172,30 +1312,60 @@ export default function LandingPage({ onNavigate, currentUser, onLogout, logoSca
       </section>
 
       {/* FINAL CALL TO ACTION */}
-      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-32 text-center">
-        <div className="bg-gradient-to-r from-orange-600/10 via-yellow-500/5 to-orange-600/10 border border-orange-500/20 rounded-3xl p-8 md:p-14 space-y-6 md:space-y-8 shadow-2xl relative overflow-hidden">
-          {/* Glowing particle background behind CTA */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-orange-500/10 rounded-full blur-[80px] pointer-events-none"></div>
-          
-          <h2 className="text-xl sm:text-3xl md:text-4xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-300 tracking-tight leading-tight relative z-10">
-            PRONTO PARA APRESENTAR SEU REPERTÓRIO COMO UM PROFISSIONAL?
-          </h2>
-          <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto relative z-10 font-sans">
-            Crie sua conta agora mesmo e organize seu catálogo musical na nuvem.
-          </p>
-          <div className="flex justify-center pt-2 relative z-10">
-            <button 
-              onClick={() => onNavigate('auth', { isRegister: true })}
-              className="px-8 py-4 sm:px-10 sm:py-5 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-xl font-heading font-extrabold text-xs sm:text-sm uppercase tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-xl shadow-orange-500/20 transition duration-300 select-none text-slate-950 font-black"
-            >
-              COMEÇAR AGORA DE GRAÇA
-            </button>
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-32 pb-12 text-center overflow-x-clip">
+        <div className="relative">
+          {/* Main Card Box Container */}
+          <div className={`bg-gradient-to-r from-orange-600/10 via-yellow-500/5 to-orange-600/10 border border-orange-500/20 rounded-3xl p-8 ${landingCtaImageUrl ? 'md:p-12 md:py-14' : 'md:p-14'} shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between text-center ${landingCtaImageUrl ? 'md:text-left' : 'md:text-center'}`}>
+            {/* Glowing particle background behind CTA */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-orange-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+
+            {/* Text & Button content wrapper */}
+            <div className={`relative z-10 space-y-6 md:space-y-8 w-full ${landingCtaImageUrl ? 'md:w-[58%] lg:w-[60%]' : 'max-w-2xl mx-auto'}`}>
+              <h2 className="text-xl sm:text-3xl md:text-4xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-300 tracking-tight leading-tight">
+                PRONTO PARA APRESENTAR SEU REPERTÓRIO COMO UM PROFISSIONAL?
+              </h2>
+              <p className="text-slate-300 text-sm sm:text-base font-sans">
+                Crie sua conta agora mesmo e organize seu catálogo musical na nuvem.
+              </p>
+              <div className={`flex ${landingCtaImageUrl ? 'justify-center md:justify-start' : 'justify-center'} pt-2`}>
+                <button 
+                  onClick={() => onNavigate('auth', { isRegister: true })}
+                  className="px-8 py-4 sm:px-10 sm:py-5 bg-gradient-to-r from-orange-600 to-yellow-500 rounded-xl font-heading font-extrabold text-xs sm:text-sm uppercase tracking-wider hover:from-orange-500 hover:to-yellow-400 cursor-pointer shadow-xl shadow-orange-500/20 transition duration-300 select-none text-slate-950 font-black"
+                >
+                  COMEÇAR AGORA DE GRAÇA
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* Overlapping character image layer (outside overflow-hidden card) */}
+          {landingCtaImageUrl && (
+            <div className="relative z-20 w-full md:w-[42%] lg:w-[44%] flex justify-center md:justify-end items-end md:absolute md:right-0 md:-bottom-12 lg:-bottom-16 pointer-events-none select-none mt-6 md:mt-0">
+              <div 
+                className="relative max-w-[280px] sm:max-w-[320px] md:max-w-[450px] lg:max-w-[520px] w-full flex items-end justify-center md:justify-end origin-bottom-right transition-transform duration-150"
+                style={{
+                  transform: `translate(${landingCtaImageOffsetX || 0}px, ${landingCtaImageOffsetY || 0}px) scale(${(landingCtaImageScale || 100) / 100})`,
+                }}
+              >
+                {/* Subtle bottom glow for seamless blending */}
+                <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-orange-950/40 via-orange-500/10 to-transparent blur-xl -z-10"></div>
+                <img 
+                  src={landingCtaImageUrl} 
+                  alt="SomDrive CTA Promocional" 
+                  className="w-full h-auto object-contain object-bottom max-h-[380px] sm:max-h-[420px] md:max-h-[650px] lg:max-h-[750px] drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)]"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
       {/* Trust Seal Footer */}
-      <footer className="mt-28 py-10 border-t border-slate-900 text-center max-w-7xl mx-auto px-6">
+      <footer className="mt-20 md:mt-28 py-10 border-t border-slate-900 text-center max-w-7xl mx-auto px-6 relative z-10">
         <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-mono uppercase mb-3">
           <ShieldCheck className="w-4 h-4 text-orange-500" /> Seus áudios em alta qualidade e 100% seguros • SSL Ativo
         </div>

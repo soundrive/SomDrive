@@ -25,7 +25,9 @@ import {
   RefreshCw,
   Sparkles,
   Megaphone,
-  Database
+  Database,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Artist, ShareCardSettings, RecommendedToolConfig, FREE_MUSIC_LIMIT } from '../types';
 import AnnouncementsManager from './admin/AnnouncementsManager';
@@ -76,6 +78,22 @@ interface AdminAreaProps {
   onShowLogoChange: (show: boolean) => void;
   customLogoUrl: string;
   onCustomLogoUrlChange: (url: string) => void;
+  landingCtaImageUrl?: string;
+  onLandingCtaImageUrlChange?: (url: string) => void;
+  landingCtaImageScale?: number;
+  onLandingCtaImageScaleChange?: (scale: number) => void;
+  landingCtaImageOffsetY?: number;
+  onLandingCtaImageOffsetYChange?: (offsetY: number) => void;
+  landingCtaImageOffsetX?: number;
+  onLandingCtaImageOffsetXChange?: (offsetX: number) => void;
+  collectionImageUrl?: string;
+  onCollectionImageUrlChange?: (url: string) => void;
+  collectionImageScale?: number;
+  onCollectionImageScaleChange?: (scale: number) => void;
+  collectionImageOffsetY?: number;
+  onCollectionImageOffsetYChange?: (offsetY: number) => void;
+  collectionImageOffsetX?: number;
+  onCollectionImageOffsetXChange?: (offsetX: number) => void;
 }
 
 export default function AdminArea({
@@ -87,7 +105,23 @@ export default function AdminArea({
   showLogo,
   onShowLogoChange,
   customLogoUrl,
-  onCustomLogoUrlChange
+  onCustomLogoUrlChange,
+  landingCtaImageUrl = '',
+  onLandingCtaImageUrlChange,
+  landingCtaImageScale = 100,
+  onLandingCtaImageScaleChange,
+  landingCtaImageOffsetY = 0,
+  onLandingCtaImageOffsetYChange,
+  landingCtaImageOffsetX = 0,
+  onLandingCtaImageOffsetXChange,
+  collectionImageUrl = '',
+  onCollectionImageUrlChange,
+  collectionImageScale = 100,
+  onCollectionImageScaleChange,
+  collectionImageOffsetY = 0,
+  onCollectionImageOffsetYChange,
+  collectionImageOffsetX = 0,
+  onCollectionImageOffsetXChange
 }: AdminAreaProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'manual' | 'payments' | 'settings' | 'mercadopago' | 'announcements' | 'infra'>('dashboard');
   const [users, setUsers] = useState<Artist[]>([]);
@@ -98,6 +132,329 @@ export default function AdminArea({
   const [localCustomLogoUrl, setLocalCustomLogoUrl] = useState<string>(customLogoUrl || '');
   const [isSavingLogoScale, setIsSavingLogoScale] = useState(false);
   const [logoSuccessMsg, setLogoSuccessMsg] = useState('');
+
+  // Landing Page Final CTA Promotional Image state
+  const [localLandingCtaImageUrl, setLocalLandingCtaImageUrl] = useState<string>(landingCtaImageUrl || '');
+  const [localLandingCtaImageScale, setLocalLandingCtaImageScale] = useState<number>(landingCtaImageScale || 100);
+  const [localLandingCtaImageOffsetY, setLocalLandingCtaImageOffsetY] = useState<number>(landingCtaImageOffsetY || 0);
+  const [localLandingCtaImageOffsetX, setLocalLandingCtaImageOffsetX] = useState<number>(landingCtaImageOffsetX || 0);
+  const [isUploadingLandingCtaImage, setIsUploadingLandingCtaImage] = useState(false);
+  const [isSavingCtaImageSettings, setIsSavingCtaImageSettings] = useState(false);
+  const [ctaImageSuccessMsg, setCtaImageSuccessMsg] = useState('');
+  const [landingCtaUploadProgress, setLandingCtaUploadProgress] = useState(0);
+  const [landingCtaImageError, setLandingCtaImageError] = useState<string | null>(null);
+  const landingCtaFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Landing Page Collection Section Image state
+  const [localCollectionImageUrl, setLocalCollectionImageUrl] = useState<string>(collectionImageUrl || '');
+  const [localCollectionImageScale, setLocalCollectionImageScale] = useState<number>(collectionImageScale || 100);
+  const [localCollectionImageOffsetY, setLocalCollectionImageOffsetY] = useState<number>(collectionImageOffsetY || 0);
+  const [localCollectionImageOffsetX, setLocalCollectionImageOffsetX] = useState<number>(collectionImageOffsetX || 0);
+  const [isUploadingCollectionImage, setIsUploadingCollectionImage] = useState(false);
+  const [isSavingCollectionImageSettings, setIsSavingCollectionImageSettings] = useState(false);
+  const [collectionImageSuccessMsg, setCollectionImageSuccessMsg] = useState('');
+  const [collectionUploadProgress, setCollectionUploadProgress] = useState(0);
+  const [collectionImageError, setCollectionImageError] = useState<string | null>(null);
+  const collectionFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (landingCtaImageUrl !== undefined) setLocalLandingCtaImageUrl(landingCtaImageUrl);
+    if (landingCtaImageScale !== undefined) setLocalLandingCtaImageScale(landingCtaImageScale);
+    if (landingCtaImageOffsetY !== undefined) setLocalLandingCtaImageOffsetY(landingCtaImageOffsetY);
+    if (landingCtaImageOffsetX !== undefined) setLocalLandingCtaImageOffsetX(landingCtaImageOffsetX);
+  }, [landingCtaImageUrl, landingCtaImageScale, landingCtaImageOffsetY, landingCtaImageOffsetX]);
+
+  useEffect(() => {
+    if (collectionImageUrl !== undefined) setLocalCollectionImageUrl(collectionImageUrl);
+    if (collectionImageScale !== undefined) setLocalCollectionImageScale(collectionImageScale);
+    if (collectionImageOffsetY !== undefined) setLocalCollectionImageOffsetY(collectionImageOffsetY);
+    if (collectionImageOffsetX !== undefined) setLocalCollectionImageOffsetX(collectionImageOffsetX);
+  }, [collectionImageUrl, collectionImageScale, collectionImageOffsetY, collectionImageOffsetX]);
+
+  const handleSaveCtaImageAdjustments = async () => {
+    setIsSavingCtaImageSettings(true);
+    setCtaImageSuccessMsg('');
+    try {
+      await dbService.updateAppearanceSettings({
+        logoScale: localLogoScale,
+        showLogo: localShowLogo,
+        customLogoUrl: localCustomLogoUrl,
+        landingCtaImageUrl: localLandingCtaImageUrl,
+        landingCtaImageScale: localLandingCtaImageScale,
+        landingCtaImageOffsetY: localLandingCtaImageOffsetY,
+        landingCtaImageOffsetX: localLandingCtaImageOffsetX
+      }, currentUser.email || 'admin');
+
+      if (onLandingCtaImageScaleChange) onLandingCtaImageScaleChange(localLandingCtaImageScale);
+      if (onLandingCtaImageOffsetYChange) onLandingCtaImageOffsetYChange(localLandingCtaImageOffsetY);
+      if (onLandingCtaImageOffsetXChange) onLandingCtaImageOffsetXChange(localLandingCtaImageOffsetX);
+
+      setCtaImageSuccessMsg('Ajustes salvos com sucesso!');
+      triggerNotification('Ajustes da imagem do CTA salvos!');
+      setTimeout(() => setCtaImageSuccessMsg(''), 3000);
+    } catch (err: any) {
+      console.error("Erro ao salvar ajustes da imagem CTA:", err);
+      triggerNotification('Erro ao salvar ajustes da imagem.');
+    } finally {
+      setIsSavingCtaImageSettings(false);
+    }
+  };
+
+  const handleLandingCtaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!acceptedTypes.includes(file.type)) {
+      setLandingCtaImageError("Formato de imagem inválido. Use PNG, WEBP ou JPEG.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setLandingCtaImageError("A imagem excede o tamanho máximo de 10 MB.");
+      return;
+    }
+
+    setLandingCtaImageError(null);
+    setIsUploadingLandingCtaImage(true);
+    setLandingCtaUploadProgress(15);
+
+    try {
+      setLandingCtaUploadProgress(40);
+
+      const response = await fetch("/api/r2-proxy-image-upload", {
+        method: "POST",
+        headers: {
+          "X-File-Name": encodeURIComponent(file.name || "landing-cta-promo.png"),
+          "X-File-Type": file.type || "image/png",
+          "X-File-Size": file.size.toString(),
+          "X-User-Id": currentUser.userId,
+          "X-User-Email": currentUser.email || "",
+        },
+        body: file,
+      });
+
+      setLandingCtaUploadProgress(80);
+
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonErr) {
+        if (response.status === 413) {
+          throw new Error("A imagem é muito grande. O limite máximo permitido para envio é de 10 MB.");
+        }
+        throw new Error(`Erro do servidor (${response.status}): Não foi possível processar a resposta do upload.`);
+      }
+
+      if (!response.ok || !data.publicImageUrl) {
+        throw new Error(data.error || "Erro no upload da imagem promocional.");
+      }
+
+      const uploadedUrl = data.publicImageUrl;
+      setLandingCtaUploadProgress(100);
+
+      await dbService.updateAppearanceSettings({
+        logoScale: localLogoScale,
+        showLogo: localShowLogo,
+        customLogoUrl: localCustomLogoUrl,
+        landingCtaImageUrl: uploadedUrl,
+        landingCtaImageScale: localLandingCtaImageScale,
+        landingCtaImageOffsetY: localLandingCtaImageOffsetY,
+        landingCtaImageOffsetX: localLandingCtaImageOffsetX
+      }, currentUser.email || 'admin');
+
+      setLocalLandingCtaImageUrl(uploadedUrl);
+      if (onLandingCtaImageUrlChange) {
+        onLandingCtaImageUrlChange(uploadedUrl);
+      }
+
+      triggerNotification("Imagem CTA Final salva e publicada com sucesso!");
+    } catch (err: any) {
+      console.error("Erro no upload da imagem CTA:", err);
+      setLandingCtaImageError(err.message || "Não foi possível enviar a imagem. Tente novamente.");
+    } finally {
+      setIsUploadingLandingCtaImage(false);
+      if (landingCtaFileInputRef.current) {
+        landingCtaFileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveLandingCtaImage = async () => {
+    askConfirmation(
+      "Remover Imagem CTA Final",
+      "Deseja realmente remover a imagem promocional da Landing Page? O bloco do CTA voltará ao modelo padrão de texto centralizado.",
+      async () => {
+        try {
+          await dbService.updateAppearanceSettings({
+            logoScale: localLogoScale,
+            showLogo: localShowLogo,
+            customLogoUrl: localCustomLogoUrl,
+            landingCtaImageUrl: ''
+          }, currentUser.email || 'admin');
+
+          setLocalLandingCtaImageUrl('');
+          if (onLandingCtaImageUrlChange) {
+            onLandingCtaImageUrlChange('');
+          }
+
+          triggerNotification("Imagem do CTA removida com sucesso. Modelo padrão ativo.");
+        } catch (err: any) {
+          console.error("Erro ao remover imagem CTA:", err);
+          setLandingCtaImageError("Erro ao salvar alteração. Tente novamente.");
+        }
+      }
+    );
+  };
+
+  const handleSaveCollectionImageAdjustments = async () => {
+    setIsSavingCollectionImageSettings(true);
+    setCollectionImageSuccessMsg('');
+    try {
+      await dbService.updateAppearanceSettings({
+        logoScale: localLogoScale,
+        showLogo: localShowLogo,
+        customLogoUrl: localCustomLogoUrl,
+        landingCtaImageUrl: localLandingCtaImageUrl,
+        landingCtaImageScale: localLandingCtaImageScale,
+        landingCtaImageOffsetY: localLandingCtaImageOffsetY,
+        landingCtaImageOffsetX: localLandingCtaImageOffsetX,
+        collectionImageUrl: localCollectionImageUrl,
+        collectionImageScale: localCollectionImageScale,
+        collectionImageOffsetY: localCollectionImageOffsetY,
+        collectionImageOffsetX: localCollectionImageOffsetX
+      }, currentUser.email || 'admin');
+
+      if (onCollectionImageScaleChange) onCollectionImageScaleChange(localCollectionImageScale);
+      if (onCollectionImageOffsetYChange) onCollectionImageOffsetYChange(localCollectionImageOffsetY);
+      if (onCollectionImageOffsetXChange) onCollectionImageOffsetXChange(localCollectionImageOffsetX);
+
+      setCollectionImageSuccessMsg('Ajustes salvos com sucesso!');
+      triggerNotification('Ajustes da imagem do acervo salvos!');
+      setTimeout(() => setCollectionImageSuccessMsg(''), 3000);
+    } catch (err: any) {
+      console.error("Erro ao salvar ajustes da imagem do acervo:", err);
+      triggerNotification('Erro ao salvar ajustes da imagem.');
+    } finally {
+      setIsSavingCollectionImageSettings(false);
+    }
+  };
+
+  const handleCollectionUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!acceptedTypes.includes(file.type)) {
+      setCollectionImageError("Formato de imagem inválido. Use PNG, WEBP ou JPEG.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setCollectionImageError("A imagem excede o tamanho máximo de 10 MB.");
+      return;
+    }
+
+    setCollectionImageError(null);
+    setIsUploadingCollectionImage(true);
+    setCollectionUploadProgress(15);
+
+    try {
+      setCollectionUploadProgress(40);
+
+      const response = await fetch("/api/r2-proxy-image-upload", {
+        method: "POST",
+        headers: {
+          "X-File-Name": encodeURIComponent(file.name || "collection-organize-promo.png"),
+          "X-File-Type": file.type || "image/png",
+          "X-File-Size": file.size.toString(),
+          "X-User-Id": currentUser.userId,
+          "X-User-Email": currentUser.email || "",
+        },
+        body: file,
+      });
+
+      setCollectionUploadProgress(80);
+
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonErr) {
+        if (response.status === 413) {
+          throw new Error("A imagem é muito grande. O limite máximo permitido para envio é de 10 MB.");
+        }
+        throw new Error(`Erro do servidor (${response.status}): Não foi possível processar a resposta do upload.`);
+      }
+
+      if (!response.ok || !data.publicImageUrl) {
+        throw new Error(data.error || "Erro no upload da imagem do acervo.");
+      }
+
+      const uploadedUrl = data.publicImageUrl;
+      setCollectionUploadProgress(100);
+
+      await dbService.updateAppearanceSettings({
+        logoScale: localLogoScale,
+        showLogo: localShowLogo,
+        customLogoUrl: localCustomLogoUrl,
+        landingCtaImageUrl: localLandingCtaImageUrl,
+        landingCtaImageScale: localLandingCtaImageScale,
+        landingCtaImageOffsetY: localLandingCtaImageOffsetY,
+        landingCtaImageOffsetX: localLandingCtaImageOffsetX,
+        collectionImageUrl: uploadedUrl,
+        collectionImageScale: localCollectionImageScale,
+        collectionImageOffsetY: localCollectionImageOffsetY,
+        collectionImageOffsetX: localCollectionImageOffsetX
+      }, currentUser.email || 'admin');
+
+      setLocalCollectionImageUrl(uploadedUrl);
+      if (onCollectionImageUrlChange) {
+        onCollectionImageUrlChange(uploadedUrl);
+      }
+
+      triggerNotification("Imagem do Acervo salva e publicada com sucesso!");
+    } catch (err: any) {
+      console.error("Erro no upload da imagem do acervo:", err);
+      setCollectionImageError(err.message || "Não foi possível enviar a imagem. Tente novamente.");
+    } finally {
+      setIsUploadingCollectionImage(false);
+      if (collectionFileInputRef.current) {
+        collectionFileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveCollectionImage = async () => {
+    askConfirmation(
+      "Remover Imagem do Acervo",
+      "Deseja realmente remover a imagem da seção 'Organize Seu Acervo'? A seção voltará ao quadro de exemplo padrão.",
+      async () => {
+        try {
+          await dbService.updateAppearanceSettings({
+            logoScale: localLogoScale,
+            showLogo: localShowLogo,
+            customLogoUrl: localCustomLogoUrl,
+            landingCtaImageUrl: localLandingCtaImageUrl,
+            landingCtaImageScale: localLandingCtaImageScale,
+            landingCtaImageOffsetY: localLandingCtaImageOffsetY,
+            landingCtaImageOffsetX: localLandingCtaImageOffsetX,
+            collectionImageUrl: ''
+          }, currentUser.email || 'admin');
+
+          setLocalCollectionImageUrl('');
+          if (onCollectionImageUrlChange) {
+            onCollectionImageUrlChange('');
+          }
+          triggerNotification("Imagem do Acervo removida com sucesso!");
+        } catch (err: any) {
+          console.error("Erro ao remover imagem do acervo:", err);
+          triggerNotification("Erro ao remover a imagem.");
+        }
+      }
+    );
+  };
 
   useEffect(() => {
     if (logoScale !== undefined) {
@@ -3494,6 +3851,464 @@ export default function AdminArea({
                   {recommendedToolMsg && (
                     <div className="p-3 bg-emerald-950/40 border border-emerald-900/30 text-xs text-emerald-400 rounded-xl animate-fade-in font-medium">
                       ✓ {recommendedToolMsg}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* IMAGEM CTA FINAL DA LANDING PAGE */}
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-orange-400" />
+                    Imagem CTA Final da Landing Page
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">
+                    Envie uma imagem promocional com fundo transparente (ex: personagem/mulher segurando o celular) para ser exibida no bloco final de cadastro da Landing Page ("PRONTO PARA APRESENTAR SEU REPERTÓRIO COMO UM PROFISSIONAL?").
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-850 space-y-5">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                    {/* Upload Controls */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">Upload da Imagem Promocional (PNG/WEBP com Transparência)</label>
+                        <span className="text-[11px] text-slate-500 block mb-3">
+                          Recomendado: PNG ou WEBP transparente na vertical (com dimensões aproximadas de 800x1200px). Tamanho máximo: 10 MB.
+                        </span>
+
+                        <input
+                          type="file"
+                          ref={landingCtaFileInputRef}
+                          onChange={handleLandingCtaUpload}
+                          accept="image/png,image/webp,image/jpeg"
+                          className="hidden"
+                        />
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            disabled={isUploadingLandingCtaImage}
+                            onClick={() => landingCtaFileInputRef.current?.click()}
+                            className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 font-bold transition rounded-xl text-xs flex items-center gap-2 uppercase tracking-wider cursor-pointer shadow-md shadow-orange-950/20 disabled:opacity-50"
+                          >
+                            {isUploadingLandingCtaImage ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" /> Enviando...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" /> Selecionar Imagem do Computador
+                              </>
+                            )}
+                          </button>
+
+                          {localLandingCtaImageUrl && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveLandingCtaImage}
+                              disabled={isUploadingLandingCtaImage}
+                              className="px-4 py-2.5 bg-red-950/40 hover:bg-red-900/40 border border-red-500/20 text-red-400 font-semibold rounded-xl text-xs transition cursor-pointer select-none"
+                            >
+                              Remover Imagem (Usar Padrão)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Upload Progress Bar */}
+                      {isUploadingLandingCtaImage && (
+                        <div className="space-y-1.5 pt-2">
+                          <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                            <span>Enviando arquivo para o Cloudflare R2...</span>
+                            <span>{landingCtaUploadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-gradient-to-r from-orange-500 to-yellow-400 h-full transition-all duration-300"
+                              style={{ width: `${landingCtaUploadProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error message */}
+                      {landingCtaImageError && (
+                        <div className="p-3 bg-red-950/40 border border-red-900/30 text-xs text-red-400 rounded-xl font-medium">
+                          ⚠️ {landingCtaImageError}
+                        </div>
+                      )}
+
+                      {/* Current URL indicator */}
+                      {localLandingCtaImageUrl ? (
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-1">
+                          <span className="text-slate-400 font-medium block">URL Ativa no Cloudflare R2:</span>
+                          <p className="font-mono text-[10px] text-orange-400 truncate select-all">{localLandingCtaImageUrl}</p>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-slate-900/50 border border-slate-800/80 rounded-xl text-xs text-slate-500 italic">
+                          Nenhuma imagem customizada ativa. A Landing Page está utilizando o modelo padrão de texto centralizado.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview Container */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-300 block">Prévia da Imagem Configurada</label>
+                      <div className="p-4 bg-slate-950 border border-slate-850 rounded-2xl flex items-center justify-center min-h-[200px] relative overflow-hidden">
+                        {localLandingCtaImageUrl ? (
+                          <div className="relative max-h-[220px] flex items-center justify-center">
+                            <div className="absolute inset-0 bg-gradient-to-t from-orange-500/10 to-transparent blur-lg rounded-full pointer-events-none"></div>
+                            <img 
+                              src={localLandingCtaImageUrl} 
+                              alt="Prévia CTA Final" 
+                              className="max-h-[200px] w-auto object-contain relative z-10 drop-shadow-lg transition-transform duration-150" 
+                              style={{
+                                transform: `translate(${localLandingCtaImageOffsetX / 3}px, ${localLandingCtaImageOffsetY / 3}px) scale(${localLandingCtaImageScale / 100})`
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-center p-6 space-y-2 text-slate-600">
+                            <Sparkles className="w-8 h-8 mx-auto opacity-40 text-slate-500" />
+                            <p className="text-xs italic">Sem imagem cadastrada</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fine Adjustment Sliders (Scale & Positioning) */}
+                  {localLandingCtaImageUrl && (
+                    <div className="pt-5 border-t border-slate-800/80 space-y-5">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4" /> Ajustes Finos de Exibição (Tamanho e Posicionamento)
+                        </h4>
+                        <p className="text-slate-400 text-[11px] mt-1">
+                          Ajuste o tamanho, suba/desça a personagem para sobrepor o topo do card e ajuste o encaixe horizontal no canto direito.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        {/* 1. TAMANHO DA IMAGEM */}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">TAMANHO DA IMAGEM</label>
+                            <span className="text-xs font-mono font-bold text-orange-400">{localLandingCtaImageScale}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="80"
+                            max="180"
+                            step="5"
+                            value={localLandingCtaImageScale}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setLocalLandingCtaImageScale(val);
+                              if (onLandingCtaImageScaleChange) onLandingCtaImageScaleChange(val);
+                            }}
+                            className="w-full accent-orange-500 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                            <span>80%</span>
+                            <span>100% (Padrão)</span>
+                            <span>180%</span>
+                          </div>
+                        </div>
+
+                        {/* 2. POSIÇÃO VERTICAL (SUBIR / DESCER) */}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">POSIÇÃO VERTICAL</label>
+                            <span className="text-xs font-mono font-bold text-orange-400">{localLandingCtaImageOffsetY}px</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="-200"
+                            max="200"
+                            step="5"
+                            value={localLandingCtaImageOffsetY}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setLocalLandingCtaImageOffsetY(val);
+                              if (onLandingCtaImageOffsetYChange) onLandingCtaImageOffsetYChange(val);
+                            }}
+                            className="w-full accent-orange-500 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                            <span>↑ -200px (Subir)</span>
+                            <span>0px</span>
+                            <span>↓ +200px (Descer)</span>
+                          </div>
+                        </div>
+
+                        {/* 3. POSIÇÃO HORIZONTAL (ESQUERDA / DIREITA) */}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">POSIÇÃO HORIZONTAL</label>
+                            <span className="text-xs font-mono font-bold text-orange-400">{localLandingCtaImageOffsetX}px</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="-150"
+                            max="150"
+                            step="5"
+                            value={localLandingCtaImageOffsetX}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setLocalLandingCtaImageOffsetX(val);
+                              if (onLandingCtaImageOffsetXChange) onLandingCtaImageOffsetXChange(val);
+                            }}
+                            className="w-full accent-orange-500 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                            <span>← -150px (Esquerda)</span>
+                            <span>0px</span>
+                            <span>→ +150px (Direita)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botão de Salvar Ajustes */}
+                      <div className="flex items-center justify-between pt-2">
+                        {ctaImageSuccessMsg ? (
+                          <span className="text-xs font-bold text-emerald-400 animate-fade-in flex items-center gap-1">
+                            ✓ {ctaImageSuccessMsg}
+                          </span>
+                        ) : <span />}
+
+                        <button
+                          type="button"
+                          disabled={isSavingCtaImageSettings}
+                          onClick={handleSaveCtaImageAdjustments}
+                          className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-md disabled:opacity-50"
+                        >
+                          {isSavingCtaImageSettings ? "Salvando..." : "Salvar Posição e Tamanho"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* CARD 3: IMAGEM PROMOCIONAL - ORGANIZE SEU ACERVO */}
+                <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 md:p-8 space-y-6">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-orange-400" /> Imagem — Organize Seu Acervo
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-1">
+                      Faça upload de uma imagem personalizada para a seção "ORGANIZE SEU ACERVO DO SEU JEITO". Se nenhuma imagem for enviada, a seção exibirá o quadro de exemplo visual prático.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    {/* Controls & Upload */}
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-300 block">Enviar Nova Imagem (PNG, WEBP ou JPEG)</label>
+                        <input 
+                          type="file" 
+                          ref={collectionFileInputRef}
+                          onChange={handleCollectionUpload}
+                          accept="image/png, image/jpeg, image/webp"
+                          className="hidden" 
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={isUploadingCollectionImage}
+                            onClick={() => collectionFileInputRef.current?.click()}
+                            className="px-4 py-2.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                          >
+                            <Upload className="w-4 h-4" />
+                            {isUploadingCollectionImage ? "Enviando..." : "Selecionar Imagem"}
+                          </button>
+
+                          {localCollectionImageUrl && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveCollectionImage}
+                              className="px-4 py-2.5 bg-slate-800 hover:bg-red-950/60 hover:text-red-400 text-slate-300 font-bold rounded-xl text-xs transition cursor-pointer"
+                            >
+                              Remover Imagem (Usar Exemplo Visual)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Upload Progress Bar */}
+                      {isUploadingCollectionImage && (
+                        <div className="space-y-1.5 pt-2">
+                          <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                            <span>Enviando arquivo para o Cloudflare R2...</span>
+                            <span>{collectionUploadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-gradient-to-r from-orange-500 to-yellow-400 h-full transition-all duration-300"
+                              style={{ width: `${collectionUploadProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error message */}
+                      {collectionImageError && (
+                        <div className="p-3 bg-red-950/40 border border-red-900/30 text-xs text-red-400 rounded-xl font-medium">
+                          ⚠️ {collectionImageError}
+                        </div>
+                      )}
+
+                      {/* Current URL indicator */}
+                      {localCollectionImageUrl ? (
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-1">
+                          <span className="text-slate-400 font-medium block">URL Ativa no Cloudflare R2:</span>
+                          <p className="font-mono text-[10px] text-orange-400 truncate select-all">{localCollectionImageUrl}</p>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-slate-900/50 border border-slate-800/80 rounded-xl text-xs text-slate-500 italic">
+                          Nenhuma imagem customizada ativa. A seção está exibindo o quadro de exemplo visual prático.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview Container */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-300 block">Prévia da Imagem Configurada</label>
+                      <div className="p-4 bg-slate-950 border border-slate-850 rounded-2xl flex items-center justify-center min-h-[200px] relative overflow-hidden">
+                        {localCollectionImageUrl ? (
+                          <div className="relative max-h-[220px] flex items-center justify-center">
+                            <div className="absolute inset-0 bg-gradient-to-t from-orange-500/10 to-transparent blur-lg rounded-full pointer-events-none"></div>
+                            <img 
+                              src={localCollectionImageUrl} 
+                              alt="Prévia Organize Seu Acervo" 
+                              className="max-h-[200px] w-auto object-contain relative z-10 drop-shadow-lg transition-transform duration-150" 
+                              style={{
+                                transform: `translate(${localCollectionImageOffsetX / 3}px, ${localCollectionImageOffsetY / 3}px) scale(${localCollectionImageScale / 100})`
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-center p-6 space-y-2 text-slate-600">
+                            <Sparkles className="w-8 h-8 mx-auto opacity-40 text-slate-500" />
+                            <p className="text-xs italic">Sem imagem cadastrada (Usando exemplo visual)</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fine Adjustment Sliders (Scale & Positioning) */}
+                  {localCollectionImageUrl && (
+                    <div className="pt-5 border-t border-slate-800/80 space-y-5">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4" /> Ajustes Finos de Exibição (Tamanho e Posicionamento)
+                        </h4>
+                        <p className="text-slate-400 text-[11px] mt-1">
+                          Ajuste a escala e o posicionamento da imagem no lado direito da seção "Organize Seu Acervo".
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        {/* 1. TAMANHO DA IMAGEM */}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">TAMANHO DA IMAGEM</label>
+                            <span className="text-xs font-mono font-bold text-orange-400">{localCollectionImageScale}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="80"
+                            max="180"
+                            step="5"
+                            value={localCollectionImageScale}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setLocalCollectionImageScale(val);
+                              if (onCollectionImageScaleChange) onCollectionImageScaleChange(val);
+                            }}
+                            className="w-full accent-orange-500 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                            <span>80%</span>
+                            <span>100% (Padrão)</span>
+                            <span>180%</span>
+                          </div>
+                        </div>
+
+                        {/* 2. POSIÇÃO VERTICAL (SUBIR / DESCER) */}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">POSIÇÃO VERTICAL</label>
+                            <span className="text-xs font-mono font-bold text-orange-400">{localCollectionImageOffsetY}px</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="-200"
+                            max="200"
+                            step="5"
+                            value={localCollectionImageOffsetY}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setLocalCollectionImageOffsetY(val);
+                              if (onCollectionImageOffsetYChange) onCollectionImageOffsetYChange(val);
+                            }}
+                            className="w-full accent-orange-500 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                            <span>↑ -200px (Subir)</span>
+                            <span>0px</span>
+                            <span>↓ +200px (Descer)</span>
+                          </div>
+                        </div>
+
+                        {/* 3. POSIÇÃO HORIZONTAL (ESQUERDA / DIREITA) */}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">POSIÇÃO HORIZONTAL</label>
+                            <span className="text-xs font-mono font-bold text-orange-400">{localCollectionImageOffsetX}px</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="-150"
+                            max="150"
+                            step="5"
+                            value={localCollectionImageOffsetX}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setLocalCollectionImageOffsetX(val);
+                              if (onCollectionImageOffsetXChange) onCollectionImageOffsetXChange(val);
+                            }}
+                            className="w-full accent-orange-500 cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                            <span>← -150px (Esquerda)</span>
+                            <span>0px</span>
+                            <span>→ +150px (Direita)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botão de Salvar Ajustes */}
+                      <div className="flex items-center justify-between pt-2">
+                        {collectionImageSuccessMsg ? (
+                          <span className="text-xs font-bold text-emerald-400 animate-fade-in flex items-center gap-1">
+                            ✓ {collectionImageSuccessMsg}
+                          </span>
+                        ) : <span />}
+
+                        <button
+                          type="button"
+                          disabled={isSavingCollectionImageSettings}
+                          onClick={handleSaveCollectionImageAdjustments}
+                          className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-yellow-500 hover:from-orange-500 hover:to-yellow-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-md disabled:opacity-50"
+                        >
+                          {isSavingCollectionImageSettings ? "Salvando..." : "Salvar Posição e Tamanho"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

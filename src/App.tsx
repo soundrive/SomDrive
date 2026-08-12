@@ -101,6 +101,14 @@ export default function App() {
   const [logoScale, setLogoScale] = useState<number>(1.0);
   const [showLogo, setShowLogo] = useState<boolean>(true);
   const [customLogoUrl, setCustomLogoUrl] = useState<string>('');
+  const [landingCtaImageUrl, setLandingCtaImageUrl] = useState<string>('');
+  const [landingCtaImageScale, setLandingCtaImageScale] = useState<number>(100);
+  const [landingCtaImageOffsetY, setLandingCtaImageOffsetY] = useState<number>(0);
+  const [landingCtaImageOffsetX, setLandingCtaImageOffsetX] = useState<number>(0);
+  const [collectionImageUrl, setCollectionImageUrl] = useState<string>('');
+  const [collectionImageScale, setCollectionImageScale] = useState<number>(100);
+  const [collectionImageOffsetY, setCollectionImageOffsetY] = useState<number>(0);
+  const [collectionImageOffsetX, setCollectionImageOffsetX] = useState<number>(0);
 
   // Load general appearance configurations on initialization
   useEffect(() => {
@@ -114,6 +122,30 @@ export default function App() {
         }
         if (typeof appearance.customLogoUrl === 'string') {
           setCustomLogoUrl(appearance.customLogoUrl);
+        }
+        if (typeof appearance.landingCtaImageUrl === 'string') {
+          setLandingCtaImageUrl(appearance.landingCtaImageUrl);
+        }
+        if (typeof appearance.landingCtaImageScale === 'number') {
+          setLandingCtaImageScale(appearance.landingCtaImageScale);
+        }
+        if (typeof appearance.landingCtaImageOffsetY === 'number') {
+          setLandingCtaImageOffsetY(appearance.landingCtaImageOffsetY);
+        }
+        if (typeof appearance.landingCtaImageOffsetX === 'number') {
+          setLandingCtaImageOffsetX(appearance.landingCtaImageOffsetX);
+        }
+        if (typeof appearance.collectionImageUrl === 'string') {
+          setCollectionImageUrl(appearance.collectionImageUrl);
+        }
+        if (typeof appearance.collectionImageScale === 'number') {
+          setCollectionImageScale(appearance.collectionImageScale);
+        }
+        if (typeof appearance.collectionImageOffsetY === 'number') {
+          setCollectionImageOffsetY(appearance.collectionImageOffsetY);
+        }
+        if (typeof appearance.collectionImageOffsetX === 'number') {
+          setCollectionImageOffsetX(appearance.collectionImageOffsetX);
         }
       }
     }).catch(err => {
@@ -456,6 +488,14 @@ export default function App() {
             logoScale={logoScale}
             showLogo={showLogo}
             customLogoUrl={customLogoUrl}
+            landingCtaImageUrl={landingCtaImageUrl}
+            landingCtaImageScale={landingCtaImageScale}
+            landingCtaImageOffsetY={landingCtaImageOffsetY}
+            landingCtaImageOffsetX={landingCtaImageOffsetX}
+            collectionImageUrl={collectionImageUrl}
+            collectionImageScale={collectionImageScale}
+            collectionImageOffsetY={collectionImageOffsetY}
+            collectionImageOffsetX={collectionImageOffsetX}
           />
         )}
 
@@ -523,6 +563,22 @@ export default function App() {
             onShowLogoChange={setShowLogo}
             customLogoUrl={customLogoUrl}
             onCustomLogoUrlChange={setCustomLogoUrl}
+            landingCtaImageUrl={landingCtaImageUrl}
+            onLandingCtaImageUrlChange={setLandingCtaImageUrl}
+            landingCtaImageScale={landingCtaImageScale}
+            onLandingCtaImageScaleChange={setLandingCtaImageScale}
+            landingCtaImageOffsetY={landingCtaImageOffsetY}
+            onLandingCtaImageOffsetYChange={setLandingCtaImageOffsetY}
+            landingCtaImageOffsetX={landingCtaImageOffsetX}
+            onLandingCtaImageOffsetXChange={setLandingCtaImageOffsetX}
+            collectionImageUrl={collectionImageUrl}
+            onCollectionImageUrlChange={setCollectionImageUrl}
+            collectionImageScale={collectionImageScale}
+            onCollectionImageScaleChange={setCollectionImageScale}
+            collectionImageOffsetY={collectionImageOffsetY}
+            onCollectionImageOffsetYChange={setCollectionImageOffsetY}
+            collectionImageOffsetX={collectionImageOffsetX}
+            onCollectionImageOffsetXChange={setCollectionImageOffsetX}
           />
         )}
 

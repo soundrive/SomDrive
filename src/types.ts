@@ -163,6 +163,14 @@ export interface AppearanceSettings {
   logoScale: number;
   showLogo?: boolean;
   customLogoUrl?: string;
+  landingCtaImageUrl?: string;
+  landingCtaImageScale?: number;
+  landingCtaImageOffsetY?: number;
+  landingCtaImageOffsetX?: number;
+  collectionImageUrl?: string;
+  collectionImageScale?: number;
+  collectionImageOffsetY?: number;
+  collectionImageOffsetX?: number;
   updatedAt?: string;
   updatedBy?: string;
 }

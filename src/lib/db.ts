@@ -2376,18 +2376,38 @@ export const dbService = {
           logoScale: typeof data.logoScale === 'number' ? data.logoScale : 1.0,
           showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
           customLogoUrl: typeof data.customLogoUrl === 'string' ? data.customLogoUrl : '',
+          landingCtaImageUrl: typeof data.landingCtaImageUrl === 'string' ? data.landingCtaImageUrl : '',
+          landingCtaImageScale: typeof data.landingCtaImageScale === 'number' ? data.landingCtaImageScale : 100,
+          landingCtaImageOffsetY: typeof data.landingCtaImageOffsetY === 'number' ? data.landingCtaImageOffsetY : 0,
+          landingCtaImageOffsetX: typeof data.landingCtaImageOffsetX === 'number' ? data.landingCtaImageOffsetX : 0,
+          collectionImageUrl: typeof data.collectionImageUrl === 'string' ? data.collectionImageUrl : '',
+          collectionImageScale: typeof data.collectionImageScale === 'number' ? data.collectionImageScale : 100,
+          collectionImageOffsetY: typeof data.collectionImageOffsetY === 'number' ? data.collectionImageOffsetY : 0,
+          collectionImageOffsetX: typeof data.collectionImageOffsetX === 'number' ? data.collectionImageOffsetX : 0,
           updatedAt: data.updatedAt,
           updatedBy: data.updatedBy
         };
       }
-      return { logoScale: 1.0, showLogo: true, customLogoUrl: '' };
+      return { logoScale: 1.0, showLogo: true, customLogoUrl: '', landingCtaImageUrl: '', landingCtaImageScale: 100, landingCtaImageOffsetY: 0, landingCtaImageOffsetX: 0, collectionImageUrl: '', collectionImageScale: 100, collectionImageOffsetY: 0, collectionImageOffsetX: 0 };
     } catch (e) {
       console.error("Error fetching appearance settings:", e);
-      return { logoScale: 1.0, showLogo: true, customLogoUrl: '' };
+      return { logoScale: 1.0, showLogo: true, customLogoUrl: '', landingCtaImageUrl: '', landingCtaImageScale: 100, landingCtaImageOffsetY: 0, landingCtaImageOffsetX: 0, collectionImageUrl: '', collectionImageScale: 100, collectionImageOffsetY: 0, collectionImageOffsetX: 0 };
     }
   },
 
-  async updateAppearanceSettings(settings: { logoScale?: number; showLogo?: boolean; customLogoUrl?: string }, updatedBy: string): Promise<void> {
+  async updateAppearanceSettings(settings: { 
+    logoScale?: number; 
+    showLogo?: boolean; 
+    customLogoUrl?: string; 
+    landingCtaImageUrl?: string;
+    landingCtaImageScale?: number;
+    landingCtaImageOffsetY?: number;
+    landingCtaImageOffsetX?: number;
+    collectionImageUrl?: string;
+    collectionImageScale?: number;
+    collectionImageOffsetY?: number;
+    collectionImageOffsetX?: number;
+  }, updatedBy: string): Promise<void> {
     try {
       const docRef = doc(db, 'settings', 'appearance');
       const dataToSave = {
