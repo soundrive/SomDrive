@@ -506,7 +506,6 @@ export default function Player({
     const onEnded = () => {
       const audio = audioRef.current;
       const currentList = trackListRef.current || [];
-      const currentT = currentTrackRef.current;
 
       // 1. If repeat button is enabled: restart current track
       if (isRepeatRef.current) {
@@ -520,24 +519,15 @@ export default function Player({
         return;
       }
 
-      // Find index of current track in trackList
-      const currentIndex = (currentT && currentList.length > 0)
-        ? currentList.findIndex(t => t.trackId === currentT.trackId)
-        : -1;
-
-      // Check if there is a next track in the queue (i.e. not at the end of the queue)
-      const hasNextTrack = currentIndex !== -1 && currentIndex < currentList.length - 1;
-
-      if (hasNextTrack) {
-        // 2. Repeat disabled & next track exists: play next track normally
+      // 2. Circular queue: for multi-track queue, advance to next track (wraps to track 1 when reaching end of queue)
+      if (currentList.length > 1) {
         onNextRef.current();
       } else {
-        // 3. Repeat disabled & NO next track in queue (end of queue OR single track):
-        // Automatically restart current track so the player never stops
+        // 3. Single track queue: restart current track
         if (audio) {
           audio.currentTime = 0;
           audio.play().catch((err) => {
-            console.warn("Replay current track on end of queue failed:", err);
+            console.warn("Replay current track failed:", err);
           });
         }
         setCurrentTime(0);
