@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Play, 
   Pause,
@@ -33,7 +33,8 @@ import {
   SkipForward,
   Repeat,
   FileText,
-  List
+  List,
+  ArrowLeft
 } from 'lucide-react';
 import { Artist } from '../types';
 import { PLANS_CONFIG } from '../lib/plansConfig';
@@ -151,6 +152,41 @@ export default function LandingPage({
   const [isSimulatedPlaying, setIsSimulatedPlaying] = useState(true);
   const [collectionImageFailed, setCollectionImageFailed] = useState(false);
 
+  const [isViewingPlans, setIsViewingPlans] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      return hash === '#planos' || hash.startsWith('#/planos') || hash === '#pricing';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      setIsViewingPlans(hash === '#planos' || hash.startsWith('#/planos') || hash === '#pricing');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const openPlans = () => {
+    setIsViewingPlans(true);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', '#planos');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const closePlans = () => {
+    setIsViewingPlans(false);
+    if (typeof window !== 'undefined') {
+      if (window.location.hash === '#planos' || window.location.hash.startsWith('#/planos') || window.location.hash === '#pricing') {
+        window.history.pushState(null, '', window.location.pathname);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const landingPlans = {
     free: {
       name: 'SomDrive Free',
@@ -246,6 +282,327 @@ export default function LandingPage({
     }
   };
 
+  if (isViewingPlans) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-orange-500 selection:text-white pb-20 relative overflow-hidden">
+        {/* Ambient Grid overlay & Decorative Glows */}
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff03_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none z-0"></div>
+        <div className="absolute right-[-10%] top-[-10%] w-[600px] h-[600px] bg-gradient-to-br from-orange-500/10 via-yellow-500/5 to-transparent rounded-full filter blur-[120px] pointer-events-none z-0 animate-pulse"></div>
+        <div className="absolute left-[-5%] top-[25%] w-[500px] h-[500px] bg-gradient-to-br from-yellow-500/5 via-orange-600/5 to-transparent rounded-full filter blur-[140px] pointer-events-none z-0"></div>
+
+        {/* Navigation Top Header for Plans */}
+        <header className="relative z-10 border-b border-slate-900 bg-slate-950/80 backdrop-blur-md px-6 py-3.5 md:px-12">
+          <div className="max-w-7xl mx-auto flex items-center justify-between w-full">
+            <div 
+              onClick={closePlans}
+              className="cursor-pointer select-none group"
+            >
+              <BrandLogo size="sm" scale={logoScale || 1.0} showLogo={showLogo} customLogoUrl={customLogoUrl} className="origin-left" />
+            </div>
+
+            <nav className="flex items-center gap-2 md:gap-4 shrink-0">
+              <button 
+                onClick={closePlans}
+                className="px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 transition"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-orange-400" />
+                <span className="hidden sm:inline">Voltar ao</span> Início
+              </button>
+              
+              {currentUser ? (
+                <div className="flex items-center gap-1.5 md:gap-3">
+                  <button 
+                    onClick={() => onNavigate('dashboard')}
+                    className="px-2.5 py-1.5 md:px-4 md:py-1.5 bg-gradient-to-r from-emerald-600 to-yellow-500 rounded-lg text-[10px] md:text-xs font-heading font-bold uppercase tracking-widest sm:tracking-wider hover:from-emerald-500 hover:to-yellow-400 cursor-pointer shadow-md shadow-emerald-500/10 select-none text-slate-950 transition font-black sm:font-bold whitespace-nowrap"
+                  >
+                    Painel<span className="hidden sm:inline"> do Artista</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 md:gap-3">
+                  <button 
+                    onClick={() => onNavigate('auth', { isRegister: false })}
+                    className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-300 hover:text-orange-400 transition cursor-pointer px-2 py-1"
+                  >
+                    Entrar
+                  </button>
+                  <button 
+                    onClick={() => onNavigate('auth', { isRegister: true })}
+                    className="px-2.5 py-1.5 md:px-4 md:py-2 bg-orange-600 border border-orange-500 rounded-lg text-[10px] md:text-xs font-heading font-bold uppercase tracking-wider hover:bg-orange-500 transition cursor-pointer shadow-lg shadow-orange-500/15 text-white whitespace-nowrap"
+                  >
+                    Criar Conta
+                  </button>
+                </div>
+              )}
+            </nav>
+          </div>
+        </header>
+
+        {/* Dedicated Plans Content */}
+        <main className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-12 sm:pt-16 pb-12">
+          <div className="text-center max-w-2xl mx-auto mb-12 space-y-4">
+            <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-bold">Planos e Limites</h3>
+            <h1 className="text-3xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none text-white">
+              Escolha o Plano Ideal
+            </h1>
+            <p className="text-slate-200 text-base leading-relaxed font-semibold">
+              Crie seu catálogo musical privado, envie suas composições por link e permita que cantores, produtores e contratantes ouçam suas músicas com facilidade.
+            </p>
+            <p className="text-slate-400 text-xs md:text-sm">
+              Todos os planos incluem os mesmos recursos principais. A diferença está na quantidade de músicas que você pode cadastrar.
+            </p>
+          </div>
+
+          {/* Monthly / Yearly Converter Toggle */}
+          <div className="flex justify-center items-center mb-12">
+            <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 flex items-center relative">
+              <button 
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition duration-200 select-none cursor-pointer ${
+                  billingCycle === 'monthly' 
+                    ? 'bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 shadow-md font-extrabold' 
+                    : 'text-slate-400 hover:text-white font-semibold'
+                }`}
+              >
+                Faturamento Mensal
+              </button>
+              <button 
+                onClick={() => setBillingCycle('yearly')}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition duration-200 select-none cursor-pointer flex items-center gap-1.5 ${
+                  billingCycle === 'yearly' 
+                    ? 'bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 shadow-md font-extrabold' 
+                    : 'text-slate-400 hover:text-white font-semibold'
+                }`}
+              >
+                Faturamento Anual
+                <span className="bg-slate-950 text-yellow-400 text-[8px] px-1.5 py-0.5 rounded-md border border-yellow-500/20 lowercase tracking-normal font-semibold">
+                  economize ~20%
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+            
+            {/* Soundrive Free Card */}
+            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
+              <div className="space-y-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold">{landingPlans.free.badge}</span>
+                    <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.free.name}</h4>
+                  </div>
+                  <h5 className="text-3xl font-heading font-black text-slate-100">{landingPlans.free.price}</h5>
+                </div>
+
+                <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.free.description}</p>
+
+                {/* Feature bullet list */}
+                <ul className="space-y-3 text-xs">
+                  {landingPlans.free.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-slate-300">
+                      {feat.highlight ? (
+                        <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
+                          ★ {feat.name}
+                        </div>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                          <span className="text-slate-200 font-medium">{feat.name}</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-8">
+                <button 
+                  onClick={() => onNavigate('auth', { isRegister: true })}
+                  className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
+                >
+                  Cadastrar grátis
+                </button>
+              </div>
+            </div>
+
+            {/* Soundrive Essencial Card */}
+            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
+              <div className="space-y-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold">{landingPlans.essencial.badge}</span>
+                    <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.essencial.name}</h4>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline justify-end gap-0.5">
+                      <h5 className="text-3xl font-heading font-black text-white">
+                        {landingPlans.essencial.price}
+                      </h5>
+                    </div>
+                    <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.essencial.period}</p>
+                  </div>
+                </div>
+
+                <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.essencial.description}</p>
+
+                {/* Feature bullet list */}
+                <ul className="space-y-3 text-xs">
+                  {landingPlans.essencial.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-slate-300">
+                      {feat.highlight ? (
+                        <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
+                          ★ {feat.name}
+                        </div>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                          <span className="text-slate-200 font-medium">{feat.name}</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-8">
+                <button 
+                  onClick={() => onNavigate('auth', { isRegister: true })}
+                  className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
+                >
+                  Quero ser Essencial
+                </button>
+              </div>
+            </div>
+
+            {/* Soundrive Pro Card (Highlighted!) */}
+            <div className="relative bg-gradient-to-b from-[#14100c] to-[#0c0d12] border-2 border-orange-500 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.02] transition duration-300 shadow-2xl shadow-orange-950/30 h-full">
+              {/* Top recommendation bubble */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-orange-600 to-yellow-500 px-3.5 py-1 text-slate-950 text-[10px] uppercase font-heading font-black tracking-widest rounded-full shadow-lg font-bold flex items-center gap-1 whitespace-nowrap z-20">
+                <Star className="w-3.5 h-3.5 fill-slate-950" /> {landingPlans.pro.badge}
+              </div>
+
+              <div className="space-y-6 pt-2">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <span className="px-2 py-0.5 bg-orange-955 text-orange-400 rounded text-[9px] font-mono uppercase tracking-widest font-extrabold border border-orange-500/20">Recomendado</span>
+                    <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.pro.name}</h4>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline justify-end gap-0.5">
+                      <h5 className="text-3xl font-heading font-black text-white">
+                        {landingPlans.pro.price}
+                      </h5>
+                    </div>
+                    <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.pro.period}</p>
+                  </div>
+                </div>
+
+                <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.pro.description}</p>
+
+                {/* Feature bullet list */}
+                <ul className="space-y-3 text-xs">
+                  {landingPlans.pro.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-slate-300">
+                      {feat.highlight ? (
+                        <div className="w-full bg-orange-550/15 border border-orange-500 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs shadow-md">
+                          ★ {feat.name}
+                        </div>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                          <span className="text-slate-200 font-medium">{feat.name}</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-8">
+                <button 
+                  onClick={() => onNavigate('auth', { isRegister: true, startPremium: false })}
+                  className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10"
+                >
+                  Quero ser Pro
+                </button>
+              </div>
+            </div>
+
+            {/* Soundrive Premium Card */}
+            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
+              <div className="space-y-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold font-bold">{landingPlans.premium.badge}</span>
+                    <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.premium.name}</h4>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-baseline justify-end gap-0.5">
+                      <h5 className="text-3xl font-heading font-black text-white">
+                        {landingPlans.premium.price}
+                      </h5>
+                    </div>
+                    <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.premium.period}</p>
+                  </div>
+                </div>
+
+                <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.premium.description}</p>
+
+                {/* Feature bullet list */}
+                <ul className="space-y-3 text-xs">
+                  {landingPlans.premium.features.map((feat, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-slate-300">
+                      {feat.highlight ? (
+                        <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
+                          ★ {feat.name}
+                        </div>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                          <span className="text-slate-200 font-medium">{feat.name}</span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-8">
+                <button 
+                  onClick={() => onNavigate('auth', { isRegister: true, startPremium: true })}
+                  className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
+                >
+                  Quero ser Premium
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="mt-14 text-center">
+            <button 
+              onClick={closePlans}
+              className="px-6 py-3 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer inline-flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4 text-orange-400" /> Voltar para a Página Principal
+            </button>
+          </div>
+        </main>
+
+        {/* Trust Seal Footer */}
+        <footer className="mt-20 md:mt-28 py-10 border-t border-slate-900 text-center max-w-7xl mx-auto px-6 relative z-10">
+          <div className="flex items-center justify-center gap-2 text-slate-500 text-xs font-mono uppercase mb-3">
+            <ShieldCheck className="w-4 h-4 text-orange-500" /> Seus áudios em alta qualidade e 100% seguros • SSL Ativo
+          </div>
+          <p className="text-slate-600 text-xs">
+            © {new Date().getFullYear()} SomDrive. Desenvolvido para a indústria musical do Brasil.
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-orange-500 selection:text-white pb-20 relative overflow-hidden">
       
@@ -265,9 +622,12 @@ export default function LandingPage({
           </div>
 
           <nav id="top-nav" className="flex items-center gap-1.5 md:gap-4 shrink-0">
-            <a href="#planos" className="hidden md:inline-block text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition">
+            <button 
+              onClick={openPlans} 
+              className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-white transition cursor-pointer px-2 py-1"
+            >
               Planos
-            </a>
+            </button>
             
             {currentUser ? (
               <div className="flex items-center gap-1.5 md:gap-3">
@@ -359,12 +719,12 @@ export default function LandingPage({
               <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950 group-hover:animate-bounce shrink-0" /> CRIAR MEU SOMDRIVE GRÁTIS
             </button>
             
-            <a 
-              href="#planos"
-              className="px-5 py-3.5 sm:px-6 sm:py-4 border border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 transition rounded-xl text-center font-heading font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-300 hover:text-white flex items-center justify-center gap-2"
+            <button 
+              onClick={openPlans}
+              className="px-5 py-3.5 sm:px-6 sm:py-4 border border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80 transition rounded-xl text-center font-heading font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-300 hover:text-white flex items-center justify-center gap-2 cursor-pointer"
             >
               CONHECER OS PLANOS
-            </a>
+            </button>
           </div>
 
           {/* Lista de Benefícios Principais */}
@@ -824,8 +1184,22 @@ export default function LandingPage({
 
             {collectionImageUrl && !collectionImageFailed ? (
               <div className="lg:col-span-5 relative z-20 flex justify-center lg:justify-end items-center mt-6 lg:mt-0 pointer-events-none select-none">
+                {/* Mobile version: Clean, centered, contained without extreme desktop offsets */}
+                <div className="lg:hidden relative w-full max-w-[280px] sm:max-w-[340px] flex items-center justify-center">
+                  <img 
+                    src={collectionImageUrl} 
+                    alt="Organize Seu Acervo SomDrive" 
+                    className="w-full h-auto object-contain max-h-[340px] sm:max-h-[400px] drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      setCollectionImageFailed(true);
+                    }}
+                  />
+                </div>
+
+                {/* Desktop version: Preserves exact scale and offset parameters as approved */}
                 <div 
-                  className="relative max-w-[320px] sm:max-w-[380px] md:max-w-[440px] lg:max-w-[500px] w-full flex items-center justify-center lg:justify-end origin-bottom-right transition-transform duration-150"
+                  className="hidden lg:flex relative lg:max-w-[500px] w-full items-center justify-end origin-bottom-right transition-transform duration-150"
                   style={{
                     transform: `translate(${collectionImageOffsetX || 0}px, ${collectionImageOffsetY || 0}px) scale(${(collectionImageScale || 100) / 100})`,
                   }}
@@ -833,7 +1207,7 @@ export default function LandingPage({
                   <img 
                     src={collectionImageUrl} 
                     alt="Organize Seu Acervo SomDrive" 
-                    className="w-full h-auto object-contain max-h-[380px] sm:max-h-[440px] md:max-h-[520px] lg:max-h-[600px] drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)]"
+                    className="w-full h-auto object-contain lg:max-h-[600px] drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)]"
                     referrerPolicy="no-referrer"
                     onError={() => {
                       setCollectionImageFailed(true);
@@ -1012,250 +1386,8 @@ export default function LandingPage({
         </div>
       </section>
 
-      <section id="planos" className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-32">
-        <div className="text-center max-w-2xl mx-auto mb-12 space-y-4">
-          <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-bold">Planos e Limites</h3>
-          <h2 className="text-3xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
-            Escolha o Plano Ideal
-          </h2>
-          <p className="text-slate-200 text-base leading-relaxed font-semibold">
-            Crie seu catálogo musical privado, envie suas composições por link e permita que cantores, produtores e contratantes ouçam suas músicas com facilidade.
-          </p>
-          <p className="text-slate-400 text-xs md:text-sm">
-            Todos os planos incluem os mesmos recursos principais. A diferença está na quantidade de músicas que você pode cadastrar.
-          </p>
-        </div>
-
-        {/* Monthly / Yearly Converter Toggle */}
-        <div className="flex justify-center items-center mb-12">
-          <div className="bg-slate-900 p-1.5 rounded-2xl border border-slate-800 flex items-center relative">
-            <button 
-              onClick={() => setBillingCycle('monthly')}
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition duration-200 select-none cursor-pointer ${
-                billingCycle === 'monthly' 
-                  ? 'bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 shadow-md font-extrabold' 
-                  : 'text-slate-400 hover:text-white font-semibold'
-              }`}
-            >
-              Faturamento Mensal
-            </button>
-            <button 
-              onClick={() => setBillingCycle('yearly')}
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition duration-200 select-none cursor-pointer flex items-center gap-1.5 ${
-                billingCycle === 'yearly' 
-                  ? 'bg-gradient-to-r from-orange-600 to-yellow-500 text-slate-950 shadow-md font-extrabold' 
-                  : 'text-slate-400 hover:text-white font-semibold'
-              }`}
-            >
-              Faturamento Anual
-              <span className="bg-slate-950 text-yellow-400 text-[8px] px-1.5 py-0.5 rounded-md border border-yellow-500/20 lowercase tracking-normal font-semibold">
-                economize ~20%
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-          
-          {/* Soundrive Free Card */}
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold">{landingPlans.free.badge}</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.free.name}</h4>
-                </div>
-                <h5 className="text-3xl font-heading font-black text-slate-100">{landingPlans.free.price}</h5>
-              </div>
-
-              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.free.description}</p>
-
-              {/* Feature bullet list */}
-              <ul className="space-y-3 text-xs">
-                {landingPlans.free.features.map((feat, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.highlight ? (
-                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
-                        ★ {feat.name}
-                      </div>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                        <span className="text-slate-200 font-medium">{feat.name}</span>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-8">
-              <button 
-                onClick={() => onNavigate('auth', { isRegister: true })}
-                className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
-              >
-                Cadastrar grátis
-              </button>
-            </div>
-          </div>
-
-          {/* Soundrive Essencial Card */}
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold">{landingPlans.essencial.badge}</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.essencial.name}</h4>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-baseline justify-end gap-0.5">
-                    <h5 className="text-3xl font-heading font-black text-white">
-                      {landingPlans.essencial.price}
-                    </h5>
-                  </div>
-                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.essencial.period}</p>
-                </div>
-              </div>
-
-              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.essencial.description}</p>
-
-              {/* Feature bullet list */}
-              <ul className="space-y-3 text-xs">
-                {landingPlans.essencial.features.map((feat, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.highlight ? (
-                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
-                        ★ {feat.name}
-                      </div>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                        <span className="text-slate-200 font-medium">{feat.name}</span>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-8">
-              <button 
-                onClick={() => onNavigate('auth', { isRegister: true })}
-                className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
-              >
-                Quero ser Essencial
-              </button>
-            </div>
-          </div>
-
-          {/* Soundrive Pro Card (Highlighted!) */}
-          <div className="relative bg-gradient-to-b from-[#14100c] to-[#0c0d12] border-2 border-orange-500 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.02] transition duration-300 shadow-2xl shadow-orange-950/30 h-full">
-            {/* Top recommendation bubble */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-orange-600 to-yellow-500 px-3.5 py-1 text-slate-950 text-[10px] uppercase font-heading font-black tracking-widest rounded-full shadow-lg font-bold flex items-center gap-1 whitespace-nowrap z-20">
-              <Star className="w-3.5 h-3.5 fill-slate-950" /> {landingPlans.pro.badge}
-            </div>
-
-            <div className="space-y-6 pt-2">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="px-2 py-0.5 bg-orange-955 text-orange-400 rounded text-[9px] font-mono uppercase tracking-widest font-extrabold border border-orange-500/20">Recomendado</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.pro.name}</h4>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-baseline justify-end gap-0.5">
-                    <h5 className="text-3xl font-heading font-black text-white">
-                      {landingPlans.pro.price}
-                    </h5>
-                  </div>
-                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.pro.period}</p>
-                </div>
-              </div>
-
-              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.pro.description}</p>
-
-              {/* Feature bullet list */}
-              <ul className="space-y-3 text-xs">
-                {landingPlans.pro.features.map((feat, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.highlight ? (
-                      <div className="w-full bg-orange-550/15 border border-orange-500 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs shadow-md">
-                        ★ {feat.name}
-                      </div>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                        <span className="text-slate-200 font-medium">{feat.name}</span>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-8">
-              <button 
-                onClick={() => onNavigate('auth', { isRegister: true, startPremium: false })}
-                className="w-full text-center py-3 bg-gradient-to-r from-orange-600 to-yellow-500 hover:brightness-110 text-slate-950 text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold shadow-lg shadow-orange-500/10"
-              >
-                Quero ser Pro
-              </button>
-            </div>
-          </div>
-
-          {/* Soundrive Premium Card */}
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between hover:scale-[1.01] hover:border-slate-700/80 transition duration-300 relative h-full">
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 rounded text-[9px] font-mono text-slate-400 uppercase tracking-widest font-extrabold font-bold">{landingPlans.premium.badge}</span>
-                  <h4 className="text-xl font-heading font-black text-white uppercase">{landingPlans.premium.name}</h4>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-baseline justify-end gap-0.5">
-                    <h5 className="text-3xl font-heading font-black text-white">
-                      {landingPlans.premium.price}
-                    </h5>
-                  </div>
-                  <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">{landingPlans.premium.period}</p>
-                </div>
-              </div>
-
-              <p className="text-slate-400 text-xs leading-relaxed">{landingPlans.premium.description}</p>
-
-              {/* Feature bullet list */}
-              <ul className="space-y-3 text-xs">
-                {landingPlans.premium.features.map((feat, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-slate-300">
-                    {feat.highlight ? (
-                      <div className="w-full bg-orange-500/10 border border-orange-500/35 px-3 py-1.5 rounded-lg text-orange-400 font-extrabold tracking-wide text-xs">
-                        ★ {feat.name}
-                      </div>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-                        <span className="text-slate-200 font-medium">{feat.name}</span>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-8">
-              <button 
-                onClick={() => onNavigate('auth', { isRegister: true, startPremium: true })}
-                className="w-full text-center py-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-400 hover:text-white text-xs uppercase font-heading font-black tracking-widest rounded-xl transition cursor-pointer select-none font-bold"
-              >
-                Quero ser Premium
-              </button>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
       {/* FAQ - Perguntas Frequentes */}
-      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-32">
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-28 sm:pt-32">
         <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
           <h3 className="text-xs font-mono tracking-widest text-orange-400 uppercase font-black">Dúvidas Comuns</h3>
           <h2 className="text-2xl sm:text-4xl md:text-5xl font-heading font-black tracking-tight uppercase leading-none">
@@ -1312,15 +1444,15 @@ export default function LandingPage({
       </section>
 
       {/* FINAL CALL TO ACTION */}
-      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-32 pb-12 text-center overflow-x-clip">
+      <section className="relative z-10 max-w-5xl mx-auto px-6 md:px-12 pt-28 sm:pt-32 pb-12 text-center overflow-x-clip">
         <div className="relative">
           {/* Main Card Box Container */}
-          <div className={`bg-gradient-to-r from-orange-600/10 via-yellow-500/5 to-orange-600/10 border border-orange-500/20 rounded-3xl p-8 ${landingCtaImageUrl ? 'md:p-12 md:py-14' : 'md:p-14'} shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between text-center ${landingCtaImageUrl ? 'md:text-left' : 'md:text-center'}`}>
+          <div className={`bg-gradient-to-br from-[#0e1726] via-[#09111e] to-[#060a12] border border-orange-500/30 rounded-3xl p-6 sm:p-8 md:p-12 ${landingCtaImageUrl ? 'md:py-14' : 'md:p-14'} shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between text-center ${landingCtaImageUrl ? 'md:text-left' : 'md:text-center'}`}>
             {/* Glowing particle background behind CTA */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-orange-500/10 rounded-full blur-[80px] pointer-events-none"></div>
 
             {/* Text & Button content wrapper */}
-            <div className={`relative z-10 space-y-6 md:space-y-8 w-full ${landingCtaImageUrl ? 'md:w-[58%] lg:w-[60%]' : 'max-w-2xl mx-auto'}`}>
+            <div className={`relative z-10 space-y-5 sm:space-y-6 md:space-y-8 w-full ${landingCtaImageUrl ? 'md:w-[58%] lg:w-[60%]' : 'max-w-2xl mx-auto'}`}>
               <h2 className="text-xl sm:text-3xl md:text-4xl font-heading font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-slate-300 tracking-tight leading-tight">
                 PRONTO PARA APRESENTAR SEU REPERTÓRIO COMO UM PROFISSIONAL?
               </h2>
@@ -1336,13 +1468,30 @@ export default function LandingPage({
                 </button>
               </div>
             </div>
+
+            {/* Mobile Image (rendered cleanly inside the card under the button) */}
+            {landingCtaImageUrl && (
+              <div className="md:hidden relative z-10 w-full flex justify-center items-end mt-6 pt-2 pointer-events-none select-none">
+                <div className="relative max-w-[240px] sm:max-w-[280px] w-full flex items-end justify-center">
+                  <img 
+                    src={landingCtaImageUrl} 
+                    alt="SomDrive CTA Promocional" 
+                    className="w-full h-auto object-contain object-bottom max-h-[300px] sm:max-h-[360px] drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Overlapping character image layer (outside overflow-hidden card) */}
+          {/* Desktop Overlapping character image layer (outside overflow-hidden card) */}
           {landingCtaImageUrl && (
-            <div className="relative z-20 w-full md:w-[42%] lg:w-[44%] flex justify-center md:justify-end items-end md:absolute md:right-0 md:-bottom-12 lg:-bottom-16 pointer-events-none select-none mt-6 md:mt-0">
+            <div className="hidden md:flex absolute right-0 md:-bottom-12 lg:-bottom-16 z-20 md:w-[42%] lg:w-[44%] justify-end items-end pointer-events-none select-none">
               <div 
-                className="relative max-w-[280px] sm:max-w-[320px] md:max-w-[450px] lg:max-w-[520px] w-full flex items-end justify-center md:justify-end origin-bottom-right transition-transform duration-150"
+                className="relative md:max-w-[450px] lg:max-w-[520px] w-full flex items-end justify-end origin-bottom-right transition-transform duration-150"
                 style={{
                   transform: `translate(${landingCtaImageOffsetX || 0}px, ${landingCtaImageOffsetY || 0}px) scale(${(landingCtaImageScale || 100) / 100})`,
                 }}
@@ -1352,7 +1501,7 @@ export default function LandingPage({
                 <img 
                   src={landingCtaImageUrl} 
                   alt="SomDrive CTA Promocional" 
-                  className="w-full h-auto object-contain object-bottom max-h-[380px] sm:max-h-[420px] md:max-h-[650px] lg:max-h-[750px] drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)]"
+                  className="w-full h-auto object-contain object-bottom md:max-h-[650px] lg:max-h-[750px] drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)]"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
