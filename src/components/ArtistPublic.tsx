@@ -2266,40 +2266,33 @@ export default function ArtistPublic({
                         }}
                         className={`grid grid-cols-12 gap-3 md:gap-4 px-4.5 sm:px-6 py-1.5 md:py-2 items-center cursor-pointer transition-all select-none border-l-[3.5px] group ${isCurrentlyPlaying ? 'bg-zinc-850/60 border-l-[#10b981] shadow-inner' : 'border-l-transparent hover:border-l-zinc-700 hover:bg-zinc-800/60'}`}
                       >
-                        {/* Col 1: Play trigger + index swap (Spotify style for ultimate elegance and minimum width) */}
+                        {/* Col 1: Play trigger - permanently visible circular button */}
                         <div className="col-span-2 sm:col-span-1 flex items-center justify-start min-w-8">
-                          {isCurrentlyPlaying ? (
-                            <button
-                              onClick={(e) => {
-                                  e.stopPropagation();
-                                  onPlayPause();
-                              }}
-                              className="w-7.5 h-7.5 rounded-full bg-[#10b981]/10 border border-[#10b981] flex items-center justify-center text-[#10b981] cursor-pointer focus:outline-none shrink-0"
-                            >
-                              {isActiveAndPlaying ? (
-                                <Pause className="w-3.5 h-3.5 text-[#10b981] fill-[#10b981]" />
-                              ) : (
-                                <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
-                              )}
-                            </button>
-                          ) : (
-                            <div className="relative w-7.5 h-7.5 flex items-center justify-start">
-                              {/* Show index number, hide on row hover */}
-                              <span className="font-mono text-[11px] font-bold text-zinc-500 block group-hover:hidden pl-1 select-none">
-                                {(idx + 1).toString().padStart(2, '0')}
-                              </span>
-                              {/* Show play button icon on row hover */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectTrack(track, activeDisplayTracks);
-                                }}
-                                className="hidden group-hover:flex w-7 h-7 rounded-full bg-zinc-855 border border-zinc-700/50 items-center justify-center text-white hover:text-[#10b981] hover:border-[#10b981] transition-all cursor-pointer focus:outline-none"
-                              >
-                                <Play className="w-3 h-3 text-white fill-white ml-0.5" />
-                              </button>
-                            </div>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isCurrentlyPlaying) {
+                                onPlayPause();
+                              } else {
+                                onSelectTrack(track, activeDisplayTracks);
+                              }
+                            }}
+                            className={`w-7.5 h-7.5 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border transition-all cursor-pointer outline-none shrink-0 ${
+                              isCurrentlyPlaying
+                                ? 'bg-[#10b981] border-[#10b981] text-black hover:bg-[#34d399] hover:scale-105'
+                                : 'bg-zinc-900/80 border-zinc-600 text-white hover:border-white hover:bg-zinc-800 hover:scale-105'
+                            }`}
+                            title={isCurrentlyPlaying && isPlaying ? "Pausar" : "Tocar"}
+                            aria-label={isCurrentlyPlaying && isPlaying ? "Pausar música" : "Tocar música"}
+                          >
+                            {isCurrentlyPlaying && isPlaying ? (
+                              <Pause className="w-3.5 h-3.5 text-black fill-black" />
+                            ) : isCurrentlyPlaying ? (
+                              <Play className="w-3.5 h-3.5 text-black fill-black ml-0.5" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+                            )}
+                          </button>
                         </div>
 
                         {/* Col 2: Title & Waveform bar layout from Reference */}
