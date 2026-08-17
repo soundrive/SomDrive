@@ -3594,7 +3594,7 @@ export default function AdminArea({
                     Card "Ferramenta Recomendada" no Dashboard
                   </h3>
                   <p className="text-slate-400 text-xs mt-1">
-                    Configure o banner/card exibido no painel dos compositores para divulgar ferramentas parceiras ou serviços recomendados (ex: Multiconverte).
+                    Configure o banner/card exibido no painel dos compositores para divulgar ferramentas parceiras ou serviços recomendados.
                   </p>
                 </div>
 
@@ -3624,7 +3624,7 @@ export default function AdminArea({
                         value={recommendedTool.title}
                         onChange={(e) => setRecommendedTool(prev => ({ ...prev, title: e.target.value }))}
                         className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none"
-                        placeholder="Ex: Multiconverte — Conversor de Áudio MP3"
+                        placeholder="Ex: Nome da Ferramenta"
                       />
                     </div>
 
@@ -3636,7 +3636,7 @@ export default function AdminArea({
                         value={recommendedTool.subtitle}
                         onChange={(e) => setRecommendedTool(prev => ({ ...prev, subtitle: e.target.value }))}
                         className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none"
-                        placeholder="Ex: Ferramenta Externa Recomendada pelo SomDrive"
+                        placeholder="Ex: Ferramenta Externa Recomendada"
                       />
                     </div>
 
@@ -3648,7 +3648,7 @@ export default function AdminArea({
                         value={recommendedTool.buttonText}
                         onChange={(e) => setRecommendedTool(prev => ({ ...prev, buttonText: e.target.value }))}
                         className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none"
-                        placeholder="Ex: Acessar Multiconverte"
+                        placeholder="Ex: Acessar Ferramenta"
                       />
                     </div>
 
@@ -3660,7 +3660,7 @@ export default function AdminArea({
                         value={recommendedTool.linkUrl}
                         onChange={(e) => setRecommendedTool(prev => ({ ...prev, linkUrl: e.target.value }))}
                         className="w-full bg-slate-900 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs text-white focus:border-cyan-500 outline-none font-mono"
-                        placeholder="https://www.multiconverte.com.br/"
+                        placeholder="https://exemplo.com.br/"
                       />
                     </div>
                   </div>
@@ -3755,7 +3755,7 @@ export default function AdminArea({
                         onChange={(e) => setRecommendedTool(prev => ({ ...prev, cardStyle: e.target.value as any }))}
                         className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:border-purple-500 outline-none cursor-pointer"
                       >
-                        <option value="purple_gradient">Roxo / Gradiente Multiconverte (Destaque Exclusivo)</option>
+                        <option value="purple_gradient">Roxo / Gradiente Destaque</option>
                         <option value="blue_gradient">Azul Destaque</option>
                         <option value="emerald_gradient">Verde Esmeralda</option>
                         <option value="dark_premium">Escuro Premium</option>
@@ -3808,7 +3808,7 @@ export default function AdminArea({
                   </div>
 
                   {/* LIVE PREVIEW BOX */}
-                  <div className="space-y-2 pt-2 border-t border-slate-850">
+                  <div className="space-y-2 pt-2 border-t border-slate-855">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-purple-400" />
@@ -3844,7 +3844,7 @@ export default function AdminArea({
                       onClick={() => setRecommendedTool(DEFAULT_RECOMMENDED_TOOL)}
                       className="px-4 py-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-300 rounded-xl transition text-xs select-none cursor-pointer"
                     >
-                      Restaurar Padrão Multiconverte
+                      Restaurar Padrão
                     </button>
                   </div>
 

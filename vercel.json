@@ -15,31 +15,6 @@
       "source": "/catalogo/:slug",
       "destination": "/s/:slug",
       "permanent": true
-    },
-    {
-      "source": "/conversor",
-      "destination": "https://www.multiconverte.com.br/",
-      "permanent": true
-    },
-    {
-      "source": "/conversor-sundrive",
-      "destination": "https://www.multiconverte.com.br/",
-      "permanent": true
-    },
-    {
-      "source": "/sundrive-conversor",
-      "destination": "https://www.multiconverte.com.br/",
-      "permanent": true
-    },
-    {
-      "source": "/conversor-de-audio",
-      "destination": "https://www.multiconverte.com.br/",
-      "permanent": true
-    },
-    {
-      "source": "/ferramentas/conversor",
-      "destination": "https://www.multiconverte.com.br/",
-      "permanent": true
     }
   ],
   "rewrites": [

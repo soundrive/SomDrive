@@ -959,12 +959,12 @@ async function startServer() {
 
       const ogPayload = `
   <!-- Dynamic Custom SomDrive OG Home Metadata -->
-  <title>SomDrive | Catálogo Musical para Compositores, Cantores e Produtores Musicais</title>
-  <meta name="description" content="Pare de enviar músicas pelo WhatsApp. Organize seu catálogo musical, crie repertórios personalizados e compartilhe apenas as músicas certas com cantores, produtores musicais e parceiros através de um link profissional." />
+  <title>SomDrive | Catálogo Musical e Repertório para Compositores</title>
+  <meta name="description" content="Pare de enviar músicas soltas no WhatsApp. Organize seu catálogo e repertórios por link para cantores ouvirem sem cadastro, no celular ou no carro." />
   <link rel="canonical" href="https://www.somdrive.com.br/" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="SomDrive | Catálogo Musical para Compositores, Cantores e Produtores Musicais" />
-  <meta property="og:description" content="Pare de enviar músicas pelo WhatsApp. Organize seu catálogo musical, crie repertórios personalizados e compartilhe apenas as músicas certas com cantores, produtores musicais e parceiros através de um link profissional." />
+  <meta property="og:title" content="SomDrive | Catálogo Musical e Repertório para Compositores" />
+  <meta property="og:description" content="Pare de enviar músicas soltas no WhatsApp. Organize seu catálogo e repertórios por link para cantores ouvirem sem cadastro, no celular ou no carro." />
   <meta property="og:image" content="${ogImageToUse}" />
   <meta property="og:image:secure_url" content="${ogImageSecureToUse}" />
   <meta property="og:image:type" content="image/jpeg" />
@@ -973,8 +973,8 @@ async function startServer() {
   <meta property="og:url" content="https://www.somdrive.com.br/" />
   <meta property="og:site_name" content="SomDrive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SomDrive | Catálogo Musical para Compositores, Cantores e Produtores Musicais" />
-  <meta name="twitter:description" content="Pare de enviar músicas pelo WhatsApp. Organize seu catálogo musical, crie repertórios personalizados e compartilhe apenas as músicas certas com cantores, produtores musicais e parceiros através de um link profissional." />
+  <meta name="twitter:title" content="SomDrive | Catálogo Musical e Repertório para Compositores" />
+  <meta name="twitter:description" content="Pare de enviar músicas soltas no WhatsApp. Organize seu catálogo e repertórios por link para cantores ouvirem sem cadastro, no celular ou no carro." />
   <meta name="twitter:image" content="${ogImageToUse}" />
   <link rel="image_src" href="${ogImageToUse}" />
   <meta itemprop="image" content="${ogImageToUse}" />
@@ -1246,11 +1246,6 @@ async function startServer() {
       artistFound: true
     };
   };
-
-  // 301 Permanent Redirect for legacy "Conversor SunDrive" URLs to the new dedicated MultiConverte service
-  app.get(["/conversor", "/conversor-sundrive", "/sundrive-conversor", "/conversor-de-audio", "/ferramentas/conversor"], (req, res) => {
-    return res.redirect(301, "https://www.multiconverte.com.br/");
-  });
 
   app.get("/api/global-share-card", serveGlobalShareCard);
   app.get("/api/global-share-card.png", serveGlobalShareCard);

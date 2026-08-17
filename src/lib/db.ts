@@ -3,17 +3,17 @@ import { Artist, Music, Analytics, PaymentSettings, ShareCardSettings, Appearanc
 export { FREE_MUSIC_LIMIT };
 
 export const DEFAULT_RECOMMENDED_TOOL: RecommendedToolConfig = {
-  active: true,
-  title: "Multiconverte",
-  subtitle: "Converta suas músicas para MP3 antes de enviar ao SomDrive.",
-  description: "O SomDrive testou músicas convertidas em MP3 112 kbps e percebeu que esse formato mantém boa qualidade, com arquivo mais leve para ouvir no celular e no carro.",
-  buttonText: "Acessar Multiconverte",
-  linkUrl: "https://www.multiconverte.com.br/",
+  active: false,
+  title: "Ferramenta Recomendada",
+  subtitle: "Ferramenta Externa Recomendada",
+  description: "",
+  buttonText: "Acessar Ferramenta",
+  linkUrl: "",
   imageUrl: "",
   openInNewTab: true,
   logoSize: "large",
-  cardStyle: "purple_gradient",
-  buttonColor: "purple",
+  cardStyle: "blue_gradient",
+  buttonColor: "blue",
   buttonSize: "large"
 };
 

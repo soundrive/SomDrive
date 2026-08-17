@@ -96,15 +96,6 @@ async function testLiveDomain() {
       console.log("Error " + cUrl + ": " + e.message);
     }
   }
-
-  console.log("\n=== 5. TESTANDO REDIRECIONAMENTO DO CONVERSOR ===");
-  try {
-    const res = await fetch("https://www.somdrive.com.br/conversor", { redirect: "manual" });
-    console.log("Conversor Status: " + res.status);
-    console.log("Location Header: " + res.headers.get("location"));
-  } catch (e) {
-    console.log("Error conversor: " + e.message);
-  }
 }
 
 testLiveDomain();
